@@ -1,0 +1,32 @@
+
+
+/**:
+  ros__parameters:  # pour définir des variables pour tout le monde
+    display_length_video: 1000.0
+    nb_ROV : 1.0 # nombre de rov en simultané
+
+inky:
+
+  control_inky: # Fait référence au nom du node executé
+    ros__parameters: # Attention, il y a deux "_"
+      ROV_name: 'inky'
+      ID: 1.0
+      param: "parameters_inky"
+      nb_cam: 1.0
+      nb_target_cam: 1.0
+      ip_adress_light: "192.168.2"
+
+  ihm_inky : # Fait référence au nom du node executé
+    ros__parameters: # Attention, il y a deux "_"
+      ROV_name: 'inky'
+      ID: 1.0
+
+  tracking_inky: # Fait référence au nom du node executé
+    ros__parameters: # Attention, il y a deux "_"
+      ROV_name: 'inky'
+      ID: 1.0
+      camera_port_udp: 5600.0
+      affichage_on: 1.0 # 1.0 : affichage on / 0.0 : affichage off
+      num_cam : 1.0
+
+
