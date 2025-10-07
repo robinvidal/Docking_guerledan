@@ -338,15 +338,41 @@ class ROV(Node):
             ##### Lecture des input de la manette
 
             # Example : move forward/backward
-            if self.axes[4] != 0:  # joy right up/down
-                self.commands[4] = int(200 * self.axes[4] + 1500)
+            if self.axes[1] != 0:  # joy right up/down
+                self.commands[4] = int(200 * self.axes[1] + 1500)
                 self.commands_front = self.commands[4]
 
             else:
                 self.commands[4] = 1500
                 self.commands_front = self.commands[4]
 
-            # (...)
+            # Example : move left/right translation
+            if self.axes[0] != 0:  # joy right up/down
+                self.commands[5] = int(200 * self.axes[0] + 1500)
+                self.commands_front = self.commands[5]
+
+            else:
+                self.commands[5] = 1500
+                self.commands_front = self.commands[5]
+
+            # Example : move yaw
+            if self.axes[3] != 0:  # joy right up/down
+                self.commands[3] = int(200 * self.axes[3] + 1500)
+                self.commands_front = self.commands[3]
+
+            else:
+                self.commands[3] = 1500
+                self.commands_front = self.commands[3]
+
+
+            # Example : move elevation
+            if self.axes[4] != 0:  # joy right up/down
+                self.commands[2] = int(200 * self.axes[4] + 1500)
+                self.commands_front = self.commands[2]
+
+            else:
+                self.commands[2] = 1500
+                self.commands_front = self.commands[2]
 
 
 
