@@ -29,6 +29,13 @@ print("module:", bps_oculus.__file__)
 print("version:", im.version("oculus-python"))
 PY
 
+# Modifier bibliotèque 
+
+trouver le fichier qui finit par /bps_oculus/core.py en lancant cette commmande bps_oculus_io pack_mousse.oculus --output netcdf4
+# remplacer NAN par nan dans 
+gain_table = np.frombuffer(gain_payload, np.uint32) if gain_payload is not None else np.full((item_message.nRanges,), np.NAN, np.float32)
+
+
 
 # Conversion du fichier sonar .oculus en .nc (format NetCDF4)
 cd ~/Documents/test_accoustic_cage_guerledan  
