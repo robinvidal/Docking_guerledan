@@ -1,0 +1,47 @@
+# =========================================================
+# 🚀 Gitignore pour projet ROS2 + Python + fichiers sonar
+# =========================================================
+
+# === Fichiers temporaires / cache système ===
+*.log
+*.swp
+*.tmp
+*.bak
+*~
+
+# === Fichiers Python ===
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+*.egg
+.env
+.venv
+venv/
+env/
+
+# === ROS2 / colcon / build ===
+build/
+install/
+log/
+.colcon/
+.deps/
+CMakeFiles/
+CMakeCache.txt
+
+# === Visual Studio Code / IDE ===
+.vscode/
+.idea/
+
+# === Données sonar et lourds fichiers ===
+*.mkv
+*.oculus
+*.nc
+
+# === Fichiers systèmes inutiles ===
+.DS_Store
+Thumbs.db
+
+# === Sauvegardes personnelles ===
+*.old
+*.backup
