@@ -31,7 +31,7 @@ PY
 
 
 # Conversion du fichier sonar .oculus en .nc (format NetCDF4)
-cd ~/Documents/test_accoustic_cage_guerledan
+cd ~/Documents/test_accoustic_cage_guerledan  
 bps_oculus_io pack_mousse.oculus --output netcdf4
 
 # Un fichier .nc a été créé
