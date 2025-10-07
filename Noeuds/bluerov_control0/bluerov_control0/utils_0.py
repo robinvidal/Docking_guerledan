@@ -348,7 +348,7 @@ class ROV(Node):
 
             # Example : move left/right translation
             if self.axes[0] != 0:  # joy right up/down
-                self.commands[5] = int(200 * self.axes[0] + 1500)
+                self.commands[5] = int(200 * -self.axes[0] + 1500)
                 self.commands_front = self.commands[5]
 
             else:
@@ -357,7 +357,7 @@ class ROV(Node):
 
             # Example : move yaw
             if self.axes[3] != 0:  # joy right up/down
-                self.commands[3] = int(200 * self.axes[3] + 1500)
+                self.commands[3] = int(200 * -self.axes[3] + 1500)
                 self.commands_front = self.commands[3]
 
             else:
@@ -385,6 +385,7 @@ class ROV(Node):
 
         ######## Programme a activer/desactive avec bouton "B" ############
         if self.program_B:
+            
 
             self.name_program_B = "Tensegrety control"
 
