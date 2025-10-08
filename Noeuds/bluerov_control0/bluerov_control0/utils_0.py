@@ -1,5 +1,3 @@
-
-
 # Copyright 2024, Christophe VIEL
 # 
 # Redistribution and use in source and binary forms, with or without modification, are permitted # provided that the following conditions are met:
@@ -34,7 +32,7 @@ from mavros_msgs.msg import OverrideRCIn
 from mavros_msgs.srv import CommandBool
 from sensor_msgs.msg import Imu
 from sensor_msgs.msg import Joy
-from std_msgs.msg import Float64, String, Bool, Float32MultiArray
+from std_msgs.msg import Float64, Bool, Float32MultiArray
 
 
 
@@ -116,11 +114,19 @@ class ROV(Node):
 
         # Robot modes
         self.armed = False
-        self.program_B = False
 
         # Robot parameter
         self.depth = 0.0 # Depth
         self.heading = 0.0 # Heading
+
+        # Depth-hold mode flag (ensure attribute exists before use in run)
+        self.depth_hold = False
+
+                # Desired depth to maintain when depth_hold is True.
+        # Initialized to current depth; will be updated after manual joystick moves.
+        self.desired_depth = self.depth
+        # Internal flag: True while operator is moving depth stick; used to capture last depth on release.
+        self._depth_move_active = False
 
         # IMU
         self.Phi_rad = 0.0
@@ -162,7 +168,6 @@ class ROV(Node):
         ######################
         # liste des publishers
         self.command_pub = self.create_publisher(OverrideRCIn,self.ns+'/mavros/rc/override', self.queue_listener)
-        self.program_B_name_pub = self.create_publisher(String,self.ns+"/program_B_name", self.queue_listener) 
 
         #####################
 
@@ -193,10 +198,7 @@ class ROV(Node):
             msg.channels[i] = self.commands[i] 
         #msg.channels = self.commands
         self.command_pub.publish(msg)
-
-        msg = String()
-        msg.data = self.name_program_B
-        self.program_B_name_pub.publish(msg)
+        
         
 
     def callback_heading(self, msg):
@@ -297,6 +299,8 @@ class ROV(Node):
 ###############################
     def run(self):
 
+        print("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
+
 
         if (self.frame_id_last != self.frame_id):  # Check if new commands are given with joystick  : + on regarde si on obéit ou non à la télécommande
             self.frame_id_last = self.frame_id
@@ -328,12 +332,11 @@ class ROV(Node):
                 light_modif_value = 100
                 light_control(self,light_modif_value)
 
-
-            # activation d'un programme (au coder plus bas) avec le bouton "B"
-            if (self.button('B') != 0):
-                    self.program_B = False
-            elif (self.program_B == False):
-                    self.program_B = True
+            # Bouton B : Activer/ désactiver maintien de profondeur
+            if self.button("B") != 0:
+                self.depth_hold = not self.depth_hold
+                self.get_logger().info(f"Depth hold {'activated' if self.depth_hold else 'deactivated'}")
+                print("CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC")
 
             ##### Lecture des input de la manette
 
@@ -341,6 +344,7 @@ class ROV(Node):
             if self.axes[1] != 0:  # joy right up/down
                 self.commands[4] = int(200 * self.axes[1] + 1500)
                 self.commands_front = self.commands[4]
+                print("BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB")
 
             else:
                 self.commands[4] = 1500
@@ -366,13 +370,36 @@ class ROV(Node):
 
 
             # Example : move elevation
-            if self.axes[4] != 0:  # joy right up/down
+            if self.axes[4] != 0:  # joy up/down
+                # Direct manual control while stick is moved
                 self.commands[2] = int(200 * self.axes[4] + 1500)
                 self.commands_front = self.commands[2]
+                # If depth hold is active, mark that operator is changing depth
+                if self.depth_hold:
+                    self._depth_move_active = True
 
             else:
-                self.commands[2] = 1500
-                self.commands_front = self.commands[2]
+                if self.depth_hold:
+                    print("EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE")
+                    # If operator just released the stick after moving it, capture the current depth
+                    if self._depth_move_active:
+                        self.desired_depth = self.depth
+                        self._depth_move_active = False
+                    # maintain desired depth
+                    self.desired_depth = -2 #test exterieur
+
+                    print(f"Desired depth: {self.desired_depth}, Current depth: {self.depth}")
+                    Kp_depth = 100  # Proportional gain for depth control
+                    depth_error = self.depth - self.desired_depth
+                    depth_correction = Kp_depth * depth_error
+                    self.commands[2] = int(1500 - depth_correction)
+                    # Bound the commanded motor PWM to [1300, 1700]
+                    self.commands[2] = clip(self.commands[2], 1300, 1700)
+                    self.commands_front = self.commands[2]
+                else:
+                    print("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF")
+                    self.commands[2] = 1500
+                    self.commands_front = self.commands[2]
 
 
 
@@ -383,15 +410,8 @@ class ROV(Node):
         
         # (...)
 
-        ######## Programme a activer/desactive avec bouton "B" ############
-        if self.program_B:
-            
-
-            self.name_program_B = "Tensegrety control"
-
-            # (...)
-
-        ####################################################################
+        # (Programme lié au bouton B retiré)
+        print("DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD")
 
         self.send_commands()
         self.commands_old = self.commands
@@ -419,6 +439,6 @@ def main(args=None):
 
 if __name__ == '__main__':
     main()
-    
-    
-    
+
+
+

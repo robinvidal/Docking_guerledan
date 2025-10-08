@@ -34,7 +34,7 @@ from mavros_msgs.msg import OverrideRCIn
 from mavros_msgs.srv import CommandBool
 from sensor_msgs.msg import Imu
 from sensor_msgs.msg import Joy
-from std_msgs.msg import Float64, Bool, Float32MultiArray
+from std_msgs.msg import Float64, String, Bool, Float32MultiArray
 
 
 
@@ -116,6 +116,7 @@ class ROV(Node):
 
         # Robot modes
         self.armed = False
+        self.program_B = False
 
         # Robot parameter
         self.depth = 0.0 # Depth
@@ -161,6 +162,7 @@ class ROV(Node):
         ######################
         # liste des publishers
         self.command_pub = self.create_publisher(OverrideRCIn,self.ns+'/mavros/rc/override', self.queue_listener)
+        self.program_B_name_pub = self.create_publisher(String,self.ns+"/program_B_name", self.queue_listener) 
 
         #####################
 
@@ -191,7 +193,10 @@ class ROV(Node):
             msg.channels[i] = self.commands[i] 
         #msg.channels = self.commands
         self.command_pub.publish(msg)
-        
+
+        msg = String()
+        msg.data = self.name_program_B
+        self.program_B_name_pub.publish(msg)
         
 
     def callback_heading(self, msg):
@@ -323,10 +328,12 @@ class ROV(Node):
                 light_modif_value = 100
                 light_control(self,light_modif_value)
 
-            # Bouton B : Activer/ désactiver maintien de profondeur
-            if self.button("B") != 0:
-                self.depth_hold = not self.depth_hold
-                self.get_logger().info(f"Depth hold {'activated' if self.depth_hold else 'deactivated'}")
+
+            # activation d'un programme (au coder plus bas) avec le bouton "B"
+            if (self.button('B') != 0):
+                    self.program_B = False
+            elif (self.program_B == False):
+                    self.program_B = True
 
             ##### Lecture des input de la manette
 
@@ -364,16 +371,8 @@ class ROV(Node):
                 self.commands_front = self.commands[2]
 
             else:
-                if self.depth_hold:
-                    # maintain depth
-                    Kp_depth = 100  # Proportional gain for depth control
-                    depth_error = self.depth  # Assuming desired depth is 0
-                    depth_correction = Kp_depth * depth_error
-                    self.commands[2] = int(1500 - depth_correction)
-                    self.commands_front = self.commands[2]
-                else:
-                    self.commands[2] = 1500
-                    self.commands_front = self.commands[2]
+                self.commands[2] = 1500
+                self.commands_front = self.commands[2]
 
 
 
@@ -384,7 +383,15 @@ class ROV(Node):
         
         # (...)
 
-        # (Programme lié au bouton B retiré)
+        ######## Programme a activer/desactive avec bouton "B" ############
+        if self.program_B:
+            
+
+            self.name_program_B = "Tensegrety control"
+
+            # (...)
+
+        ####################################################################
 
         self.send_commands()
         self.commands_old = self.commands
