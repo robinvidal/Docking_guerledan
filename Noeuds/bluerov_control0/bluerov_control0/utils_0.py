@@ -121,12 +121,25 @@ class ROV(Node):
 
         # Depth-hold mode flag (ensure attribute exists before use in run)
         self.depth_hold = False
+        # Rosbag recording flag
+        self.recording = False
 
                 # Desired depth to maintain when depth_hold is True.
         # Initialized to current depth; will be updated after manual joystick moves.
         self.desired_depth = self.depth
         # Internal flag: True while operator is moving depth stick; used to capture last depth on release.
         self._depth_move_active = False
+
+        # PID state for depth control
+        self._depth_integral = 0.0
+        self._depth_error_prev = 0.0
+        # PID gains (tunable)
+        self.Kp_depth = 100.0
+        self.Ki_depth = 5.0
+        self.Kd_depth = 10.0
+        # Integral windup limits (tunable)
+        self._depth_integral_min = -50.0
+        self._depth_integral_max = 50.0
 
         # IMU
         self.Phi_rad = 0.0
@@ -299,8 +312,6 @@ class ROV(Node):
 ###############################
     def run(self):
 
-        print("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
-
 
         if (self.frame_id_last != self.frame_id):  # Check if new commands are given with joystick  : + on regarde si on obéit ou non à la télécommande
             self.frame_id_last = self.frame_id
@@ -333,18 +344,42 @@ class ROV(Node):
                 light_control(self,light_modif_value)
 
             # Bouton B : Activer/ désactiver maintien de profondeur
+            # B alone -> activate depth hold; LH + B -> deactivate depth hold
             if self.button("B") != 0:
-                self.depth_hold = not self.depth_hold
-                self.get_logger().info(f"Depth hold {'activated' if self.depth_hold else 'deactivated'}")
+                if self.button("LH") != 0:
+                    # LH + B : deactivate (only if currently active)
+                    if self.depth_hold:
+                        self.depth_hold = False
+                        self.get_logger().info("Depth hold deactivated (LH + B)")
+                else:
+                    # B alone : activate (only if currently inactive)
+                    if not self.depth_hold:
+                        self.depth_hold = True
+                        self.get_logger().info("Depth hold activated (B)")
                 print("CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC")
 
+            # Bouton Y seul : Activer enregistrement rosbag
+            # Bouton Y + gachette droite (RT) : Stopper enregistrement rosbag
+            if self.button("Y") != 0:
+                if self.button("LH") != 0:
+                    if self.recording:
+                        # os.system('ros2 bag stop -s')  # Stop recording
+                        self.recording = False
+                        self.get_logger().info("Rosbag recording stopped.")
+                else:
+                    if not self.recording:
+                        bag_name = f"rosbag_{self.ROV_name}_{time.strftime('%Y%m%d_%H%M%S')}"
+                        # os.system(f'ros2 bag record -o {bag_name} -a &')  # Start recording all topics
+                        self.recording = True
+                        self.get_logger().info(f"Rosbag recording started: {bag_name}")
+
+            # Bouton 
             ##### Lecture des input de la manette
 
             # Example : move forward/backward
             if self.axes[1] != 0:  # joy right up/down
                 self.commands[4] = int(200 * self.axes[1] + 1500)
                 self.commands_front = self.commands[4]
-                print("BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB")
 
             else:
                 self.commands[4] = 1500
@@ -370,9 +405,11 @@ class ROV(Node):
 
 
             # Example : move elevation
-            if self.axes[4] != 0:  # joy up/down
+            if self.axes[4] != 0:  # joy up/down (manual)
                 # Direct manual control while stick is moved
                 self.commands[2] = int(200 * self.axes[4] + 1500)
+                # Bound manual command to safe range
+                self.commands[2] = clip(self.commands[2], 1300, 1700)
                 self.commands_front = self.commands[2]
                 # If depth hold is active, mark that operator is changing depth
                 if self.depth_hold:
@@ -380,27 +417,47 @@ class ROV(Node):
 
             else:
                 if self.depth_hold:
-                    print("EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE")
+                    print("EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE")
                     # If operator just released the stick after moving it, capture the current depth
                     if self._depth_move_active:
                         self.desired_depth = self.depth
+                        # reset integral and previous error to avoid jump
+                        self._depth_integral = -6 #  seems to be approximally the value reached when depth is stable so it avoid jump
+                        self._depth_error_prev = 0.0
                         self._depth_move_active = False
-                    # maintain desired depth
-                    self.desired_depth = -2 #test exterieur
+                    # self.desired_depth = 2
 
-                    print(f"Desired depth: {self.desired_depth}, Current depth: {self.depth}")
-                    Kp_depth = 100  # Proportional gain for depth control
-                    depth_error = self.depth - self.desired_depth
-                    depth_correction = Kp_depth * depth_error
-                    self.commands[2] = int(1500 - depth_correction)
-                    # Bound the commanded motor PWM to [1300, 1700]
+                    # maintain desired depth using PID
+                    # error = desired - current (positive => need to go deeper)
+                    error = self.desired_depth - self.depth
+                    dt = self.dt if self.dt > 0 else 0.1
+
+                    # Integrate with anti-windup
+                    self._depth_integral += error * dt
+                    self._depth_integral = max(self._depth_integral_min, min(self._depth_integral, self._depth_integral_max))
+                    # Derivative
+                    derivative = (error - self._depth_error_prev) / dt if dt > 0 else 0.0
+                    self._depth_error_prev = error
+
+                    print(f"Desired depth: {self.desired_depth:.3f}, Current depth: {self.depth:.3f}, Error: {error:.3f}, self._depth_integral: {self._depth_integral:.3f}")
+
+
+                    # PID output (maps to same sign as previous P-only behavior)
+                    pid_out = (self.Kp_depth * error) + (self.Ki_depth * self._depth_integral) + (self.Kd_depth * derivative)
+
+                    print(f"Depth err:{self.Kp_depth * error:.3f} I:{self.Ki_depth * self._depth_integral:.3f} D:{self.Kd_depth * derivative:.3f} pid:{pid_out:.3f}")
+                    
+
+                    # Convert PID output to RC command and bound
+                    self.commands[2] = int(1500 - pid_out)
                     self.commands[2] = clip(self.commands[2], 1300, 1700)
+                    # Optional debug
+                    # print(f"Depth err:{error:.3f} I:{self._depth_integral:.3f} D:{derivative:.3f} pid:{pid_out:.3f} cmd:{self.commands[2]}")
                     self.commands_front = self.commands[2]
                 else:
-                    print("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF")
+                    print("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF")
                     self.commands[2] = 1500
                     self.commands_front = self.commands[2]
-
 
 
 
