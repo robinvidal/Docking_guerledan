@@ -55,9 +55,9 @@ def light_control(self,light_modif_value):
 
     self.pwm_light = pwm_light0
 
+    print(f"Light PWM value set to: {self.pwm_light}")
     
-    
-    # on ecrit la valeur que l'on veut dans le fichier test.txt   TODO: retirer ce passage pour version publique
+    # # on ecrit la valeur que l'on veut dans le fichier test.txt   TODO: retirer ce passage pour version publique
     msg_lum = str(pwm_light0) 
     password = 'companion' 
     file3 = '/home/pi/pwm_light.txt'
@@ -65,8 +65,8 @@ def light_control(self,light_modif_value):
     os.system(cmd) 
 
     # for classic bluerov
-    if (self.nb_channels > 8): # if the MAVROS version can control the light
-        self.commands[8] = self.pwm_light
+    self.commands[8] = self.pwm_light
+    print(f"Light command set to: {self.commands[8]}")
 
 
 def clip(val, min_val, max_val):
@@ -523,6 +523,7 @@ class ROV(Node):
 
         # (Programme lié au bouton B retiré)
         print("DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD")
+        print(f"Light command set to: {self.commands[8]}")
 
         self.send_commands()
         self.commands_old = self.commands
