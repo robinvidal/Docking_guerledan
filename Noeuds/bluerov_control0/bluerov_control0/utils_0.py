@@ -76,6 +76,10 @@ def clip(val, min_val, max_val):
         return max_val
     return val
 
+def angle_diff_deg(target_deg, current_deg):
+    # return smallest signed difference target - current in range [-180,180)
+    d = (target_deg - current_deg + 180.0) % 360.0 - 180.0
+    return d
 
 class ROV(Node):
 
@@ -118,6 +122,20 @@ class ROV(Node):
         # Robot parameter
         self.depth = 0.0 # Depth
         self.heading = 0.0 # Heading
+
+        # Heading-hold state: X => enable to a fixed target (120°); LH+X => disable
+        self.heading_hold = False
+        self.desired_heading = 200.0
+        # Internal flag: True while operator is moving yaw stick; used to capture last heading on release
+        self._heading_move_active = False
+        # Heading PID state and gains (tunable)
+        self._heading_integral = 0.0
+        self._heading_error_prev = 0.0
+        self.Kp_heading = 2.0
+        self.Ki_heading = 0.01
+        self.Kd_heading = 0.5
+        self._heading_integral_min = -100.0
+        self._heading_integral_max = 100.0
 
         # Depth-hold mode flag (ensure attribute exists before use in run)
         self.depth_hold = False
@@ -382,13 +400,61 @@ class ROV(Node):
                 self.commands_front = self.commands[5]
 
             # Example : move yaw
-            if self.axes[3] != 0:  # joy right up/down
-                self.commands[3] = int(200 * -self.axes[3] + 1500)
-                self.commands_front = self.commands[3]
+            # Heading hold control using X / LH+X
+            if self.button("X") != 0:
+                if self.button("LH") != 0:
+                    # LH + X -> deactivate heading hold
+                    if self.heading_hold:
+                        self.heading_hold = False
+                        self.get_logger().info("Heading hold deactivated (LH + X)")
+                else:
+                    # X alone -> activate heading hold to fixed 120°
+                    if not self.heading_hold:
+                        self.heading_hold = True
+                        self.desired_heading = 200.0
+                        self._heading_integral = 0.0
+                        self._heading_error_prev = 0.0
+                        self.get_logger().info(f"Heading hold activated (X) -> target {self.desired_heading}°")
 
-            else:
-                self.commands[3] = 1500
+            # Manual yaw input takes precedence
+            if self.axes[3] != 0:  # joy right left/right
+                self.commands[3] = int(200 * -self.axes[3] + 1500)
+                self.commands[3] = clip(self.commands[3], 1300, 1700)
                 self.commands_front = self.commands[3]
+                # mark manual move active so that on release we can capture new desired heading
+                if self.heading_hold:
+                    self._heading_move_active = True
+            else:
+                if self.heading_hold:
+                    # if operator just released the yaw stick after moving it, capture current heading
+                    if self._heading_move_active:
+                        current_heading_deg = (math.degrees(self.Psy_rad)) % 360.0
+                        self.desired_heading = 200.0
+                        self._heading_integral = 0.0
+                        self._heading_error_prev = 0.0
+                        self._heading_move_active = False
+
+                    # PID to maintain desired_heading
+                    current_heading_deg = (math.degrees(self.Psy_rad)) % 360.0
+                    err_deg = angle_diff_deg(self.desired_heading, current_heading_deg)
+                    dt = self.dt if self.dt > 0 else 0.1
+                    # integral with anti-windup
+                    self._heading_integral += err_deg * dt
+                    self._heading_integral = max(self._heading_integral_min, min(self._heading_integral, self._heading_integral_max))
+                    # derivative
+                    derivative = (err_deg - self._heading_error_prev) / dt if dt > 0 else 0.0
+                    self._heading_error_prev = err_deg
+                    # PID output (deg -> RC mapping)
+                    pid_out = (self.Kp_heading * err_deg) + (self.Ki_heading * self._heading_integral) + (self.Kd_heading * derivative)
+                    print(f"Desired head:{self.desired_heading:.1f}°, Current head:{current_heading_deg:.1f}°, Err:{err_deg:.1f}°, I:{self._heading_integral:.1f}, D:{derivative:.1f}, PID out:{pid_out:.1f}")
+                    self.commands[3] = int(1500 - pid_out)
+                    self.commands[3] = clip(self.commands[3], 1300, 1700)
+                    self.commands_front = self.commands[3]
+                    print("MAAAAAAAAAAAAAAAAAAAINNNNNNNNNNTIEEEEENNN CAAAAAAAAAAAAAAAAAAAAAP")
+                else:
+                    print("CAAAAAAAAAAAAAAAAAAP LIIIIIIIIIIIIIIIIIIIIIIIIIBRE")
+                    self.commands[3] = 1500
+                    self.commands_front = self.commands[3]
 
 
             # Example : move elevation
