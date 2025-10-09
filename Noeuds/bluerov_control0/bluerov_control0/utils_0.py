@@ -312,6 +312,8 @@ class ROV(Node):
 ###############################
     def run(self):
 
+        print("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
+
 
         if (self.frame_id_last != self.frame_id):  # Check if new commands are given with joystick  : + on regarde si on obéit ou non à la télécommande
             self.frame_id_last = self.frame_id
@@ -358,28 +360,13 @@ class ROV(Node):
                         self.get_logger().info("Depth hold activated (B)")
                 print("CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC")
 
-            # Bouton Y seul : Activer enregistrement rosbag
-            # Bouton Y + gachette droite (RT) : Stopper enregistrement rosbag
-            if self.button("Y") != 0:
-                if self.button("LH") != 0:
-                    if self.recording:
-                        # os.system('ros2 bag stop -s')  # Stop recording
-                        self.recording = False
-                        self.get_logger().info("Rosbag recording stopped.")
-                else:
-                    if not self.recording:
-                        bag_name = f"rosbag_{self.ROV_name}_{time.strftime('%Y%m%d_%H%M%S')}"
-                        # os.system(f'ros2 bag record -o {bag_name} -a &')  # Start recording all topics
-                        self.recording = True
-                        self.get_logger().info(f"Rosbag recording started: {bag_name}")
-
-            # Bouton 
             ##### Lecture des input de la manette
 
             # Example : move forward/backward
             if self.axes[1] != 0:  # joy right up/down
                 self.commands[4] = int(200 * self.axes[1] + 1500)
                 self.commands_front = self.commands[4]
+                print("BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB")
 
             else:
                 self.commands[4] = 1500
@@ -458,6 +445,7 @@ class ROV(Node):
                     print("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF")
                     self.commands[2] = 1500
                     self.commands_front = self.commands[2]
+
 
 
 
