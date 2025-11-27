@@ -1,0 +1,22 @@
+# Paramètres de contrôle PID
+
+control_node:
+  ros__parameters:
+    # PID latéral (x)
+    pid_x_kp: 0.5
+    pid_x_ki: 0.01
+    pid_x_kd: 0.1
+    
+    # PID frontal (y)
+    pid_y_kp: 0.3
+    pid_y_ki: 0.005
+    pid_y_kd: 0.05
+    
+    # PID lacet (yaw)
+    pid_yaw_kp: 1.0
+    pid_yaw_ki: 0.02
+    pid_yaw_kd: 0.2
+    
+    # Limites
+    max_linear_speed: 0.5   # m/s
+    max_angular_speed: 0.5  # rad/s

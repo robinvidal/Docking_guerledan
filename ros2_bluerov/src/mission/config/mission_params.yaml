@@ -1,0 +1,8 @@
+# Paramètres de mission
+
+mission_node:
+  ros__parameters:
+    lock_on_timeout: 10.0        # Timeout acquisition cage (s)
+    approach_distance: 1.0       # Distance déclenchement approche (m)
+    docking_distance: 0.3        # Distance déclenchement docking final (m)
+    alignment_threshold: 0.1     # Tolérance alignement (rad, ~6°)

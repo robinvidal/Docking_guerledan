@@ -1,0 +1,9 @@
+# Paramètres de tracking
+
+tracking_node:
+  ros__parameters:
+    intensity_threshold: 150    # Seuil intensité pour détection pics
+    min_confidence: 0.7         # Confiance minimale pour validation
+    expected_cage_width: 2.0    # Largeur cage attendue (m)
+    search_range_min: 2.0       # Distance min recherche (m)
+    search_range_max: 20.0      # Distance max recherche (m)

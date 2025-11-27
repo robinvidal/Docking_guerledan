@@ -1,0 +1,9 @@
+# Configuration globale pour pipeline mock
+
+# Tous les paramètres peuvent être overridés ici
+# Les valeurs par défaut sont dans les config/ de chaque package
+
+# Exemple: augmenter distance cage simulée
+/**:
+  ros__parameters:
+    cage_distance: 10.0  # Distance cage mock (m)

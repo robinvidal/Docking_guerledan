@@ -1,0 +1,21 @@
+# Paramètres du sonar
+
+sonar_mock:
+  ros__parameters:
+    publish_rate: 10.0      # Hz
+    range_count: 512        # Nombre de bins en distance
+    bearing_count: 256      # Nombre de faisceaux angulaires
+    min_range: 1.0          # Distance minimale (m)
+    max_range: 40.0         # Distance maximale (m)
+    cage_distance: 8.0      # Distance de la cage simulée (m)
+    cage_width: 2.0         # Largeur cage (m)
+    noise_level: 20.0       # Niveau de bruit (0-100)
+
+sonar_node:
+  ros__parameters:
+    publish_rate: 10.0
+    ip_address: "192.168.1.10"
+    port: 52102
+    range: 40.0             # Portée sonar (m)
+    gain: 50.0              # Gain (0-100)
+    frequency: 750          # Fréquence (kHz) - M750d

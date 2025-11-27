@@ -1,0 +1,12 @@
+# Paramètres de traitement sonar
+
+traitement_node:
+  ros__parameters:
+    enable_median: true
+    median_kernel: 3        # Taille noyau filtre médian
+    enable_gaussian: true
+    gaussian_sigma: 1.5     # Écart-type gaussien
+    enable_contrast: true
+    contrast_clip: 2.0      # Limite écrêtage (%)
+    enable_range_comp: true
+    range_comp_alpha: 0.0001  # Coefficient atténuation
