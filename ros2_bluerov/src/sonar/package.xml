@@ -11,7 +11,11 @@
 
   <depend>rclpy</depend>
   <depend>docking_msgs</depend>
+  <depend>docking_utils</depend>
   <depend>std_msgs</depend>
+
+  <exec_depend>python3-numpy</exec_depend>
+  <exec_depend>python3-scipy</exec_depend>
 
   <test_depend>ament_copyright</test_depend>
   <test_depend>ament_flake8</test_depend>

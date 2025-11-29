@@ -73,12 +73,13 @@ ros2 topic list
 ```
 
 Doit contenir:
-- `/docking/sonar/raw`
-- `/docking/sonar/filtered`
-- `/docking/tracking/borders`
-- `/docking/localisation/pose`
-- `/docking/mission/state`
 - `/cmd_vel`
+- `/docking/localisation/pose`
+- `/docking/mission/abort`
+- `/docking/mission/state`
+- `/docking/sonar/filtered`
+- `/docking/sonar/raw`
+- `/docking/tracking/borders`
 
 ### Les nœuds sont actifs
 

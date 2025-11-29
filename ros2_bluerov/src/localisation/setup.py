@@ -12,7 +12,7 @@ setup(
         ('share/' + package_name, ['package.xml']),
         ('share/' + package_name + '/config', ['config/localisation_params.yaml']),
     ],
-    install_requires=['setuptools'],
+    install_requires=['setuptools', 'numpy>=1.17.3,<1.25.0'],
     zip_safe=True,
     maintainer='Maxime Lefevre',
     maintainer_email='maxime.lefevre@example.com',

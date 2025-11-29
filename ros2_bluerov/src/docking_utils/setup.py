@@ -11,7 +11,7 @@ setup(
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
     ],
-    install_requires=['setuptools'],
+    install_requires=['setuptools', 'numpy>=1.17.3,<1.25.0', 'scipy'],
     zip_safe=True,
     maintainer='Maxime Lefevre',
     maintainer_email='maxime.lefevre@example.com',

@@ -1,12 +1,27 @@
-# Paramètres de traitement sonar
+# Paramètres de traitement sonar avancé
+# Pipeline: TVG → Égalisation → Filtrage → SO-CFAR → Seuillage adaptatif
 
 traitement_node:
   ros__parameters:
-    enable_median: true
-    median_kernel: 3        # Taille noyau filtre médian
-    enable_gaussian: true
-    gaussian_sigma: 1.5     # Écart-type gaussien
-    enable_contrast: true
-    contrast_clip: 2.0      # Limite écrêtage (%)
-    enable_range_comp: true
-    range_comp_alpha: 0.0001  # Coefficient atténuation
+    # === 1. Normalisation et Correction de Gain (TVG) ===
+    enable_histogram_eq: true       # Égalisation d'histogramme (CLAHE)
+    enable_tvg_correction: true     # Correction Time Varying Gain
+    tvg_alpha: 0.0002               # Coefficient d'atténuation acoustique (m⁻¹)
+    tvg_spreading_loss: 20.0        # Perte par étalement géométrique (dB)
+    
+    # === 2. Filtrage de base ===
+    enable_median: true             # Réduction bruit impulsionnel
+    median_kernel: 3                # Taille noyau filtre médian (impair)
+    enable_gaussian: true           # Lissage gaussien
+    gaussian_sigma: 1.0             # Écart-type gaussien
+    
+    # === 3. SO-CFAR (Smallest Of - Constant False Alarm Rate) ===
+    enable_so_cfar: true            # Détection adaptative de cibles
+    cfar_guard_cells: 2             # Cellules de garde autour du pixel testé
+    cfar_window_size: 10            # Taille fenêtre de référence (avant/arrière)
+    cfar_alpha: 3.0                 # Facteur seuil (↑ = moins sensible, moins fausses alarmes)
+    
+    # === 4. Seuillage Adaptatif Final (ADT) ===
+    enable_adaptive_threshold: true  # Binarisation finale
+    adt_block_size: 15              # Taille bloc pour moyenne locale (impair)
+    adt_c: 2                        # Constante soustraite à la moyenne locale

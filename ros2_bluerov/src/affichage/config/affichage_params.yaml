@@ -1,0 +1,4 @@
+sonar_viewer:
+  ros__parameters:
+    # Aucun paramètre pour l'instant
+    # L'interface s'adapte automatiquement aux données reçues

@@ -1,32 +1,44 @@
 """
 Nœud de filtrage et prétraitement des données sonar.
+Implémente normalisation, TVG, égalisation d'histogramme et SO-CFAR.
 """
 
 import rclpy
 from rclpy.node import Node
 from docking_msgs.msg import Frame
 import numpy as np
-from docking_utils.filters import (
-    median_filter, gaussian_filter, contrast_enhancement,
-    range_compensation, morphological_opening
-)
+from scipy import ndimage
+import cv2
 
 
 class TraitementNode(Node):
-    """Applique filtres sur frames sonar brutes."""
+    """Applique filtres avancés sur frames sonar brutes."""
     
     def __init__(self):
         super().__init__('traitement_node')
         
-        # Paramètres
+        # Paramètres de normalisation et TVG
+        self.declare_parameter('enable_histogram_eq', True)
+        self.declare_parameter('enable_tvg_correction', True)
+        self.declare_parameter('tvg_alpha', 0.0002)  # Coefficient d'atténuation
+        self.declare_parameter('tvg_spreading_loss', 20.0)  # Perte par étalement (dB)
+        
+        # Paramètres de filtrage de base
         self.declare_parameter('enable_median', True)
         self.declare_parameter('median_kernel', 3)
         self.declare_parameter('enable_gaussian', True)
-        self.declare_parameter('gaussian_sigma', 1.5)
-        self.declare_parameter('enable_contrast', True)
-        self.declare_parameter('contrast_clip', 2.0)
-        self.declare_parameter('enable_range_comp', True)
-        self.declare_parameter('range_comp_alpha', 0.0001)
+        self.declare_parameter('gaussian_sigma', 1.0)
+        
+        # Paramètres SO-CFAR
+        self.declare_parameter('enable_so_cfar', True)
+        self.declare_parameter('cfar_guard_cells', 2)  # Cellules de garde
+        self.declare_parameter('cfar_window_size', 10)  # Taille fenêtre référence
+        self.declare_parameter('cfar_alpha', 3.0)  # Facteur seuil (taux fausse alarme)
+        
+        # Paramètres seuillage adaptatif final
+        self.declare_parameter('enable_adaptive_threshold', True)
+        self.declare_parameter('adt_block_size', 15)  # Taille bloc (doit être impair)
+        self.declare_parameter('adt_c', 2)  # Constante soustraite à la moyenne
         
         # Subscription
         self.subscription = self.create_subscription(
@@ -39,7 +51,113 @@ class TraitementNode(Node):
         # Publisher
         self.publisher_ = self.create_publisher(Frame, '/docking/sonar/filtered', 10)
         
-        self.get_logger().info('Traitement node démarré')
+        self.get_logger().info('Traitement node démarré (TVG + SO-CFAR enabled)')
+    
+    def tvg_correction(self, img: np.ndarray, ranges: np.ndarray) -> np.ndarray:
+        """
+        Correction Time Varying Gain (TVG).
+        Compense l'atténuation due à l'étalement géométrique et l'absorption.
+        """
+        # Modèle de perte: spreading loss + absorption
+        spreading_loss_db = self.get_parameter('tvg_spreading_loss').value
+        alpha = self.get_parameter('tvg_alpha').value
+        
+        # Calcul du gain en dB pour chaque range bin
+        # Spreading loss: 20*log10(r) ou 10*log10(r) selon géométrie
+        # Absorption: alpha * r (Neper/m converti en dB)
+        gain_db = spreading_loss_db * np.log10(ranges + 1e-6) + (alpha * ranges * 8.686)
+        
+        # Conversion dB -> linéaire
+        gain_linear = 10 ** (gain_db / 20.0)
+        
+        # Application du gain (broadcast sur tous les bearings)
+        corrected = img.astype(np.float32) * gain_linear[np.newaxis, :]
+        
+        return np.clip(corrected, 0, 255).astype(np.uint8)
+    
+    def histogram_equalization(self, img: np.ndarray) -> np.ndarray:
+        """
+        Égalisation d'histogramme adaptative (CLAHE).
+        Améliore le contraste local tout en limitant l'amplification du bruit.
+        """
+        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+        return clahe.apply(img)
+    
+    def so_cfar_detector(self, img: np.ndarray) -> np.ndarray:
+        """
+        SO-CFAR (Smallest Of - Constant False Alarm Rate).
+        Détection adaptative de cibles avec rejet du bruit de fond variable.
+        
+        Principe:
+        - Fenêtre glissante autour de chaque pixel (cellule sous test)
+        - Division en 2 sous-fenêtres (avant/arrière le long du range)
+        - Calcul de la moyenne dans chaque sous-fenêtre
+        - Sélection de la PLUS PETITE moyenne (robuste aux cibles voisines)
+        - Seuil local: T = alpha * mu_min
+        - Décision: pixel > T => cible potentielle
+        """
+        guard = self.get_parameter('cfar_guard_cells').value
+        window = self.get_parameter('cfar_window_size').value
+        alpha = self.get_parameter('cfar_alpha').value
+        
+        bearing_count, range_count = img.shape
+        output = np.zeros_like(img, dtype=np.uint8)
+        
+        # Conversion en float pour calculs
+        img_float = img.astype(np.float32)
+        
+        # Parcours de l'image (éviter les bords)
+        margin = guard + window
+        
+        for b in range(bearing_count):
+            for r in range(margin, range_count - margin):
+                # Cellule sous test
+                cut = img_float[b, r]
+                
+                # Fenêtre avant (leading)
+                leading_start = r - guard - window
+                leading_end = r - guard
+                leading_window = img_float[b, leading_start:leading_end]
+                
+                # Fenêtre arrière (trailing)
+                trailing_start = r + guard + 1
+                trailing_end = r + guard + window + 1
+                trailing_window = img_float[b, trailing_start:trailing_end]
+                
+                # Moyennes des deux fenêtres
+                mu_leading = np.mean(leading_window) if leading_window.size > 0 else 0
+                mu_trailing = np.mean(trailing_window) if trailing_window.size > 0 else 0
+                
+                # SO-CFAR: sélection de la plus petite moyenne
+                mu_min = min(mu_leading, mu_trailing)
+                
+                # Seuil adaptatif
+                threshold = alpha * mu_min
+                
+                # Décision
+                if cut > threshold:
+                    output[b, r] = 255  # Cible détectée
+                else:
+                    output[b, r] = 0
+        
+        return output
+    
+    def adaptive_threshold(self, img: np.ndarray) -> np.ndarray:
+        """
+        Seuillage adaptatif local (ADT).
+        Binarisation finale pour ne garder que les structures pertinentes.
+        """
+        block_size = self.get_parameter('adt_block_size').value
+        c = self.get_parameter('adt_c').value
+        
+        # Assurer que block_size est impair
+        if block_size % 2 == 0:
+            block_size += 1
+        
+        return cv2.adaptiveThreshold(
+            img, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+            cv2.THRESH_BINARY, block_size, c
+        )
     
     def frame_callback(self, msg: Frame):
         """Traite une frame sonar."""
@@ -48,25 +166,34 @@ class TraitementNode(Node):
             (msg.bearing_count, msg.range_count)
         )
         
-        # Pipeline de filtrage
         filtered = img.copy()
         
+        # 1. Correction TVG (Time Varying Gain)
+        if self.get_parameter('enable_tvg_correction').value:
+            ranges = np.linspace(msg.min_range, msg.max_range, msg.range_count)
+            filtered = self.tvg_correction(filtered, ranges)
+        
+        # 2. Égalisation d'histogramme (CLAHE)
+        if self.get_parameter('enable_histogram_eq').value:
+            filtered = self.histogram_equalization(filtered)
+        
+        # 3. Filtrage médian (réduction bruit impulsionnel)
         if self.get_parameter('enable_median').value:
             kernel = self.get_parameter('median_kernel').value
-            filtered = median_filter(filtered, kernel)
+            filtered = ndimage.median_filter(filtered, size=kernel)
         
+        # 4. Filtrage gaussien (lissage)
         if self.get_parameter('enable_gaussian').value:
             sigma = self.get_parameter('gaussian_sigma').value
-            filtered = gaussian_filter(filtered, sigma)
+            filtered = ndimage.gaussian_filter(filtered, sigma=sigma)
         
-        if self.get_parameter('enable_range_comp').value:
-            alpha = self.get_parameter('range_comp_alpha').value
-            ranges = np.linspace(msg.min_range, msg.max_range, msg.range_count)
-            filtered = range_compensation(filtered, ranges, alpha)
+        # 5. SO-CFAR (détection adaptative de cibles)
+        if self.get_parameter('enable_so_cfar').value:
+            filtered = self.so_cfar_detector(filtered)
         
-        if self.get_parameter('enable_contrast').value:
-            clip = self.get_parameter('contrast_clip').value
-            filtered = contrast_enhancement(filtered, clip)
+        # 6. Seuillage adaptatif final (ADT)
+        if self.get_parameter('enable_adaptive_threshold').value:
+            filtered = self.adaptive_threshold(filtered)
         
         # Publication
         out_msg = Frame()
