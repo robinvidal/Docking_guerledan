@@ -6,15 +6,21 @@ Affiche les frames sonar brutes et filtrées avec overlay des détections.
 import sys
 import numpy as np
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
-                             QHBoxLayout, QLabel, QTabWidget, QPushButton, QGroupBox)
+                             QHBoxLayout, QLabel, QTabWidget, QPushButton, QGroupBox,
+                             QCheckBox, QSlider, QDoubleSpinBox, QSpinBox, QScrollArea,
+                             QFormLayout, QFileDialog, QMessageBox)
 from PyQt5.QtCore import Qt, QTimer, pyqtSignal, QObject
 from PyQt5.QtGui import QImage, QPixmap
 import pyqtgraph as pg
 
 import rclpy
 from rclpy.node import Node
+from rclpy.parameter import Parameter
+from rcl_interfaces.msg import ParameterType
 from docking_msgs.msg import Frame, Borders, PoseRelative, State
 from std_msgs.msg import Bool
+import yaml
+import os
 
 
 class ROSSignals(QObject):
@@ -32,6 +38,9 @@ class SonarViewerNode(Node):
     def __init__(self, signals):
         super().__init__('sonar_viewer')
         self.signals = signals
+        
+        # Client pour accéder aux paramètres du nœud traitement
+        self.traitement_param_client = None
         
         # Subscriptions
         self.raw_sub = self.create_subscription(
@@ -59,6 +68,60 @@ class SonarViewerNode(Node):
         self.current_state = None
         
         self.get_logger().info('Sonar Viewer démarré')
+    
+    def set_traitement_parameter(self, param_name, value):
+        """Modifie un paramètre du nœud traitement_node."""
+        if not self.traitement_param_client:
+            # Lazy initialization du client
+            from rclpy.parameter import Parameter
+            self.traitement_param_client = self.create_client(
+                self.get_parameter_service_type(),
+                '/traitement_node/set_parameters'
+            )
+        
+        # Déterminer le type de paramètre
+        if isinstance(value, bool):
+            param_type = ParameterType.PARAMETER_BOOL
+        elif isinstance(value, int):
+            param_type = ParameterType.PARAMETER_INTEGER
+        elif isinstance(value, float):
+            param_type = ParameterType.PARAMETER_DOUBLE
+        else:
+            self.get_logger().error(f'Type de paramètre non supporté: {type(value)}')
+            return False
+        
+        # Créer la requête de modification
+        from rcl_interfaces.srv import SetParameters
+        from rcl_interfaces.msg import Parameter as ParameterMsg, ParameterValue
+        
+        request = SetParameters.Request()
+        param = ParameterMsg()
+        param.name = param_name
+        param.value = ParameterValue()
+        param.value.type = param_type
+        
+        if param_type == ParameterType.PARAMETER_BOOL:
+            param.value.bool_value = value
+        elif param_type == ParameterType.PARAMETER_INTEGER:
+            param.value.integer_value = value
+        elif param_type == ParameterType.PARAMETER_DOUBLE:
+            param.value.double_value = value
+        
+        request.parameters = [param]
+        
+        # Envoyer la requête (non bloquant)
+        if self.traitement_param_client.service_is_ready():
+            future = self.traitement_param_client.call_async(request)
+            self.get_logger().debug(f'Paramètre {param_name} = {value} envoyé')
+            return True
+        else:
+            self.get_logger().warn('Service de paramètres traitement_node non disponible')
+            return False
+    
+    def get_parameter_service_type(self):
+        """Retourne le type de service pour les paramètres."""
+        from rcl_interfaces.srv import SetParameters
+        return SetParameters
     
     def raw_callback(self, msg):
         """Callback pour frames sonar brutes."""
@@ -215,6 +278,276 @@ class SonarCartesianWidget(pg.PlotWidget):
             self.borders_scatter.setData(pos=np.array(points))
 
 
+class TraitementControlWidget(QWidget):
+    """Panneau de contrôle des paramètres de traitement en temps réel."""
+    
+    def __init__(self, ros_node):
+        super().__init__()
+        self.ros_node = ros_node
+        self.param_widgets = {}  # Stockage des widgets pour récupération valeurs
+        
+        # Layout principal avec scroll
+        main_layout = QVBoxLayout(self)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll_content = QWidget()
+        scroll_layout = QVBoxLayout(scroll_content)
+        
+        # === En-tête avec boutons d'action ===
+        header_layout = QHBoxLayout()
+        
+        self.save_btn = QPushButton("💾 Sauvegarder dans YAML")
+        self.save_btn.setStyleSheet("background-color: #4CAF50; color: white; "
+                                   "font-weight: bold; padding: 8px;")
+        self.save_btn.clicked.connect(self.save_to_yaml)
+        header_layout.addWidget(self.save_btn)
+        
+        self.reset_btn = QPushButton("🔄 Réinitialiser")
+        self.reset_btn.clicked.connect(self.reset_to_defaults)
+        header_layout.addWidget(self.reset_btn)
+        
+        header_layout.addStretch()
+        scroll_layout.addLayout(header_layout)
+        
+        # === 1. TVG Correction ===
+        tvg_group = self.create_group_box(
+            "🎚️ Correction TVG (Time Varying Gain)",
+            [
+                ('enable_histogram_eq', 'Égalisation histogramme (CLAHE)', 'bool', True),
+                ('enable_tvg_correction', 'Activer correction TVG', 'bool', False),
+                ('tvg_alpha', 'Coefficient atténuation α (Np/m)', 'double', 0.0002, 0.0, 0.001, 0.00001),
+                ('tvg_spreading_loss', 'Perte étalement (dB)', 'double', 20.0, 10.0, 40.0, 1.0),
+            ]
+        )
+        scroll_layout.addWidget(tvg_group)
+        
+        # === 2. Filtrage de base ===
+        filter_group = self.create_group_box(
+            "🔍 Filtrage de base",
+            [
+                ('enable_median', 'Filtre médian', 'bool', True),
+                ('median_kernel', 'Taille kernel médian', 'int', 3, 3, 11, 2),  # step=2 (impair)
+                ('enable_gaussian', 'Filtre gaussien', 'bool', True),
+                ('gaussian_sigma', 'Sigma gaussien', 'double', 1.0, 0.1, 5.0, 0.1),
+            ]
+        )
+        scroll_layout.addWidget(filter_group)
+        
+        # === 3. SO-CFAR ===
+        cfar_group = self.create_group_box(
+            "🎯 SO-CFAR (Smallest Of - Constant False Alarm Rate)",
+            [
+                ('enable_so_cfar', 'Activer SO-CFAR', 'bool', True),
+                ('cfar_guard_cells', 'Cellules de garde', 'int', 5, 1, 20, 1),
+                ('cfar_window_size', 'Taille fenêtre référence', 'int', 10, 5, 30, 1),
+                ('cfar_alpha', 'Facteur seuil α', 'double', 10.0, 1.0, 20.0, 0.5),
+            ]
+        )
+        scroll_layout.addWidget(cfar_group)
+        
+        # === 4. Seuillage adaptatif ===
+        adt_group = self.create_group_box(
+            "✂️ Seuillage Adaptatif Final (ADT)",
+            [
+                ('enable_adaptive_threshold', 'Activer ADT', 'bool', False),
+                ('adt_block_size', 'Taille bloc', 'int', 15, 5, 51, 2),  # impair
+                ('adt_c', 'Constante C', 'int', 2, 0, 10, 1),
+            ]
+        )
+        scroll_layout.addWidget(adt_group)
+        
+        # === Informations en bas ===
+        info_label = QLabel(
+            "ℹ️ Les modifications sont appliquées en temps réel au nœud traitement_node.\n"
+            "Utilisez 'Sauvegarder dans YAML' pour rendre les changements permanents."
+        )
+        info_label.setStyleSheet("background-color: #e3f2fd; padding: 10px; "
+                                 "border-radius: 5px; color: #1565c0;")
+        info_label.setWordWrap(True)
+        scroll_layout.addWidget(info_label)
+        
+        scroll_layout.addStretch()
+        scroll.setWidget(scroll_content)
+        main_layout.addWidget(scroll)
+    
+    def create_group_box(self, title, params):
+        """Crée un groupe de paramètres avec des widgets appropriés."""
+        group = QGroupBox(title)
+        layout = QFormLayout()
+        
+        for param_info in params:
+            if param_info[2] == 'bool':
+                # Checkbox pour booléen
+                param_name, label, _, default = param_info
+                checkbox = QCheckBox()
+                checkbox.setChecked(default)
+                checkbox.stateChanged.connect(
+                    lambda state, name=param_name: self.on_param_changed(name, state == Qt.Checked)
+                )
+                layout.addRow(label + ':', checkbox)
+                self.param_widgets[param_name] = checkbox
+                
+            elif param_info[2] == 'int':
+                # Slider + SpinBox pour entier
+                param_name, label, _, default, min_val, max_val, step = param_info
+                
+                widget_layout = QHBoxLayout()
+                slider = QSlider(Qt.Horizontal)
+                slider.setMinimum(min_val)
+                slider.setMaximum(max_val)
+                slider.setValue(default)
+                slider.setSingleStep(step)
+                
+                spinbox = QSpinBox()
+                spinbox.setMinimum(min_val)
+                spinbox.setMaximum(max_val)
+                spinbox.setValue(default)
+                spinbox.setSingleStep(step)
+                
+                # Synchronisation slider <-> spinbox
+                slider.valueChanged.connect(spinbox.setValue)
+                spinbox.valueChanged.connect(slider.setValue)
+                spinbox.valueChanged.connect(
+                    lambda value, name=param_name: self.on_param_changed(name, value)
+                )
+                
+                widget_layout.addWidget(slider, 3)
+                widget_layout.addWidget(spinbox, 1)
+                layout.addRow(label + ':', widget_layout)
+                self.param_widgets[param_name] = spinbox
+                
+            elif param_info[2] == 'double':
+                # Slider + DoubleSpinBox pour flottant
+                param_name, label, _, default, min_val, max_val, step = param_info
+                
+                widget_layout = QHBoxLayout()
+                
+                # Slider avec résolution x1000 pour précision
+                slider = QSlider(Qt.Horizontal)
+                slider.setMinimum(int(min_val / step))
+                slider.setMaximum(int(max_val / step))
+                slider.setValue(int(default / step))
+                
+                spinbox = QDoubleSpinBox()
+                spinbox.setMinimum(min_val)
+                spinbox.setMaximum(max_val)
+                spinbox.setValue(default)
+                spinbox.setSingleStep(step)
+                spinbox.setDecimals(len(str(step).split('.')[-1]) if '.' in str(step) else 0)
+                
+                # Synchronisation slider <-> spinbox
+                slider.valueChanged.connect(lambda v, sb=spinbox, s=step: sb.setValue(v * s))
+                spinbox.valueChanged.connect(lambda v, sl=slider, s=step: sl.setValue(int(v / s)))
+                spinbox.valueChanged.connect(
+                    lambda value, name=param_name: self.on_param_changed(name, value)
+                )
+                
+                widget_layout.addWidget(slider, 3)
+                widget_layout.addWidget(spinbox, 1)
+                layout.addRow(label + ':', widget_layout)
+                self.param_widgets[param_name] = spinbox
+        
+        group.setLayout(layout)
+        return group
+    
+    def on_param_changed(self, param_name, value):
+        """Callback appelé quand un paramètre change."""
+        # Envoyer au nœud ROS
+        success = self.ros_node.set_traitement_parameter(param_name, value)
+        if success:
+            self.ros_node.get_logger().info(f'Paramètre {param_name} = {value}')
+    
+    def get_current_params(self):
+        """Récupère les valeurs actuelles de tous les paramètres."""
+        params = {}
+        for name, widget in self.param_widgets.items():
+            if isinstance(widget, QCheckBox):
+                params[name] = widget.isChecked()
+            elif isinstance(widget, (QSpinBox, QDoubleSpinBox)):
+                params[name] = widget.value()
+        return params
+    
+    def save_to_yaml(self):
+        """Sauvegarde les paramètres actuels dans un fichier YAML."""
+        # Récupérer valeurs actuelles
+        params = self.get_current_params()
+        
+        # Construire structure YAML
+        yaml_content = {
+            'traitement_node': {
+                'ros__parameters': params
+            }
+        }
+        
+        # Dialogue de sauvegarde
+        file_path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Sauvegarder paramètres de traitement",
+            "traitement_params.yaml",
+            "YAML Files (*.yaml *.yml)"
+        )
+        
+        if file_path:
+            try:
+                with open(file_path, 'w') as f:
+                    yaml.dump(yaml_content, f, default_flow_style=False, sort_keys=False)
+                
+                QMessageBox.information(
+                    self,
+                    "Sauvegarde réussie",
+                    f"Paramètres sauvegardés dans:\n{file_path}\n\n"
+                    "Pour les utiliser au démarrage:\n"
+                    "ros2 run traitement traitement_node --ros-args "
+                    f"--params-file {file_path}"
+                )
+                self.ros_node.get_logger().info(f'Paramètres sauvegardés: {file_path}')
+            except Exception as e:
+                QMessageBox.critical(
+                    self,
+                    "Erreur de sauvegarde",
+                    f"Impossible de sauvegarder:\n{str(e)}"
+                )
+                self.ros_node.get_logger().error(f'Erreur sauvegarde: {e}')
+    
+    def reset_to_defaults(self):
+        """Réinitialise tous les paramètres aux valeurs par défaut."""
+        reply = QMessageBox.question(
+            self,
+            "Confirmer réinitialisation",
+            "Voulez-vous vraiment réinitialiser tous les paramètres aux valeurs par défaut ?",
+            QMessageBox.Yes | QMessageBox.No
+        )
+        
+        if reply == QMessageBox.Yes:
+            # Valeurs par défaut (à synchroniser avec traitement_params.yaml)
+            defaults = {
+                'enable_histogram_eq': True,
+                'enable_tvg_correction': False,
+                'tvg_alpha': 0.0002,
+                'tvg_spreading_loss': 20.0,
+                'enable_median': True,
+                'median_kernel': 3,
+                'enable_gaussian': True,
+                'gaussian_sigma': 1.0,
+                'enable_so_cfar': True,
+                'cfar_guard_cells': 5,
+                'cfar_window_size': 10,
+                'cfar_alpha': 10.0,
+                'enable_adaptive_threshold': False,
+                'adt_block_size': 15,
+                'adt_c': 2,
+            }
+            
+            # Appliquer aux widgets
+            for name, value in defaults.items():
+                if name in self.param_widgets:
+                    widget = self.param_widgets[name]
+                    if isinstance(widget, QCheckBox):
+                        widget.setChecked(value)
+                    elif isinstance(widget, (QSpinBox, QDoubleSpinBox)):
+                        widget.setValue(value)
+
+
 class MainWindow(QMainWindow):
     """Fenêtre principale de l'application."""
     
@@ -296,6 +629,10 @@ class MainWindow(QMainWindow):
         graphs_layout.addWidget(self.pose_plot)
         graphs_layout.addWidget(self.yaw_plot)
         self.tabs.addTab(graphs_widget, "📊 Graphes Pose")
+        
+        # Onglet 5: Contrôle traitement
+        self.control_widget = TraitementControlWidget(self.ros_node)
+        self.tabs.addTab(self.control_widget, "⚙️ Contrôle Traitement")
         
         # Historique des données pour graphes
         self.pose_history_x = []
