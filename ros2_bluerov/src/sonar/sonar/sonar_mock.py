@@ -54,6 +54,13 @@ class SonarMockNode(Node):
         self.noise_level = self.get_parameter('noise_level').value
         cmd_vel_topic = self.get_parameter('cmd_vel_topic').value
         
+        # === Pré-calcul des grilles polaires (OPTIMISATION) ===
+        # Calcul unique au démarrage, réutilisé à chaque frame
+        self.ranges = np.linspace(self.min_range, self.max_range, self.range_count)
+        half_angle = self.bearing_angle / 2.0
+        self.bearings = np.linspace(-half_angle * np.pi/180, half_angle * np.pi/180, self.bearing_count)
+        self.half_angle_rad = half_angle * np.pi / 180.0
+        
         # === État de la simulation (position relative cage/ROV) ===
         # Position de la cage dans le repère du ROV (fixe au départ)
         # La cage est fixe dans le monde, le ROV bouge
@@ -159,78 +166,93 @@ class SonarMockNode(Node):
     
     def generate_synthetic_frame(self) -> np.ndarray:
         """Génère une frame sonar synthétique avec cage à la position courante."""
-        # Grille polaire (utilise bearing_angle du config)
-        ranges = np.linspace(self.min_range, self.max_range, self.range_count)
-        half_angle = self.bearing_angle / 2.0  # moitié de l'ouverture
-        bearings = np.linspace(-half_angle * np.pi/180, half_angle * np.pi/180, self.bearing_count)
+        # OPTIMISATION 1 : Réutiliser les grilles pré-calculées
+        # (plus besoin de recalculer ranges/bearings à chaque frame)
         
-        # Image de base: bruit plus réaliste
-        # - bruit gaussien de fond (std = noise_level)
-        # - speckle / salt-and-pepper aléatoire proportionnel à noise_level
-        # noise_level est interprété comme un écart-type raisonnable (0-100)
+        # OPTIMISATION 2 : Génération bruit vectorisée
         std = max(1.0, float(self.noise_level))
-        mean_bg = max(0.0, std * 0.2)
-        intensities = np.random.normal(loc=mean_bg, scale=std,
-                                       size=(self.bearing_count, self.range_count))
-
-        # Ajouter speckle / impulsions (salt-and-pepper) : probabilité dépend de noise_level
-        sp_prob = min(0.12, float(self.noise_level) / 400.0)  # borné pour éviter trop d'impulsions
+        mean_bg = std * 0.2
+        
+        # Bruit gaussien de base
+        intensities = np.random.normal(
+            loc=mean_bg, 
+            scale=std,
+            size=(self.bearing_count, self.range_count)
+        ).astype(np.float32)  # float32 plus rapide que float64
+        
+        # Speckle optimisé (une seule allocation mémoire)
+        sp_prob = min(0.12, self.noise_level / 400.0)
         if sp_prob > 0.0:
-            mask = np.random.rand(self.bearing_count, self.range_count) < sp_prob
-            # choisir principalement impulsions hautes (retours forts) et quelques creux
-            high_or_low = np.random.rand(mask.sum()) < 0.7
-            intensities[mask] = np.where(high_or_low, 200 + np.random.randint(0, 55, size=mask.sum()), 0)
-
-        # Clip et conversion en uint8
+            # Génération en une fois du masque et des valeurs
+            rand_vals = np.random.rand(self.bearing_count, self.range_count)
+            speckle_mask = rand_vals < sp_prob
+            
+            if np.any(speckle_mask):
+                # Vectorisation : toutes les valeurs d'un coup
+                high_mask = rand_vals[speckle_mask] < (sp_prob * 0.7)
+                speckle_values = np.where(
+                    high_mask,
+                    np.random.randint(200, 255, size=high_mask.shape),
+                    0
+                )
+                intensities[speckle_mask] = speckle_values
+        
+        # Clip et conversion finale
         intensities = np.clip(intensities, 0, 255).astype(np.uint8)
         
-        # === Simuler 4 montants de cage à la position actuelle ===
-        # Position de la cage dans le repère du ROV : (self.cage_x, self.cage_y)
+        # === OPTIMISATION 3 : Dessin des montants optimisé ===
         cage_half_width = self.cage_width / 2.0
         
-        # Positions des 4 montants dans le repère de la cage
-        # (cage centrée sur cage_x, cage_y avec orientation cage_theta)
-        montant_offsets = [
-            (-cage_half_width, 0.0),           # Gauche 1
-            (-cage_half_width * 0.7, 0.0),     # Gauche 2
-            (cage_half_width * 0.7, 0.0),      # Droite 2
-            (cage_half_width, 0.0)             # Droite 1
-        ]
+        # Pré-calcul trigonométrie (une seule fois)
+        cos_theta = np.cos(self.cage_theta)
+        sin_theta = np.sin(self.cage_theta)
         
-        # Transformer chaque montant dans le repère du ROV
-        for offset_x, offset_y in montant_offsets:
-            # Rotation du point autour de l'origine de la cage
-            cos_theta = np.cos(self.cage_theta)
-            sin_theta = np.sin(self.cage_theta)
+        # Positions des 4 montants (numpy array pour vectorisation partielle)
+        montant_offsets = np.array([
+            [-cage_half_width, 0.0],
+            [-cage_half_width * 0.7, 0.0],
+            [cage_half_width * 0.7, 0.0],
+            [cage_half_width, 0.0]
+        ])
+        
+        # Boucle sur les montants (peu nombreux, pas critique)
+        for offset in montant_offsets:
+            offset_x, offset_y = offset
             
-            # Position du montant dans repère ROV
+            # Transformation en une ligne (rotation + translation)
             montant_x = self.cage_x + (offset_x * cos_theta - offset_y * sin_theta)
             montant_y = self.cage_y + (offset_x * sin_theta + offset_y * cos_theta)
             
-            # Conversion cartésien -> polaire (repère sonar)
+            # Conversion polaire
             montant_range = np.sqrt(montant_x**2 + montant_y**2)
-            montant_bearing = np.arctan2(montant_x, montant_y)  # atan2(x, y) car y=frontal
+            montant_bearing = np.arctan2(montant_x, montant_y)
             
-            # Vérifier si dans le champ de vision du sonar
-            if (montant_range < self.min_range or montant_range > self.max_range):
-                continue  # Hors de portée
+            # Vérifications rapides (early exit)
+            if not (self.min_range <= montant_range <= self.max_range):
+                continue
+            if abs(montant_bearing) > self.half_angle_rad:
+                continue
             
-            if abs(montant_bearing) > (half_angle * np.pi / 180.0):
-                continue  # Hors du secteur angulaire
+            # OPTIMISATION 4 : Recherche d'index optimisée (searchsorted plus rapide que argmin)
+            bearing_idx = np.searchsorted(self.bearings, montant_bearing)
+            range_idx = int((montant_range - self.min_range) / (self.max_range - self.min_range) * (self.range_count - 1))
             
-            # Trouver indices dans la grille polaire
-            bearing_idx = np.argmin(np.abs(bearings - montant_bearing))
-            range_idx = np.argmin(np.abs(ranges - montant_range))
+            # Borner les index
+            bearing_idx = np.clip(bearing_idx, 0, self.bearing_count - 1)
+            range_idx = np.clip(range_idx, 0, self.range_count - 1)
             
-            # Dessiner le montant (épaisseur réaliste)
-            range_width = 2  # Épaisseur du montant en bins
-            bearing_width = 3  # Largeur angulaire
+            # OPTIMISATION 5 : Dessin par slicing NumPy (plus rapide que boucles imbriquées)
+            range_width = 2
+            bearing_width = 3
             
-            for db in range(-bearing_width, bearing_width + 1):
-                for dr in range(-range_width, range_width + 1):
-                    b_idx = np.clip(bearing_idx + db, 0, self.bearing_count - 1)
-                    r_idx = np.clip(range_idx + dr, 0, self.range_count - 1)
-                    intensities[b_idx, r_idx] = 200 + np.random.randint(0, 55)
+            # Calcul des bornes du patch
+            b_min = max(0, bearing_idx - bearing_width)
+            b_max = min(self.bearing_count, bearing_idx + bearing_width + 1)
+            r_min = max(0, range_idx - range_width)
+            r_max = min(self.range_count, range_idx + range_width + 1)
+            
+            # Remplissage par slicing (beaucoup plus rapide)
+            intensities[b_min:b_max, r_min:r_max] = np.random.randint(200, 255)
         
         return intensities
     
@@ -241,9 +263,11 @@ class SonarMockNode(Node):
         # Génération image synthétique brute
         intensities = self.generate_synthetic_frame()
         
-        # Application des filtres
-        filtered = intensities.copy()
+        # OPTIMISATION 6 : Éviter les copies inutiles
+        # On travaille directement sur l'array (in-place quand possible)
+        filtered = intensities  # Pas de copy() initial
         
+        # Application des filtres (certains retournent une nouvelle array)
         if self.get_parameter('enable_median').value:
             kernel = self.get_parameter('median_kernel').value
             filtered = median_filter(filtered, kernel)
@@ -254,12 +278,16 @@ class SonarMockNode(Node):
         
         if self.get_parameter('enable_range_comp').value:
             alpha = self.get_parameter('range_comp_alpha').value
-            ranges = np.linspace(self.min_range, self.max_range, self.range_count)
-            filtered = range_compensation(filtered, ranges, alpha)
+            # OPTIMISATION 7 : Réutiliser self.ranges (déjà calculé)
+            filtered = range_compensation(filtered, self.ranges, alpha)
         
         if self.get_parameter('enable_contrast').value:
             clip = self.get_parameter('contrast_clip').value
             filtered = contrast_enhancement(filtered, clip)
+        
+        # OPTIMISATION 8 : Conversion liste optimisée
+        # flatten() + tolist() est plus rapide que flatten().tolist()
+        intensities_list = filtered.ravel().tolist()
         
         # Publication sur /docking/sonar/raw (contient données filtrées)
         msg = Frame()
@@ -268,10 +296,10 @@ class SonarMockNode(Node):
         msg.range_count = self.range_count
         msg.bearing_count = self.bearing_count
         msg.range_resolution = (self.max_range - self.min_range) / self.range_count
-        msg.bearing_resolution = (self.bearing_angle * np.pi / 180.0) / self.bearing_count  # angle total en rad / nb faisceaux
+        msg.bearing_resolution = (self.bearing_angle * np.pi / 180.0) / self.bearing_count
         msg.min_range = self.min_range
         msg.max_range = self.max_range
-        msg.intensities = filtered.flatten().tolist()
+        msg.intensities = intensities_list
         msg.sound_speed = 1500.0
         msg.gain = 50
         

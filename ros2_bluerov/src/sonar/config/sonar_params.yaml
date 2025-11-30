@@ -16,10 +16,10 @@ sonar_mock:
     enable_median: true
     median_kernel: 3   # Taille du noyau médian (impair)
     enable_gaussian: true
-    gaussian_sigma: 2.0   # Écart-type du filtre gaussien
+    gaussian_sigma: 2.4   # Écart-type du filtre gaussien
     enable_contrast: true
-    contrast_clip: 2.0      # Limite de clipping pour contraste (%)
-    enable_range_comp: true
+    contrast_clip: 0.35     # Limite de clipping pour contraste (%)
+    enable_range_comp: false
     range_comp_alpha: 0.01  # Coefficient d'atténuation volumique (m⁻¹)
 
 sonar_node:
