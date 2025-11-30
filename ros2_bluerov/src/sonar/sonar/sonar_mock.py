@@ -6,11 +6,13 @@ Publie des frames synthétiques avec cage simulée.
 import rclpy
 from rclpy.node import Node
 from docking_msgs.msg import Frame
+from geometry_msgs.msg import Twist
 import numpy as np
 from docking_utils.filters import (
     median_filter, gaussian_filter, contrast_enhancement,
     range_compensation
 )
+import time
 
 
 class SonarMockNode(Node):
@@ -26,9 +28,10 @@ class SonarMockNode(Node):
         self.declare_parameter('bearing_angle', 140.0)  # Ouverture totale en degrés
         self.declare_parameter('min_range', 1.0)  # m
         self.declare_parameter('max_range', 40.0)  # m
-        self.declare_parameter('cage_distance', 8.0)  # m
+        self.declare_parameter('cage_distance', 8.0)  # m (distance initiale)
         self.declare_parameter('cage_width', 2.0)  # m
         self.declare_parameter('noise_level', 20.0)  # 0-100
+        self.declare_parameter('cmd_vel_topic', '/bluerov/cmd_vel')  # Topic commandes
         
         # Paramètres de filtrage
         self.declare_parameter('enable_median', True)
@@ -46,20 +49,116 @@ class SonarMockNode(Node):
         self.bearing_angle = self.get_parameter('bearing_angle').value  # degrés
         self.min_range = self.get_parameter('min_range').value
         self.max_range = self.get_parameter('max_range').value
-        self.cage_distance = self.get_parameter('cage_distance').value
+        cage_distance_init = self.get_parameter('cage_distance').value
         self.cage_width = self.get_parameter('cage_width').value
         self.noise_level = self.get_parameter('noise_level').value
+        cmd_vel_topic = self.get_parameter('cmd_vel_topic').value
+        
+        # === État de la simulation (position relative cage/ROV) ===
+        # Position de la cage dans le repère du ROV (fixe au départ)
+        # La cage est fixe dans le monde, le ROV bouge
+        # Donc on stocke la position relative cage vue depuis le ROV
+        self.cage_x = 0.0  # Position latérale (m) - 0 = centré
+        self.cage_y = cage_distance_init  # Distance frontale (m)
+        self.cage_theta = 0.0  # Orientation relative cage (rad)
+        
+        # Vitesses actuelles du ROV (reçues de /cmd_vel)
+        self.cmd_vx = 0.0  # Vitesse latérale (m/s)
+        self.cmd_vy = 0.0  # Vitesse frontale (m/s)
+        self.cmd_omega = 0.0  # Vitesse angulaire (rad/s)
+        
+        # Temps de la dernière mise à jour physique
+        self.last_update_time = time.time()
+        
+        # Subscriber pour commandes de vitesse
+        self.cmd_sub = self.create_subscription(
+            Twist,
+            cmd_vel_topic,
+            self.cmd_callback,
+            10
+        )
         
         # Publisher (publie données filtrées sur /docking/sonar/raw)
         self.publisher_ = self.create_publisher(Frame, '/docking/sonar/raw', 10)
         
-        # Timer
-        self.timer = self.create_timer(1.0 / rate, self.publish_frame)
+        # Timer pour mise à jour physique (50 Hz pour simulation fluide)
+        self.physics_timer = self.create_timer(1.0 / 50.0, self.update_physics)
         
-        self.get_logger().info(f'Sonar mock démarré: {rate} Hz, cage @ {self.cage_distance}m')
+        # Timer pour publication sonar (rate configuré)
+        self.publish_timer = self.create_timer(1.0 / rate, self.publish_frame)
+        
+        self.get_logger().info(
+            f'Sonar mock démarré: {rate} Hz, cage initiale @ ({self.cage_x:.2f}, {self.cage_y:.2f})m'
+        )
+        self.get_logger().info(f'Écoute des commandes sur: {cmd_vel_topic}')
+    
+    def cmd_callback(self, msg: Twist):
+        """
+        Callback pour réception des commandes de vitesse du ROV.
+        
+        Convention Twist:
+        - linear.x : vitesse avant/arrière (surge)
+        - linear.y : vitesse latérale gauche/droite (sway)
+        - angular.z : vitesse rotation autour axe vertical (yaw)
+        """
+        self.cmd_vx = msg.linear.y  # Sway (latéral)
+        self.cmd_vy = msg.linear.x  # Surge (frontal)
+        self.cmd_omega = msg.angular.z  # Yaw rate
+        
+        # Log pour debug (première fois seulement pour ne pas spammer)
+        if not hasattr(self, '_cmd_received'):
+            self._cmd_received = True
+            self.get_logger().info(
+                f'Première commande reçue: vx={self.cmd_vx:.2f}, vy={self.cmd_vy:.2f}, ω={self.cmd_omega:.2f}'
+            )
+    
+    def update_physics(self):
+        """
+        Mise à jour de la position relative de la cage (physique inverse).
+        
+        Principe : La cage est fixe dans le monde, le ROV bouge.
+        Donc si le ROV avance de +v_y, la cage recule de -v_y dans le repère du ROV.
+        
+        Étapes :
+        1. Calculer Δt depuis dernière mise à jour
+        2. Calculer déplacement inverse : Δx = -vx·Δt, Δy = -vy·Δt, Δθ = -ω·Δt
+        3. Appliquer translation à la position cage
+        4. Appliquer rotation inverse autour de l'origine (position ROV)
+        """
+        current_time = time.time()
+        dt = current_time - self.last_update_time
+        self.last_update_time = current_time
+        
+        # Déplacements inverses (cage vue depuis ROV qui bouge)
+        delta_x = -self.cmd_vx * dt
+        delta_y = -self.cmd_vy * dt
+        delta_theta = -self.cmd_omega * dt
+        
+        # Translation de la cage
+        cage_x_translated = self.cage_x + delta_x
+        cage_y_translated = self.cage_y + delta_y
+        
+        # Rotation inverse autour de l'origine (position du ROV)
+        # Matrice de rotation 2D : [cos(-θ) -sin(-θ); sin(-θ) cos(-θ)]
+        cos_theta = np.cos(-delta_theta)
+        sin_theta = np.sin(-delta_theta)
+        
+        # Appliquer rotation
+        self.cage_x = cos_theta * cage_x_translated - sin_theta * cage_y_translated
+        self.cage_y = sin_theta * cage_x_translated + cos_theta * cage_y_translated
+        
+        # Mise à jour orientation relative de la cage
+        self.cage_theta += delta_theta
+        
+        # Log périodique (toutes les 2 secondes environ)
+        if np.random.rand() < 0.02:  # ~1% de chance à 50 Hz
+            self.get_logger().info(
+                f'Cage relative: x={self.cage_x:.2f}m, y={self.cage_y:.2f}m, '
+                f'θ={np.rad2deg(self.cage_theta):.1f}°'
+            )
     
     def generate_synthetic_frame(self) -> np.ndarray:
-        """Génère une frame sonar synthétique avec cage."""
+        """Génère une frame sonar synthétique avec cage à la position courante."""
         # Grille polaire (utilise bearing_angle du config)
         ranges = np.linspace(self.min_range, self.max_range, self.range_count)
         half_angle = self.bearing_angle / 2.0  # moitié de l'ouverture
@@ -85,27 +184,45 @@ class SonarMockNode(Node):
         # Clip et conversion en uint8
         intensities = np.clip(intensities, 0, 255).astype(np.uint8)
         
-        # Simuler 4 montants de cage (forte intensité)
+        # === Simuler 4 montants de cage à la position actuelle ===
+        # Position de la cage dans le repère du ROV : (self.cage_x, self.cage_y)
         cage_half_width = self.cage_width / 2.0
         
-        # Positions angulaires des montants à distance donnée
-        # tan(bearing) = x / y => bearing = atan(x / distance)
-        bearing_left1 = np.arctan(-cage_half_width / self.cage_distance)
-        bearing_left2 = np.arctan(-(cage_half_width * 0.7) / self.cage_distance)
-        bearing_right1 = np.arctan((cage_half_width * 0.7) / self.cage_distance)
-        bearing_right2 = np.arctan(cage_half_width / self.cage_distance)
+        # Positions des 4 montants dans le repère de la cage
+        # (cage centrée sur cage_x, cage_y avec orientation cage_theta)
+        montant_offsets = [
+            (-cage_half_width, 0.0),           # Gauche 1
+            (-cage_half_width * 0.7, 0.0),     # Gauche 2
+            (cage_half_width * 0.7, 0.0),      # Droite 2
+            (cage_half_width, 0.0)             # Droite 1
+        ]
         
-        montant_bearings = [bearing_left1, bearing_left2, bearing_right1, bearing_right2]
-        
-        # Dessiner montants
-        for mb in montant_bearings:
-            # Trouver index de bearing le plus proche
-            bearing_idx = np.argmin(np.abs(bearings - mb))
+        # Transformer chaque montant dans le repère du ROV
+        for offset_x, offset_y in montant_offsets:
+            # Rotation du point autour de l'origine de la cage
+            cos_theta = np.cos(self.cage_theta)
+            sin_theta = np.sin(self.cage_theta)
             
-            # Trouver index de range correspondant à distance cage
-            range_idx = np.argmin(np.abs(ranges - self.cage_distance))
+            # Position du montant dans repère ROV
+            montant_x = self.cage_x + (offset_x * cos_theta - offset_y * sin_theta)
+            montant_y = self.cage_y + (offset_x * sin_theta + offset_y * cos_theta)
             
-            # Ajouter intensité (montant vertical = plusieurs ranges)
+            # Conversion cartésien -> polaire (repère sonar)
+            montant_range = np.sqrt(montant_x**2 + montant_y**2)
+            montant_bearing = np.arctan2(montant_x, montant_y)  # atan2(x, y) car y=frontal
+            
+            # Vérifier si dans le champ de vision du sonar
+            if (montant_range < self.min_range or montant_range > self.max_range):
+                continue  # Hors de portée
+            
+            if abs(montant_bearing) > (half_angle * np.pi / 180.0):
+                continue  # Hors du secteur angulaire
+            
+            # Trouver indices dans la grille polaire
+            bearing_idx = np.argmin(np.abs(bearings - montant_bearing))
+            range_idx = np.argmin(np.abs(ranges - montant_range))
+            
+            # Dessiner le montant (épaisseur réaliste)
             range_width = 2  # Épaisseur du montant en bins
             bearing_width = 3  # Largeur angulaire
             

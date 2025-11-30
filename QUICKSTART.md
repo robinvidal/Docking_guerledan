@@ -11,7 +11,7 @@ Guide de démarrage rapide pour le workspace de docking autonome.
 echo $ROS_DISTRO  # Doit afficher: humble, iron, ou jazzy
 
 # Si vide, sourcer ROS2
-source /opt/ros/humble/setup.zsh  # Adapter selon votre distro
+source /opt/ros/humble/setup.bash  # Adapter selon votre distro
 ```
 
 ### 2. Build le workspace
@@ -26,10 +26,66 @@ colcon build --symlink-install
 ### 3. Sourcer l'environnement
 
 ```bash
-source install/setup.zsh  # ou setup.bash
+source install/setup.bash  # ou setup.zsh
 ```
 
 ### 4. Lancer la simulation
+
+
+### Lancement de ce qui fonctionne pour le moment : 
+
+Ouvrez **4 terminaux** et sourcez l'environnement dans chacun :
+
+```bash
+cd ~/Desktop/Docking_guerledan/ros2_bluerov
+source install/setup.bash
+```
+
+#### Terminal 1 : Simulateur Sonar
+```bash
+ros2 run sonar sonar_mock --ros-args \
+  --params-file install/sonar/share/sonar/config/sonar_params.yaml
+```
+Lance le sonar virtuel avec une cage à la position initiale configurée.
+
+#### Terminal 2 : Visualiseur
+```bash
+ros2 run affichage sonar_viewer
+```
+Ouvre l'interface graphique avec :
+- 📡 **Sonar Brut** : Vue cartésienne des données sonar
+- 🔍 **Sonar Filtré** : Après traitement (si traitement_node actif)
+- ⚖️ **Comparaison** : Côte à côte brut/filtré
+- ⚙️ **Contrôle Traitement** : Réglage des filtres en temps réel
+
+#### Terminal 3 : Contrôle Clavier (Teleop)
+```bash
+ros2 run teleop_twist_keyboard teleop_twist_keyboard \
+  --ros-args -r /cmd_vel:=/bluerov/cmd_vel
+```
+
+**Commandes clavier :**
+| Touche | Action | Effet sur sonar |
+|--------|--------|-----------------|
+| `i` | Avancer | Cage se rapproche |
+| `,` | Reculer | Cage s'éloigne |
+| `J` (Maj+j) | Strafe gauche | Cage glisse à droite |
+| `L` (Maj+l) | Strafe droite | Cage glisse à gauche |
+| `j` | Tourner gauche | Cage pivote à droite |
+| `l` | Tourner droite | Cage pivote à gauche |
+| `k` | Stop | Arrêt |
+| `w/x` | ↑/↓ vitesse linéaire | |
+| `e/c` | ↑/↓ vitesse angulaire | |
+
+#### Terminal 4 (Optionnel) : Monitoring
+```bash
+# Vérifier les commandes publiées
+ros2 topic echo /bluerov/cmd_vel
+
+# Voir la position de la cage (logs du sonar_mock)
+# Les logs affichent périodiquement : "Cage relative: x=..., y=..., θ=..."
+```
+
 
 ```bash
 ros2 launch bringup mock_pipeline.launch.py
@@ -52,7 +108,7 @@ Dans un nouveau terminal:
 
 ```bash
 # Sourcer d'abord
-source ros2_bluerov/install/setup.zsh
+source ros2_bluerov/install/setup.bash
 
 # Voir l'état de la mission
 ros2 topic echo /docking/mission/state
@@ -180,7 +236,7 @@ sudo apt install python3-colcon-common-extensions
 ```bash
 # Build messages d'abord
 colcon build --packages-select docking_msgs
-source install/setup.zsh
+source install/setup.bash
 # Puis build le reste
 colcon build
 ```
@@ -189,7 +245,7 @@ colcon build
 
 **Solution**: Environnement ROS2 non sourcé
 ```bash
-source ros2_bluerov/install/setup.zsh
+source ros2_bluerov/install/setup.bash
 ```
 
 ### Aucun topic publié
