@@ -3,7 +3,7 @@ Module de filtres de signal pour traitement sonar.
 """
 
 import numpy as np
-import cv2
+from scipy import ndimage, signal
 from typing import Tuple
 
 
@@ -23,12 +23,7 @@ def median_filter(image: np.ndarray, kernel_size: int = 3) -> np.ndarray:
         >>> filtered = median_filter(img, 5)
         >>> assert filtered.shape == img.shape
     """
-    # OpenCV requires odd kernel size and 8-bit or 3-channel images
-    k = max(1, int(kernel_size) | 1)
-    img = image
-    if img.dtype != np.uint8:
-        img = np.clip(img, 0, 255).astype(np.uint8)
-    return cv2.medianBlur(img, k)
+    return ndimage.median_filter(image, size=kernel_size)
 
 
 def gaussian_filter(image: np.ndarray, sigma: float = 1.0) -> np.ndarray:
@@ -47,15 +42,7 @@ def gaussian_filter(image: np.ndarray, sigma: float = 1.0) -> np.ndarray:
         >>> smoothed = gaussian_filter(img, 2.0)
         >>> assert smoothed.shape == img.shape
     """
-    # OpenCV GaussianBlur uses kernel size derived from sigma
-    # Choose kernel size as next odd integer of 6*sigma+1
-    ksize = max(1, int(6 * sigma + 1))
-    if ksize % 2 == 0:
-        ksize += 1
-    img = image
-    if img.dtype != np.uint8:
-        img = np.clip(img, 0, 255).astype(np.uint8)
-    return cv2.GaussianBlur(img, (ksize, ksize), sigmaX=sigma)
+    return ndimage.gaussian_filter(image, sigma=sigma)
 
 
 def morphological_opening(image: np.ndarray, kernel_size: int = 3) -> np.ndarray:
@@ -75,13 +62,10 @@ def morphological_opening(image: np.ndarray, kernel_size: int = 3) -> np.ndarray
         >>> opened = morphological_opening(img, 5)
         >>> assert opened.shape == img.shape
     """
-    k = max(1, int(kernel_size))
-    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (k, k))
-    img = image
-    if img.dtype != np.uint8:
-        img = np.clip(img, 0, 255).astype(np.uint8)
-    opened = cv2.morphologyEx(img, cv2.MORPH_OPEN, kernel)
-    return opened
+    kernel = np.ones((kernel_size, kernel_size), dtype=np.uint8)
+    eroded = ndimage.binary_erosion(image, structure=kernel)
+    opened = ndimage.binary_dilation(eroded, structure=kernel)
+    return opened.astype(image.dtype)
 
 
 def morphological_closing(image: np.ndarray, kernel_size: int = 3) -> np.ndarray:
@@ -96,13 +80,10 @@ def morphological_closing(image: np.ndarray, kernel_size: int = 3) -> np.ndarray
     Returns:
         Image après fermeture
     """
-    k = max(1, int(kernel_size))
-    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (k, k))
-    img = image
-    if img.dtype != np.uint8:
-        img = np.clip(img, 0, 255).astype(np.uint8)
-    closed = cv2.morphologyEx(img, cv2.MORPH_CLOSE, kernel)
-    return closed
+    kernel = np.ones((kernel_size, kernel_size), dtype=np.uint8)
+    dilated = ndimage.binary_dilation(image, structure=kernel)
+    closed = ndimage.binary_erosion(dilated, structure=kernel)
+    return closed.astype(image.dtype)
 
 
 def adaptive_threshold(image: np.ndarray, block_size: int = 11, c: float = 2.0) -> np.ndarray:
@@ -122,13 +103,13 @@ def adaptive_threshold(image: np.ndarray, block_size: int = 11, c: float = 2.0) 
         >>> binary = adaptive_threshold(img, 15, 5.0)
         >>> assert set(np.unique(binary)).issubset({0, 255})
     """
-    # OpenCV adaptiveThreshold requires 8-bit single-channel image
-    bs = max(3, int(block_size) | 1)
-    img = image
-    if img.dtype != np.uint8:
-        img = np.clip(img, 0, 255).astype(np.uint8)
-    binary = cv2.adaptiveThreshold(img, 255, cv2.ADAPTIVE_THRESH_MEAN_C,
-                                   cv2.THRESH_BINARY, bs, c)
+    # Moyenne locale
+    local_mean = ndimage.uniform_filter(image.astype(float), size=block_size)
+    
+    # Seuillage
+    threshold = local_mean - c
+    binary = (image > threshold).astype(np.uint8) * 255
+    
     return binary
 
 
@@ -148,19 +129,14 @@ def wiener_filter(image: np.ndarray, noise_variance: float = None) -> np.ndarray
         >>> denoised = wiener_filter(img)
         >>> assert denoised.shape == img.shape
     """
-    # OpenCV does not provide a direct Wiener filter; approximate with
-    # Non-local means denoising which preserves edges and is performant.
-    img = image
-    if img.dtype != np.uint8:
-        img = np.clip(img, 0, 255).astype(np.uint8)
-    # h parameter controls filter strength; map noise_variance to h
     if noise_variance is None:
-        h = 10
-    else:
-        h = float(max(1.0, noise_variance * 10.0))
-    # fastNlMeansDenoising expects 8-bit single-channel
-    denoised = cv2.fastNlMeansDenoising(img, None, h, 7, 21)
-    return denoised
+        # Estimation noise via MAD (Median Absolute Deviation)
+        noise_variance = np.median(np.abs(image - np.median(image))) / 0.6745
+    
+    # Application filtre Wiener (version simplifiée)
+    filtered = signal.wiener(image, mysize=5, noise=noise_variance)
+    
+    return filtered
 
 
 def contrast_enhancement(image: np.ndarray, clip_limit: float = 2.0) -> np.ndarray:
@@ -179,12 +155,14 @@ def contrast_enhancement(image: np.ndarray, clip_limit: float = 2.0) -> np.ndarr
         >>> enhanced = contrast_enhancement(img)
         >>> assert enhanced.min() < img.min() or enhanced.max() > img.max()
     """
-    img = image
-    if img.dtype != np.uint8:
-        img = np.clip(img, 0, 255).astype(np.uint8)
-    clahe = cv2.createCLAHE(clipLimit=clip_limit, tileGridSize=(8, 8))
-    enhanced = clahe.apply(img)
-    return enhanced
+    # Clipping des valeurs extrêmes
+    p_low, p_high = np.percentile(image, [clip_limit, 100 - clip_limit])
+    
+    # Étirement
+    clipped = np.clip(image, p_low, p_high)
+    normalized = (clipped - p_low) / (p_high - p_low) * 255
+    
+    return normalized.astype(np.uint8)
 
 
 def range_compensation(image: np.ndarray, ranges: np.ndarray, 
@@ -209,6 +187,11 @@ def range_compensation(image: np.ndarray, ranges: np.ndarray,
     # Calcul du gain de compensation (spreading + atténuation)
     # TL = 20*log10(r) + alpha*r
     gain = ranges[:, np.newaxis].T * np.exp(alpha * ranges[:, np.newaxis].T)
+    
+    # Application (broadcasting sur bearings)
     compensated = image * gain
+    
+    # Normalisation
     compensated = np.clip(compensated, 0, 255)
+    
     return compensated.astype(image.dtype)

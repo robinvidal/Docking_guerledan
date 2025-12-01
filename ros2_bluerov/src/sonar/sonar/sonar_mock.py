@@ -12,7 +12,6 @@ from docking_utils.filters import (
     median_filter, gaussian_filter, contrast_enhancement,
     range_compensation
 )
-import cv2
 import time
 
 
@@ -99,18 +98,6 @@ class SonarMockNode(Node):
             f'Sonar mock démarré: {rate} Hz, cage initiale @ ({self.cage_x:.2f}, {self.cage_y:.2f})m'
         )
         self.get_logger().info(f'Écoute des commandes sur: {cmd_vel_topic}')
-
-        # === Optimisations: buffers réutilisables et RNG ===
-        # Générateur de nombres rapide et avec état
-        self.rng = np.random.default_rng()
-
-        # Buffers réutilisés pour éviter allocations répétées
-        self._float_buf = np.empty((self.bearing_count, self.range_count), dtype=np.float32)
-        self._int_buf = np.empty((self.bearing_count, self.range_count), dtype=np.uint8)
-
-        # Paramètre de sous-échantillonnage pour filtrage rapide (2 => 4x moins d'opérations)
-        self.declare_parameter('downsample_factor', 2)
-        self.ds_factor = max(1, int(self.get_parameter('downsample_factor').value))
     
     def cmd_callback(self, msg: Twist):
         """
@@ -178,36 +165,40 @@ class SonarMockNode(Node):
             )
     
     def generate_synthetic_frame(self) -> np.ndarray:
-        """Génère une frame sonar synthétique avec cage à la position courante.
-
-        Optimisations appliquées:
-        - Réutilisation de buffers préalloués
-        - RNG basé sur numpy.default_rng()
-        - Speckle vectorisé
-        """
+        """Génère une frame sonar synthétique avec cage à la position courante."""
+        # OPTIMISATION 1 : Réutiliser les grilles pré-calculées
+        # (plus besoin de recalculer ranges/bearings à chaque frame)
+        
+        # OPTIMISATION 2 : Génération bruit vectorisée
         std = max(1.0, float(self.noise_level))
         mean_bg = std * 0.2
-
-        # Remplir buffer flottant via RNG (évite nouvelles allocations)
-        self._float_buf[:] = self.rng.normal(loc=mean_bg, scale=std, size=self._float_buf.shape)
-
-        # Speckle (bruit impulsionnel) vectorisé
+        
+        # Bruit gaussien de base
+        intensities = np.random.normal(
+            loc=mean_bg, 
+            scale=std,
+            size=(self.bearing_count, self.range_count)
+        ).astype(np.float32)  # float32 plus rapide que float64
+        
+        # Speckle optimisé (une seule allocation mémoire)
         sp_prob = min(0.12, self.noise_level / 400.0)
         if sp_prob > 0.0:
-            rand_vals = self.rng.random(self._float_buf.shape)
+            # Génération en une fois du masque et des valeurs
+            rand_vals = np.random.rand(self.bearing_count, self.range_count)
             speckle_mask = rand_vals < sp_prob
-            if speckle_mask.any():
+            
+            if np.any(speckle_mask):
+                # Vectorisation : toutes les valeurs d'un coup
                 high_mask = rand_vals[speckle_mask] < (sp_prob * 0.7)
-                # Génération des valeurs hauteurs speckle en une fois
-                speckle_vals = np.empty(high_mask.shape, dtype=np.uint8)
-                # haut -> fortes intensités, bas -> 0
-                speckle_vals[high_mask] = self.rng.integers(200, 255, size=high_mask.sum(), dtype=np.uint8)
-                speckle_vals[~high_mask] = 0
-                self._float_buf[speckle_mask] = speckle_vals
-
-        # Conversion clamp et écriture dans int buffer
-        np.clip(self._float_buf, 0, 255, out=self._float_buf)
-        self._int_buf[:] = self._float_buf.astype(np.uint8, copy=False)
+                speckle_values = np.where(
+                    high_mask,
+                    np.random.randint(200, 255, size=high_mask.shape),
+                    0
+                )
+                intensities[speckle_mask] = speckle_values
+        
+        # Clip et conversion finale
+        intensities = np.clip(intensities, 0, 255).astype(np.uint8)
         
         # === OPTIMISATION 3 : Dessin des montants optimisé ===
         cage_half_width = self.cage_width / 2.0
@@ -244,7 +235,7 @@ class SonarMockNode(Node):
             
             # OPTIMISATION 4 : Recherche d'index optimisée (searchsorted plus rapide que argmin)
             bearing_idx = np.searchsorted(self.bearings, montant_bearing)
-            range_idx = np.searchsorted(self.ranges, montant_range)
+            range_idx = int((montant_range - self.min_range) / (self.max_range - self.min_range) * (self.range_count - 1))
             
             # Borner les index
             bearing_idx = np.clip(bearing_idx, 0, self.bearing_count - 1)
@@ -261,64 +252,41 @@ class SonarMockNode(Node):
             r_max = min(self.range_count, range_idx + range_width + 1)
             
             # Remplissage par slicing (beaucoup plus rapide)
-            # Utiliser RNG pour remplir patch rapidement
-            self._int_buf[b_min:b_max, r_min:r_max] = self.rng.integers(200, 255, size=(b_max-b_min, r_max-r_min), dtype=np.uint8)
+            intensities[b_min:b_max, r_min:r_max] = np.random.randint(200, 255)
         
-        return self._int_buf
+        return intensities
     
     def publish_frame(self):
         """Publie une frame sonar filtrée sur /docking/sonar/raw."""
         timestamp = self.get_clock().now().to_msg()
         
         # Génération image synthétique brute
-        raw = self.generate_synthetic_frame()
-
-        # Travail sur buffer int (éviter copies si possible)
-        filtered = raw  # vue sur _int_buf
-
-        # Filtrage rapide: appliquer filtres coûteux sur version sous-échantillonnée
-        if (self.ds_factor > 1) and (self.get_parameter('enable_median').value or self.get_parameter('enable_gaussian').value):
-            ds = self.ds_factor
-            # Sous-échantillonnage par slicing (vue)
-            small = filtered[::ds, ::ds]
-
-            # Appliquer les filtres sur la petite image (OpenCV interne est optimisé)
-            small_filtered = small
-            if self.get_parameter('enable_median').value:
-                kernel = self.get_parameter('median_kernel').value
-                small_filtered = median_filter(small_filtered, kernel)
-            if self.get_parameter('enable_gaussian').value:
-                sigma = self.get_parameter('gaussian_sigma').value
-                small_filtered = gaussian_filter(small_filtered, sigma)
-
-            # Upsample via OpenCV (nearest) — rapide et sans interpolation coûteuse
-            up = cv2.resize(small_filtered, (self.range_count, self.bearing_count), interpolation=cv2.INTER_NEAREST)
-
-            # Mélange en uint8 via OpenCV (évite conversions float coûteuses)
-            alpha = 0.6
-            filtered = cv2.addWeighted(filtered, float(alpha), up, float(1.0 - alpha), 0)
-        else:
-            # Application simple si pas de sous-échantillonnage
-            if self.get_parameter('enable_median').value:
-                kernel = self.get_parameter('median_kernel').value
-                filtered = median_filter(filtered, kernel)
-            if self.get_parameter('enable_gaussian').value:
-                sigma = self.get_parameter('gaussian_sigma').value
-                filtered = gaussian_filter(filtered, sigma)
-
-        # Compensation en portée et amélioration contraste (coûts O(B*R) mais légers)
+        intensities = self.generate_synthetic_frame()
+        
+        # OPTIMISATION 6 : Éviter les copies inutiles
+        # On travaille directement sur l'array (in-place quand possible)
+        filtered = intensities  # Pas de copy() initial
+        
+        # Application des filtres (certains retournent une nouvelle array)
+        if self.get_parameter('enable_median').value:
+            kernel = self.get_parameter('median_kernel').value
+            filtered = median_filter(filtered, kernel)
+        
+        if self.get_parameter('enable_gaussian').value:
+            sigma = self.get_parameter('gaussian_sigma').value
+            filtered = gaussian_filter(filtered, sigma)
+        
         if self.get_parameter('enable_range_comp').value:
             alpha = self.get_parameter('range_comp_alpha').value
-            # Range compensation requires float to avoid uint8 wrap-around
-            filtered = range_compensation(filtered.astype(np.float32), self.ranges, alpha)
-            # Revenir en uint8 pour les étapes suivantes (CLAHE, sérialisation)
-            filtered = np.clip(filtered, 0, 255).astype(np.uint8)
-
+            # OPTIMISATION 7 : Réutiliser self.ranges (déjà calculé)
+            filtered = range_compensation(filtered, self.ranges, alpha)
+        
         if self.get_parameter('enable_contrast').value:
             clip = self.get_parameter('contrast_clip').value
             filtered = contrast_enhancement(filtered, clip)
-
-        # Sérialisation: ravel -> liste (nota: assigner bytes/array possible mais dépend du binding rclpy)
+        
+        # OPTIMISATION 8 : Conversion liste optimisée
+        # flatten() + tolist() est plus rapide que flatten().tolist()
         intensities_list = filtered.ravel().tolist()
         
         # Publication sur /docking/sonar/raw (contient données filtrées)

@@ -35,7 +35,7 @@
 
 #### Package `sonar`
 - ✅ **sonar_mock.py**: Générateur de frames synthétiques avec cage simulée
--  **sonar_node.py**: Stub driver Oculus M750d (à implémenter)
+- ✅ **sonar_node.py**: Stub driver Oculus M750d (à implémenter)
 - ✅ Config YAML avec paramètres mock
 - ✅ README
 
@@ -210,7 +210,12 @@ rqt_graph
 
 2. **Amélioration tracking**:
    - Template matching pour montants
+   - Filtrage temporel (Kalman, particules)
    - Gestion occlusions
+
+3. **Fusion capteurs**:
+   - Intégrer IMU, DVL dans localisation
+   - Filtre Kalman étendu
 
 4. **Visualisation**:
    - Package affichage: overlay sonar + bords
