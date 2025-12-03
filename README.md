@@ -2,7 +2,7 @@
 
 Résumé
 ------
-Docking est un projet dont l'objectif est de faire entrer un BlueROV dans une cage. Le BlueROV utilisé est une version "heavy" équipée de 8 moteurs. Un sonar frontal (Oculus M750d) est monté pour la détection et le guidage.
+Docking est un projet dont l'objectif est de faire entrer un BlueROV dans une cage. Le BlueROV utilisé est une version "heavy" équipée de 8 moteurs. Un sonar frontal (Oculus M750d) est monté pour la détection et le guidage. La cage est fabriquée en profilé aluminium, avec de la mousse collée sur les bords pour augmenter la signature acoustique. Le projet inclut le développement de nœuds ROS2 pour la commande du véhicule, le traitement des données sonar, et une interface utilisateur pour le contrôle et la visualisation.
 
 
 Description rapide du matériel

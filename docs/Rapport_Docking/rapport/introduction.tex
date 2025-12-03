@@ -1,0 +1,48 @@
+\chapter*{Introduction Générale}
+\addcontentsline{toc}{chapter}{Introduction Générale}
+
+\section{Contexte Stratégique et Nécessité du Docking}
+
+L'évolution de la robotique sous-marine marque une transition fondamentale, passant de missions expéditionnaires ponctuelles à des déploiements persistants de systèmes résidents. Dans ce nouveau paradigme, les Véhicules Sous-marins Autonomes (AUV) et les Véhicules Télécommandés (ROV) hybrides ne sont plus systématiquement récupérés en surface après chaque intervention. Ils doivent au contraire être capables de s'amarrer de manière autonome à des infrastructures immergées (stations d'accueil, garages, cages) pour recharger leurs batteries et transférer les données collectées.
+
+Cette capacité d'amarrage autonome, ou \textit{«~docking~»}, constitue le verrou technologique majeur pour l'essor de l'économie bleue, qu'il s'agisse de la surveillance environnementale à long terme ou de l'inspection des infrastructures offshore. L'amarrage est une manœuvre délicate, comparable à un ravitaillement en vol ou à un appontage, mais effectuée dans un fluide visqueux et perturbé. La difficulté réside dans l'alignement précis du véhicule avec l'axe d'entrée de la station, nécessitant souvent des tolérances centimétriques tout en luttant contre les courants marins et les effets hydrodynamiques de proximité.
+
+Cependant, l'environnement sous-marin impose des contraintes sévères qui rendent les méthodes de guidage traditionnelles inopérantes. La turbidité de l'eau, l'absence de signaux GPS et la variabilité des conditions d'éclairage limitent drastiquement l'efficacité des systèmes de vision optique au-delà de quelques mètres. C'est ici que la technologie sonar (\textit{Sound Navigation and Ranging}) devient indispensable, offrant une capacité de perception robuste à travers les eaux troubles et sur de longues distances.
+
+\section{État de l'Art et Positionnement du Sujet}
+
+Dans la littérature scientifique actuelle, la séquence d'amarrage se décompose généralement en trois phases distinctes, chacune faisant appel à une modalité de capteur spécifique :
+
+\begin{enumerate}
+    \item \textbf{Phase de ralliement (Longue portée) :} Guidage par systèmes acoustiques (LBL/USBL).
+    \item \textbf{Phase d'approche (Moyenne portée, 10-100m) :} Utilisation prédominante du sonar d'imagerie frontale (FLS) pour détecter la signature de la station.
+    \item \textbf{Phase terminale (Courte portée, < 2m) :} La majorité des travaux existants bascule sur un guidage visuel (caméras) ou inertiel (DVL) pour l'entrée finale dans la cage, en raison de la difficulté d'interprétation des images sonar à très courte distance (zones d'ombre, trajets multiples, saturation).
+\end{enumerate}
+
+\textbf{Notre approche se démarque de cet état de l'art par un choix technologique fort : le maintien du guidage sonar durant la phase terminale.} L'hypothèse centrale de ce projet est que, dans des conditions de turbidité élevée (ports, estuaires, eaux profondes) où les caméras deviennent aveugles, le sonar doit rester le capteur primaire jusqu'à l'amarrage complet. Ce choix soulève des défis spécifiques ignorés par les approches hybrides sonar/vision : il nécessite un traitement d'image acoustique avancé et une conception mécanique de la cible (la cage) adaptée pour maximiser sa signature acoustique à courte portée.
+
+Notre projet met ainsi en œuvre un BlueROV Heavy (8 moteurs) équipé d'un sonar Oculus M750d et piloté via ROS2, avec pour objectif de réaliser un amarrage autonome dans une cage en aluminium instrumentée de réflecteurs passifs.
+
+\section{Annonce du Plan}
+
+Ce rapport détaille la méthodologie et les résultats de cette démarche à travers deux parties principales.
+
+\paragraph{Partie I : Étude Théorique et Algorithmique}
+Cette première partie posera les fondements du système développé :
+\begin{itemize}
+    \item Nous commencerons par définir les \textbf{hypothèses de travail}, en précisant le domaine d'emploi de nos travaux (type de véhicule holonome, caractéristiques du sonar Oculus, environnement statique).
+    \item Nous détaillerons ensuite la \textbf{loi de commande} élaborée pour assurer le suivi de trajectoire et la stabilisation face aux perturbations.
+    \item Ces concepts seront validés par une étape de \textbf{simulation}, permettant de tester la logique de contrôle sans risque matériel.
+    \item Un chapitre sera consacré au \textbf{traitement d'image sonar}, expliquant comment nous extrayons la position de la cage à partir des données acoustiques brutes.
+    \item Cette partie se conclura par la présentation des \textbf{résultats théoriques} attendus avant le passage au réel.
+\end{itemize}
+
+\paragraph{Partie II : Matériel et Expérimentation}
+Cette seconde partie se concentrera sur la mise en œuvre pratique :
+\begin{itemize}
+    \item Nous présenterons l'architecture matérielle, incluant le \textbf{BlueROV} modifié et l'intégration du sonar \textbf{Oculus M750d}.
+    \item Nous détaillerons les deux campagnes d'essais réalisées : d'abord en environnement contrôlé lors de l'\textbf{expérience en bassin}, puis en conditions réelles lors de l'\textbf{expérience au lac de Guerlédan}.
+    \item Nous analyserons enfin les \textbf{résultats expérimentaux} obtenus, en confrontant les performances réelles aux prédictions théoriques.
+\end{itemize}
+
+Le rapport s'achèvera par une \textbf{Conclusion} qui synthétisera les objectifs atteints et identifiera les pistes d'amélioration pour les verrous restants afin de fiabiliser totalement l'amarrage autonome par sonar.

@@ -1,0 +1,36 @@
+\newpage
+    
+\chapter{Partie II : Matériel et Expérimentation}
+
+La mise en œuvre pratique de l'amarrage autonome nécessite une intégration matérielle rigoureuse et une validation progressive. Cette partie décrit la plateforme robotique, le capteur principal, ainsi que les deux phases expérimentales menées pour valider nos algorithmes.
+
+\section{Plateforme Robotique : BlueROV Heavy}
+
+Le vecteur utilisé pour nos travaux est une version modifiée du ROV commercial BlueROV2.
+
+\textit{[Instruction : Décrivez la configuration "Heavy" à 8 propulseurs (4 verticaux, 4 horizontaux) et l'avantage de cette configuration vectorielle pour le contrôle à 6 degrés de liberté (6-DoF). Mentionnez l'électronique embarquée (Pixhawk pour le bas niveau, Raspberry Pi 4 ou NVIDIA Jetson pour le haut niveau/ROS2). Précisez l'autonomie de la batterie et les modifications mécaniques éventuelles (ajout de flottabilité, support sonar).]}
+\textit{[Instruction : Expliquez comment ROS2 est installé sur le ROV, et comment la communication entre le Pixhawk (via MAVLink) et le PC embarqué est assurée. Mentionnez l'utilisation de \texttt{mavros} pour interfacer ROS2 avec le contrôleur de vol. Expliquer les commandes de la manette.]}
+
+\section{Capteur de Perception : Sonar Oculus M750d}
+
+L'élément central de la boucle de perception est le sonar multi-faisceaux (Multibeam Imaging Sonar).
+
+\textit{[Instruction : Donnez les spécifications techniques clés du M750d : double fréquence (750kHz / 1.2MHz), ouverture angulaire (130° horizontal / 20° vertical), résolution en portée et en azimut. Expliquez pourquoi ce modèle est adapté au docking (haute résolution à courte portée). Décrivez son montage mécanique sur le ROV (inclinaison "tilt" vers le bas ou alignement horizontal) et l'interface logicielle utilisée pour récupérer les données (driver ROS, SDK Blueprint Subsea).]}
+
+\section{Protocole Expérimental en Bassin}
+
+La première phase de validation a été réalisée en environnement contrôlé afin de caractériser les performances du système sans perturbations externes majeures.
+
+\textit{[Instruction : Décrivez les dimensions du bassin (longueur, largeur, profondeur). Expliquez la mise en place de la cage (fixée au fond ou suspendue). Détaillez le scénario de test : position de départ du ROV, procédure de lancement de l'autonomie, critères de succès (entrée complète dans la cage). Mentionnez les outils de vérité terrain utilisés si disponibles (ex: caméras externes pour filmer l'essai).]}
+
+\section{Campagne d'Essais : Lac de Guerlédan}
+
+Afin de valider la robustesse du système en conditions réelles, une campagne a été menée au lac de Guerlédan.
+
+\textit{[Instruction : Décrivez les conditions environnementales spécifiques : turbidité de l'eau (visibilité réduite), présence potentielle de courants, profondeur d'opération. Expliquez les défis logistiques (mise à l'eau depuis un ponton ou un bateau). Comparez la signature acoustique de la cage dans cet environnement "bruité" par rapport au bassin (réverbération du fond, objets parasites).]}
+
+\section{Analyse des Résultats Expérimentaux}
+
+Cette section synthétise les données collectées lors des deux campagnes d'essais.
+
+\textit{[Instruction : Comparez les trajectoires réelles du ROV avec celles de la simulation. Présentez des statistiques de réussite (ex: "Sur 20 tentatives, 15 ont abouti à un amarrage réussi"). Analysez les échecs : est-ce un problème de perte de la cible au sonar (perception) ou une incapacité des propulseurs à contrer une perturbation (commande) ? Incluez des images sonar réelles montrant la cage vue par le robot à différentes distances.]}

@@ -1,0 +1,61 @@
+\renewcommand{\abstractname}{Résumé}
+\begin{abstract}
+Ce rapport présente le travail réalisé au sein du AASS Research Center (AMM lab) de l’Université d’Örebro 
+pour améliorer l’intégration de mains robotisées sur un bras compliant et développer une chaîne perception-vers-prise 
+basée sur ROS~2. L’objectif initial était d’implémenter des interfaces réutilisables pour des mains multi-doigts 
+(notamment la Schunk SIH) dans l’architecture \texttt{ros2\_control}, et d’évaluer si la préemption de la fermeture 
+de la main pendant le mouvement du bras (\textit{in-motion preemption}) peut surpasser la stratégie classique « atteindre puis saisir ». 
+Après des défaillances matérielles successives de la Schunk SIH, le projet a pivoté vers des expérimentations 
+avec la QB SoftHand puis la conception et l’assemblage d’une main à trois doigts (adaptation du Yale OpenHand Model O).
+
+\vspace{0.5cm}
+
+La méthodologie a consisté à développer des interfaces matérielles \texttt{ros2\_control} pour plusieurs mains, 
+à décrire et publier les modèles URDF correspondants, et à mettre en place des paquets reproductibles dans un dépôt GitLab. 
+Côté perception, une caméra Intel RealSense D435i a été utilisée pour le filtrage de nuages de points, la segmentation 
+et l’estimation de repères d’objets par ACP (PCA). Pour l’action, un contrôleur de conformité cartésienne (compliance control) pour le bras Franka Emika Panda 
+a été intégré et testé, incluant un contrôle interactif via RViz, la compensation de gravité, un pont capteurs de force/torque 
+et un service de validation de prise basé sur la mesure de forces. L’orchestration globale est assurée par une machine à états finis 
+coordonnant perception, planification et exécution.
+
+\vspace{0.5cm}
+
+Les résultats incluent des briques logicielles modulaires et documentées (interfaces, URDF, scripts de test, FSM), 
+une pipeline perception-vers-grasp opérationnelle et un prototype matériel de main trois-doigts. 
+Ce travail met également en lumière les limites matérielles rencontrées et ouvre des perspectives de recherche pour l'université d’Örebro, 
+notamment l’évaluation de la préemption en mouvement et l’utilisation d’approches d’apprentissage automatique 
+pour la perception.
+\end{abstract}
+
+\vspace{1cm}
+
+% Abstract in English
+\renewcommand{\abstractname}{Abstract}
+\begin{abstract}
+This report presents the work carried out at the AASS Research Center (AMM lab) of Örebro University 
+to improve the integration of robotic hands on a compliant arm and to develop a perception-to-grasping pipeline 
+based on ROS~2. The initial objective was to implement reusable interfaces for multi-fingered hands 
+(notably the Schunk SIH) within the \texttt{ros2\_control} architecture, and to evaluate whether grasp closure 
+preemption during arm motion (\textit{in-motion preemption}) could outperform the classical reach-then-grasp strategy. 
+After successive hardware failures with the Schunk SIH, the project shifted towards experiments with the QB SoftHand 
+and eventually the design and assembly of a three-finger robotic gripper (adaptation of the Yale OpenHand Model O).
+
+\vspace{0.5cm}
+
+The methodology involved developing \texttt{ros2\_control} hardware interfaces for several hands, 
+describing and publishing their URDF models, and setting up reproducible GitLab packages. 
+On the perception side, an Intel RealSense D435i camera was used for point cloud filtering, segmentation, 
+and object frame estimation via PCA. On the action side, a Cartesian compliance controller for the Franka Emika Panda arm 
+was integrated and tested, including interactive control in RViz, gravity compensation, a force-torque bridge, 
+and a grasp validation service based on force measurements. The global orchestration relied on a finite state machine 
+coordinating perception, planning, and execution.
+
+\vspace{0.5cm}
+
+The results include modular and well-documented software components (interfaces, URDF, test scripts, FSM), 
+an operational perception-to-grasp pipeline, and a physical prototype of a three-finger hand. 
+This work also highlights the hardware limitations encountered and suggests future perspectives, 
+such as evaluation of in-motion grasp preemption, and use of machine learning for perception tasks.
+\end{abstract}
+
+\vspace{1cm}
