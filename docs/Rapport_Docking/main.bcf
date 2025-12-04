@@ -2348,6 +2348,34 @@
     <bcf:datasource type="file" datatype="bibtex" glob="false">rapport/references.bib</bcf:datasource>
   </bcf:bibdata>
   <bcf:section number="0">
+    <bcf:citekey order="1">yazdani2020_survey_docking</bcf:citekey>
+    <bcf:citekey order="2">palomeras2016_iauv_panel</bcf:citekey>
+    <bcf:citekey order="2">uchihori2019_3dsonar_docking</bcf:citekey>
+    <bcf:citekey order="3">yazdani2020_survey_docking</bcf:citekey>
+    <bcf:citekey order="3">wang2023_acoustic_mfls_docking</bcf:citekey>
+    <bcf:citekey order="4">palomeras2016_iauv_panel</bcf:citekey>
+    <bcf:citekey order="5">uchihori2019_3dsonar_docking</bcf:citekey>
+    <bcf:citekey order="6">wang2023_acoustic_mfls_docking</bcf:citekey>
+    <bcf:citekey order="7">bourgois2021_safe_underwater_docking</bcf:citekey>
+    <bcf:citekey order="8">fossen2011_marine_craft</bcf:citekey>
+    <bcf:citekey order="9">palomeras2016_iauv_panel</bcf:citekey>
+    <bcf:citekey order="9">wang2023_acoustic_mfls_docking</bcf:citekey>
+    <bcf:citekey order="10">uchihori2019_3dsonar_docking</bcf:citekey>
+    <bcf:citekey order="11">yazdani2020_survey_docking</bcf:citekey>
+    <bcf:citekey order="12">wang2023_acoustic_mfls_docking</bcf:citekey>
+    <bcf:citekey order="13">palomeras2016_iauv_panel</bcf:citekey>
+    <bcf:citekey order="14">yazdani2020_survey_docking</bcf:citekey>
+    <bcf:citekey order="15">uchihori2019_3dsonar_docking</bcf:citekey>
+    <bcf:citekey order="16">yazdani2020_survey_docking</bcf:citekey>
+    <bcf:citekey order="17">palomeras2016_iauv_panel</bcf:citekey>
+    <bcf:citekey order="18">wang2023_acoustic_mfls_docking</bcf:citekey>
+    <bcf:citekey order="19">uchihori2019_3dsonar_docking</bcf:citekey>
+    <bcf:citekey order="20">yazdani2020_survey_docking</bcf:citekey>
+    <bcf:citekey order="21">palomeras2016_iauv_panel</bcf:citekey>
+    <bcf:citekey order="22">uchihori2019_3dsonar_docking</bcf:citekey>
+    <bcf:citekey order="23">wang2023_acoustic_mfls_docking</bcf:citekey>
+    <bcf:citekey order="24">bourgois2021_safe_underwater_docking</bcf:citekey>
+    <bcf:citekey order="25">fossen2011_marine_craft</bcf:citekey>
   </bcf:section>
   <!-- SORTING TEMPLATES -->
   <bcf:sortingtemplate name="none">

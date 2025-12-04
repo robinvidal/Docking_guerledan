@@ -1,9 +1,17 @@
 [0] Config.pm:307> INFO - This is Biber 2.17
 [0] Config.pm:310> INFO - Logfile is 'main.blg'
-[39] biber:340> INFO - === Thu Dec  4, 2025, 19:35:53
-[47] Biber.pm:418> INFO - Reading 'main.bcf'
-[78] Biber.pm:972> INFO - Found 0 citekeys in bib section 0
-[84] bbl.pm:654> INFO - Writing 'main.bbl' with encoding 'UTF-8'
-[84] bbl.pm:757> INFO - Output to main.bbl
-[84] Biber.pm:130> WARN - The file 'main.bcf' does not contain any citations!
-[84] Biber.pm:132> INFO - WARNINGS: 1
+[30] biber:340> INFO - === Thu Dec  4, 2025, 21:48:25
+[36] Biber.pm:418> INFO - Reading 'main.bcf'
+[63] Biber.pm:972> INFO - Found 6 citekeys in bib section 0
+[69] Biber.pm:4383> INFO - Processing section 0
+[73] Biber.pm:4574> INFO - Looking for bibtex file 'rapport/references.bib' for section 0
+[74] bibtex.pm:1713> INFO - LaTeX decoding ...
+[80] bibtex.pm:1518> INFO - Found BibTeX data source 'rapport/references.bib'
+[118] UCollate.pm:68> INFO - Overriding locale 'fr-FR' defaults 'normalization = NFD' with 'normalization = prenormalized'
+[118] UCollate.pm:68> INFO - Overriding locale 'fr-FR' defaults 'variable = shifted' with 'variable = non-ignorable'
+[118] Biber.pm:4203> INFO - Sorting list 'none/global//global/global' of type 'entry' with template 'none' and locale 'fr-FR'
+[118] Biber.pm:4209> INFO - No sort tailoring available for locale 'fr-FR'
+[120] bbl.pm:654> INFO - Writing 'main.bbl' with encoding 'UTF-8'
+[122] bbl.pm:757> INFO - Output to main.bbl
+[122] Biber.pm:130> WARN - ISBN '978-0-470-74238-7' in entry 'fossen2011_marine_craft' is invalid - run biber with '--validate_datamodel' for details.
+[122] Biber.pm:132> INFO - WARNINGS: 1

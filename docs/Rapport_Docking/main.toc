@@ -10,25 +10,25 @@
 \contentsline {section}{\numberline {1.2}Modélisation et Loi de Commande}{5}{section.1.2}%
 \contentsline {subsection}{\numberline {1.2.1}Contrôle en profondeur}{5}{subsection.1.2.1}%
 \contentsline {subsection}{\numberline {1.2.2}Modèle Dynamique du ROV}{5}{subsection.1.2.2}%
-\contentsline {subsection}{\numberline {1.2.3}Synthèse de la Loi de Commande}{5}{subsection.1.2.3}%
-\contentsline {section}{\numberline {1.3}Simulation et Validation Numérique}{5}{section.1.3}%
-\contentsline {subsection}{\numberline {1.3.1}Environnement de Simulation}{5}{subsection.1.3.1}%
+\contentsline {subsection}{\numberline {1.2.3}Synthèse de la Loi de Commande}{6}{subsection.1.2.3}%
+\contentsline {section}{\numberline {1.3}Simulation et Validation Numérique}{6}{section.1.3}%
+\contentsline {subsection}{\numberline {1.3.1}Environnement de Simulation}{6}{subsection.1.3.1}%
 \contentsline {subsection}{\numberline {1.3.2}Scénarios de Test et Résultats}{6}{subsection.1.3.2}%
 \contentsline {section}{\numberline {1.4}Algorithme de Traitement d'Image Sonar}{7}{section.1.4}%
-\contentsline {subsection}{\numberline {1.4.1}Choix de la cage et Configuration des Réflecteurs}{7}{subsection.1.4.1}%
-\contentsline {subsection}{\numberline {1.4.2}Chaîne de Traitement d'Image}{7}{subsection.1.4.2}%
-\contentsline {subsection}{\numberline {1.4.3}Estimation de la Position Relative}{7}{subsection.1.4.3}%
-\contentsline {section}{\numberline {1.5}Résultats Théoriques}{7}{section.1.5}%
-\contentsline {chapter}{\numberline {2}Partie II : Matériel et Expérimentation}{8}{chapter.2}%
-\contentsline {section}{\numberline {2.1}Plateforme Robotique : BlueROV Heavy}{8}{section.2.1}%
-\contentsline {section}{\numberline {2.2}Capteur de Perception : Sonar Oculus M750d}{8}{section.2.2}%
-\contentsline {section}{\numberline {2.3}Protocole Expérimental en Bassin}{8}{section.2.3}%
-\contentsline {section}{\numberline {2.4}Campagne d'Essais : Lac de Guerlédan}{9}{section.2.4}%
-\contentsline {section}{\numberline {2.5}Analyse des Résultats Expérimentaux}{9}{section.2.5}%
-\contentsline {section}{\numberline {2.6}Matériel}{9}{section.2.6}%
-\contentsline {section}{\numberline {2.7}Contrôle du Robot}{10}{section.2.7}%
-\contentsline {section}{\numberline {2.8}A faire}{11}{section.2.8}%
-\contentsline {chapter}{Conclusion}{12}{chapter*.8}%
-\contentsline {section}{\numberline {2.9}Conclusion Générale}{12}{section.2.9}%
-\contentsline {subsection}{\numberline {2.9.1}Synthèse des Réalisations}{12}{subsection.2.9.1}%
-\contentsline {subsection}{\numberline {2.9.2}Limites et Perspectives}{12}{subsection.2.9.2}%
+\contentsline {subsection}{\numberline {1.4.1}Choix de la Cage et Configuration des Réflecteurs}{7}{subsection.1.4.1}%
+\contentsline {subsection}{\numberline {1.4.2}Chaîne de Traitement d’Image}{8}{subsection.1.4.2}%
+\contentsline {subsection}{\numberline {1.4.3}Estimation de la Position Relative}{8}{subsection.1.4.3}%
+\contentsline {section}{\numberline {1.5}Résultats Théoriques}{8}{section.1.5}%
+\contentsline {chapter}{\numberline {2}Partie II : Matériel et Expérimentation}{9}{chapter.2}%
+\contentsline {section}{\numberline {2.1}Plateforme Robotique : BlueROV Heavy}{9}{section.2.1}%
+\contentsline {section}{\numberline {2.2}Capteur de Perception : Sonar Oculus M750d}{9}{section.2.2}%
+\contentsline {section}{\numberline {2.3}Protocole Expérimental en Bassin}{9}{section.2.3}%
+\contentsline {section}{\numberline {2.4}Campagne d'Essais : Lac de Guerlédan}{10}{section.2.4}%
+\contentsline {section}{\numberline {2.5}Analyse des Résultats Expérimentaux}{10}{section.2.5}%
+\contentsline {section}{\numberline {2.6}Matériel}{10}{section.2.6}%
+\contentsline {section}{\numberline {2.7}Contrôle du Robot}{11}{section.2.7}%
+\contentsline {section}{\numberline {2.8}A faire}{12}{section.2.8}%
+\contentsline {chapter}{Conclusion}{13}{chapter*.8}%
+\contentsline {section}{\numberline {2.9}Conclusion Générale}{13}{section.2.9}%
+\contentsline {subsection}{\numberline {2.9.1}Synthèse des Réalisations}{13}{subsection.2.9.1}%
+\contentsline {subsection}{\numberline {2.9.2}Limites et Perspectives}{13}{subsection.2.9.2}%
