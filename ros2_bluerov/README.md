@@ -1,40 +1,83 @@
-# 🤖 Système de Docking Autonome BlueROV
+# ROS2 BlueROV Docking Pipeline
+## Vue d’ensemble du workspace ROS2
 
-Système ROS2 de docking autonome pour BlueROV utilisant le sonar Oculus M750d.
+Pipeline complet: Sonar → Filtrage → Détection → Localisation → Contrôle → Mission.  
+Les messages et utilitaires communs sont dans `docking_msgs` et `docking_utils`. Les scénarios de lancement (dont `user_pipeline`) sont dans `bringup`.
 
-[![ROS2](https://img.shields.io/badge/ROS2-Humble-blue)](https://docs.ros.org/en/humble/)
-[![Python](https://img.shields.io/badge/Python-3.10-green)](https://www.python.org/)
-[![License](https://img.shields.io/badge/License-Apache%202.0-orange)](LICENSE)
+## 📦 Packages
 
-## 📋 Vue d'ensemble
+- 🟥 **Pas commencé**
+- 🟧 **Commencé**
+- 🟨 **Bien avancé**
+- 🟩 **Fonctionnel**
+- 🟦 **Terminé**
 
-Ce workspace ROS2 implémente un pipeline complet pour permettre à un BlueROV de s'amarrer automatiquement dans une cage sous-marine en utilisant uniquement les données d'un sonar frontal.
+| Package | Description | Status |
+|---------|-------------|--------|
+| [sonar](src/sonar/README.md) | Acquisition données sonar (mock + future interface Oculus) | 🟨 |
+| [traitement](src/traitement/README.md) | Pipeline de filtrage d'images | 🟨 |
+| [tracking](src/tracking/README.md) | Détection bords de cage | 🟧 |
+| [localisation](src/localisation/README.md) | Calcul pose relative 6DOF | 🟥 |
+| [control](src/control/README.md) | Asservissement PID multi-axes | 🟥 |
+| [mission](src/mission/README.md) | Machine d'états de docking | 🟥 |
+| [docking_msgs](src/docking_msgs/README.md) | Messages custom (Frame, Borders, Pose, State) | 🟩 |
+| [docking_utils](src/docking_utils/README.md) | Bibliothèque utilitaires (filtres, géométrie) | 🟩 |
+| [bringup](src/bringup/README.md) | Launch files et configuration | 🟨 |
+| [affichage](src/affichage/README.md) | Interface visualisation |  🟩 |
 
-**Pipeline:** Sonar → Filtrage → Détection → Localisation → Contrôle → Mission
+### Détails par package (en bref)
 
-## ✨ Fonctionnalités
+- **sonar**
+       - Rôle: génère des frames sonar (mock) et, à terme, interface avec l’Oculus M750d.
+       - Topics: publie `/docking/sonar/raw`; en simulation, réagit à `/bluerov/cmd_vel`.
+       - Paramètres: `publish_rate`, `range_count`, `bearing_count`, `cage_distance`, `noise_level`, etc.
 
-- ✅ **Acquisition sonar** - Simulation Oculus M750d (mock pour développement)
-- ✅ **Traitement d'image** - Filtrage adaptatif multi-étapes
-- ✅ **Détection de cage** - Identification de 4 montants verticaux
-- ✅ **Localisation 6DOF** - Calcul de pose relative avec covariance
-- ✅ **Contrôle PID** - Asservissement 3 axes (x, y, yaw)
-- ✅ **Machine d'états** - Orchestration complète de mission
-- ✅ **Architecture modulaire** - Packages ROS2 découplés
+- **traitement**
+       - Rôle: applique du filtrage (médian/gaussien, compensation de portée, contraste) aux frames sonar.
+       - Topics: souscrit `/docking/sonar/raw`, publie `/docking/sonar/filtered`.
 
-## 🚀 Démarrage rapide
+- **tracking**
+       - Rôle: détecte les montants de la cage via projection angulaire et détection de pics; calcule confiance et largeur estimée.
+       - Topics: souscrit `/docking/sonar/filtered`, publie `/docking/tracking/borders`.
 
-### Prérequis
+- **localisation**
+       - Rôle: calcule la pose relative (x, y, yaw, voire 6DOF) du ROV vis‑à‑vis du centre de la cage, avec validation/covariance.
+       - Topics: souscrit `/docking/tracking/borders`, publie `/docking/localisation/pose`.
+
+- **control**
+       - Rôle: asservissement PID (x, y, yaw), limites de vitesses, anti‑windup basique.
+       - Topics: souscrit `/docking/localisation/pose` et `/docking/mission/state`, publie `/cmd_vel` (souvent remappé vers `/bluerov/cmd_vel`).
+
+- **mission**
+       - Rôle: machine d’états (IDLE → LOCK_ON → APPROACH → DOCKING → DOCKED + RECOVERY/ABORT).
+       - Topics: souscrit tracking/localisation, publie `/docking/mission/state`.
+
+- **docking_msgs**
+       - Rôle: messages ROS2 spécifiques (Frame, Borders, PoseRelative, State).
+       - Build: doit être compilé en premier si problème de génération d’IDL.
+
+- **docking_utils**
+       - Rôle: librairie Python (conversions coordonnées, filtres signal, géométrie de cage, TF utils).
+
+- **bringup**
+       - Rôle: fichiers de lancement orchestrant des scénarios (mock complet, détection seule, sonar seul, et `user_pipeline`).
+
+- **affichage**
+       - Rôle: visualisation temps réel (à compléter). Vous pouvez provisoirement utiliser PlotJuggler ou rqt pour monitorer.
+
+## 🔧 Installation des dépendances Python (Linux, bash)
+
+Assurez-vous d’avoir ROS2 Humble sourcé et Python 3.10 dispo.
 
 ```bash
-# ROS2 Humble
-source /opt/ros/humble/setup.bash
+# Aller dans le workspace
+cd ~/Desktop/Docking_guerledan/ros2_bluerov
 
-# Dépendances Python (correction NumPy pour compatibilité SciPy)
-pip install "numpy>=1.17.3,<1.25.0" scipy opencv-python
+# Dépendances Python via requirements.txt
+pip install -r requirements.txt
 ```
 
-### Installation
+Puis build le workspace:
 
 ```bash
 cd ~/Desktop/Docking_guerledan/ros2_bluerov
@@ -42,174 +85,95 @@ colcon build
 source install/setup.bash
 ```
 
-### Lancement
+Astuce: si build cassé sur les messages, build sélectif:
 
 ```bash
-# Pipeline complet en simulation
-ros2 launch bringup mock_pipeline.launch.py
+colcon build --packages-select docking_msgs
+colcon build --packages-select docking_utils
+colcon build
 ```
 
-### Monitoring
+## Lancer le launch user_pipeline + téléop clavier
+
+Le launch `user_pipeline` démarre la pipeline utile en simulation pour un utilisateur (sonar mock + traitement + tracking + localisation + mission + control, avec les bons remaps/params).
+
+1) Ouvrez un terminal (sondé bash) et lancez le pipeline:
 
 ```bash
-# Terminal 1: Observer l'état de la mission
-ros2 topic echo /docking/mission/state
+cd ~/Desktop/Docking_guerledan/ros2_bluerov
+source install/setup.bash
 
-# Terminal 2: Observer la pose estimée
-ros2 topic echo /docking/localisation/pose
-
-# Terminal 3: Visualisation graphique
-ros2 run plotjuggler plotjuggler
+ros2 launch bringup user_pipeline.launch.py
 ```
 
-## 📦 Packages
+2) Ouvrez un deuxième terminal pour le téléop clavier (remappé vers le topic du ROV simulé):
 
-| Package | Description | Status |
-|---------|-------------|--------|
-| [sonar](src/sonar/README.md) | Acquisition données sonar (mock + future interface Oculus) | ✅ |
-| [traitement](src/traitement/README.md) | Pipeline de filtrage d'images | ✅ |
-| [tracking](src/tracking/README.md) | Détection bords de cage | ✅ |
-| [localisation](src/localisation/README.md) | Calcul pose relative 6DOF | ✅ |
-| [control](src/control/README.md) | Asservissement PID multi-axes | ✅ |
-| [mission](src/mission/README.md) | Machine d'états de docking | ✅ |
-| [docking_msgs](src/docking_msgs/README.md) | Messages custom (Frame, Borders, Pose, State) | ✅ |
-| [docking_utils](src/docking_utils/README.md) | Bibliothèque utilitaires (filtres, géométrie) | ✅ |
-| [bringup](src/bringup/README.md) | Launch files et configuration | ✅ |
-| [affichage](src/affichage/README.md) | Interface visualisation | ⚠️ TODO |
+```bash
+# Installer le paquet téléop si nécessaire (debian package ROS Humble)
+sudo apt-get update
+sudo apt-get install ros-humble-teleop-twist-keyboard
+```
 
-## 🔄 Architecture
+```bash
+# Lancer le téléop et remapper vers /bluerov/cmd_vel
+ros2 run teleop_twist_keyboard teleop_twist_keyboard \
+       --ros-args -r /cmd_vel:=/bluerov/cmd_vel
+```
+
+Commandes utiles dans la fenêtre de téléop:
+- i / , : avancer / reculer
+- J / L : strafe gauche / droite
+- j / l : tourner gauche / droite
+- k : stop
+- w/x : augmenter/diminuer vitesse linéaire
+- e/c : augmenter/diminuer vitesse angulaire
+
+3) (Optionnel) Monitoring dans un troisième terminal:
+
+```bash
+# État de mission
+ros2 topic echo /docking/sonar/raw
+
+# Pose relative estimée
+ros2 topic echo /docking/tracking/borders
+
+# Fréquences
+ros2 topic hz /docking/sonar/raw
+ros2 topic hz /docking/sonar/filtered
+```
+
+## Architecture
 
 ```
 ┌──────────────┐
-│  sonar_mock  │ Génère frames synthétiques 256×512 @ 10Hz
+│  sonar_mock  │  Génère frames synthétiques 256×512 @ ~10Hz
 └──────┬───────┘
-       │ /docking/sonar/raw
-       ▼
+                      │ /docking/sonar/raw
+                      ▼
 ┌──────────────────┐
 │ traitement_node  │ Médian + Gaussien + Contraste + Compensation
 └──────┬───────────┘
-       │ /docking/sonar/filtered
-       ▼
+                      │ /docking/sonar/filtered
+                      ▼
 ┌──────────────────┐
-│  tracking_node   │ Détection 4 montants (projection angulaire)
+│  tracking_node   │ Détection montants (projection angulaire)
 └──────┬───────────┘
-       │ /docking/tracking/borders
-       ▼
+                      │ /docking/tracking/borders
+                      ▼
 ┌────────────────────┐
 │ localisation_node  │ Calcul (x,y,yaw) + validation géométrique
 └──────┬─────────────┘
-       │ /docking/localisation/pose
-       ▼
+                      │ /docking/localisation/pose
+                      ▼
 ┌──────────────┐         ┌──────────────┐
-│ mission_node │────────▶│ control_node │ 3× PID (x, y, yaw)
+│ mission_node │────────▶│ control_node │ PID (x, y, yaw)
 └──────────────┘         └──────┬───────┘
- /docking/mission/state          │ /cmd_vel
-                                 ▼
-                          [ BlueROV ]
+ /docking/mission/state          │ /cmd_vel → (remap) /bluerov/cmd_vel
+                                                                                                                 ▼
+                                                                                           [ BlueROV simulé ]
 ```
 
-## 📊 Machine d'états
+## Notes
 
-```
-        ┌──────┐
-        │ IDLE │ ◄─────────┐
-        └───┬──┘           │
-            │              │
-            ▼              │
-      ┌──────────┐         │
-      │ LOCK_ON  │─────┐   │
-      └─────┬────┘     │   │
-            │          │   │ 
-            ▼          ▼   │
-    ┌──────────┐   ┌─────────┐
-    │ APPROACH │◄─ │RECOVERY │─┐
-    └─────┬────┘   └─────────┘ │
-          │                    │
-          ▼                    │
-    ┌──────────┐               │
-    │ DOCKING  │               │
-    └─────┬────┘               │
-          │                    │
-          ▼                    │
-      ┌────────┐               │
-      │ DOCKED │               │
-      └────────┘               │
-                               │
-   [ABORT] ────────────────────┘
-```
-
-## 🧪 Tests
-
-```bash
-# Build avec tests
-colcon build
-
-# Lancer les tests
-colcon test --packages-select docking_utils
-colcon test-result --verbose
-```
-
-## 📈 Performance
-
-- **Fréquence:** ~10 Hz (pipeline complet)
-- **Latence:** 30-40 ms par frame
-- **Précision:** ±10cm + 1% distance, ±3° orientation
-- **Portée:** 2-15m (dépend du contraste)
-- **Taux de réussite:** >90% en conditions normales
-
-## 🛠️ Configuration
-
-Tous les paramètres sont configurables via fichiers YAML dans chaque package:
-
-```yaml
-# Exemple: control/config/control_params.yaml
-control_node:
-  ros__parameters:
-    pid_x_kp: 0.5
-    pid_y_kp: 0.3
-    pid_yaw_kp: 1.0
-    max_linear_speed: 0.5
-    max_angular_speed: 0.5
-```
-
-## 📚 Documentation
-
-- [README_IMPLEMENTATION.md](README_IMPLEMENTATION.md) - État détaillé de l'implémentation
-- [README_WORKSPACE.md](README_WORKSPACE.md) - Documentation originale du workspace
-- READMEs individuels dans chaque package
-
-## ⚠️ Limitations
-
-**Implémenté:**
-- ✅ Pipeline complet en simulation
-- ✅ Détection et tracking robustes
-- ✅ Contrôle PID fonctionnel
-- ✅ Machine d'états complète
-
-**À faire:**
-- ❌ Interface sonar réel Oculus M750d
-- ❌ Interface BlueROV (thruster mapping)
-- ❌ Visualisation temps réel (package affichage)
-- ❌ Tests en conditions réelles
-- ❌ Fusion IMU pour roll/pitch
-- ❌ Détection de contact physique
-
-## 🤝 Contribution
-
-Le projet suit une architecture modulaire ROS2 standard:
-- Chaque package est indépendant
-- Messages définis dans `docking_msgs`
-- Utilitaires partagés dans `docking_utils`
-- Configuration centralisée dans `bringup`
-
-## 📝 License
-
-Apache 2.0 - Voir [LICENSE](LICENSE)
-
-## 👥 Auteurs
-
-Projet Docking Guerlédan - BlueROV Heavy Autonomous Docking System
-
----
-
-**Note:** Ce système est actuellement fonctionnel en simulation. L'intégration hardware (sonar réel + BlueROV) est en cours de développement.
+- Le launch `user_pipeline` suppose des remaps cohérents vers `/bluerov/cmd_vel` pour la simulation; le téléop doit remapper `/cmd_vel` vers ce topic.
+- Si vous modifiez des paramètres, mettez à jour les YAML dans `bringup/config` ou les `config` propres à chaque package, puis relancez le launch.

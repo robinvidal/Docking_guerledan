@@ -1,0 +1,15 @@
+# Python dependencies for ros2_bluerov workspace (ROS2 Humble, Python 3.10)
+
+# Numeric stack (pins compatible with SciPy on Ubuntu 22.04)
+numpy>=1.17.3,<1.25.0
+scipy>=1.8,<1.12
+
+# Image/vision utils
+opencv-python>=4.5,<4.10
+
+# Optional: plotting/monitoring helpers (safe to skip if not needed)
+plotjuggler_msgs>=3.7; platform_system=="Linux"
+
+# Note: ROS Python packages like rclpy, geometry_msgs, tf2_ros are provided by ROS2 apt packages.
+# Do NOT install rclpy via pip; use:
+#   sudo apt install ros-${ROS_DISTRO}-rclpy ros-${ROS_DISTRO}-geometry-msgs ros-${ROS_DISTRO}-tf2-ros

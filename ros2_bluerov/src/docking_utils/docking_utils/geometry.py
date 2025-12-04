@@ -1,5 +1,9 @@
 """
 Module de validation et calculs géométriques pour la cage.
+
+Note: La détection publie 2 bords (montants verticaux visibles). Les fonctions
+ci-dessous fournissent des utilitaires basés sur 2 bords, avec largeur attendue
+pour compléter l'estimation de centre et d'orientation.
 """
 
 import numpy as np
@@ -21,135 +25,98 @@ def validate_cage_geometry(ranges: np.ndarray, bearings: np.ndarray,
                            expected_width: float = CAGE_WIDTH,
                            expected_depth: float = CAGE_DEPTH) -> Tuple[bool, str]:
     """
-    Valide que les 4 bords détectés correspondent à une cage rectangulaire.
-    
+    Valide grossièrement la cohérence de 2 bords visibles avec une cage.
+
     Args:
-        ranges: Distances des 4 bords (m)
-        bearings: Angles des 4 bords (rad)
+        ranges: Distances des 2 bords (m)
+        bearings: Angles des 2 bords (rad)
         expected_width: Largeur attendue de la cage (m)
         expected_depth: Profondeur attendue de la cage (m)
-    
+
     Returns:
-        (is_valid, message): True si géométrie cohérente, message d'erreur sinon
-    
-    Examples:
-        >>> # Cage idéale à 5m, centrée
-        >>> ranges = np.array([5.0, 5.0, 5.0, 5.0])
-        >>> bearings = np.array([-0.2, -0.1, 0.1, 0.2])
-        >>> valid, msg = validate_cage_geometry(ranges, bearings)
+        (is_valid, message): True si cohérent, sinon warning
+
+    Notes:
+        Avec seulement 2 bords, on vérifie l'écartement angulaire raisonnable
+        et une profondeur plausible. La largeur exacte nécessite hypothèses.
     """
-    if len(ranges) != 4 or len(bearings) != 4:
-        return False, "Exactement 4 bords requis"
-    
-    # Conversion en cartésien
+    if len(ranges) != 2 or len(bearings) != 2:
+        return False, "Exactement 2 bords requis"
+
     from docking_utils.conversions import polar_to_cartesian
-    points = [polar_to_cartesian(r, b) for r, b in zip(ranges, bearings)]
-    points = np.array(points)  # Shape: (4, 2)
-    
-    # Tri des points (gauche->droite)
-    sorted_idx = np.argsort(points[:, 0])
-    points_sorted = points[sorted_idx]
-    
-    # Les 2 points gauches = montants gauches, 2 droits = montants droits
-    left_points = points_sorted[:2]
-    right_points = points_sorted[2:]
-    
-    # Calcul largeur (distance horizontale entre colonnes gauche et droite)
-    width_measured = np.mean(right_points[:, 0]) - np.mean(left_points[:, 0])
-    
-    # Calcul profondeur (distance verticale moyenne)
-    depth_measured = np.mean(points[:, 1])
-    
-    # Validation largeur
-    if abs(width_measured - expected_width) > WIDTH_TOLERANCE:
-        return False, f"Largeur invalide: {width_measured:.2f}m (attendu: {expected_width:.2f}m)"
-    
-    # Validation profondeur (ordre de grandeur)
+    points = np.array([polar_to_cartesian(r, b) for r, b in zip(ranges, bearings)])
+
+    # Profondeur moyenne
+    depth_measured = float(np.mean(points[:, 1]))
     if depth_measured < 1.0 or depth_measured > 20.0:
         return False, f"Profondeur hors limites: {depth_measured:.2f}m"
-    
-    # Validation parallélisme (colonnes gauche et droite doivent être à même y)
-    left_y_diff = abs(left_points[0, 1] - left_points[1, 1])
-    right_y_diff = abs(right_points[0, 1] - right_points[1, 1])
-    
-    if left_y_diff > DEPTH_TOLERANCE or right_y_diff > DEPTH_TOLERANCE:
-        return False, "Bords non parallèles (cage non rectangulaire)"
-    
-    return True, "Géométrie cage valide"
+
+    # Écart latéral (distance x entre deux montants)
+    lateral_gap = abs(points[1, 0] - points[0, 0])
+    if lateral_gap < 0.2:
+        return False, "Montants trop proches (écart latéral < 0.2m)"
+
+    # Écart angulaire raisonnable
+    angular_gap = abs(bearings[1] - bearings[0])
+    if angular_gap < np.deg2rad(1.0):
+        return False, "Montants quasi confondus (écart angulaire < 1°)"
+
+    return True, "Géométrie cohérente avec 2 bords"
 
 
-def compute_cage_center(ranges: np.ndarray, bearings: np.ndarray) -> Tuple[float, float]:
+def compute_cage_center_from_2_borders(ranges: np.ndarray, bearings: np.ndarray,
+                                       expected_width: float = CAGE_WIDTH) -> Tuple[float, float]:
     """
-    Calcule la position du centre de la cage.
-    
+    Estime le centre de la cage à partir de 2 bords en supposant symétrie.
+
     Args:
-        ranges: Distances des 4 bords (m)
-        bearings: Angles des 4 bords (rad)
-    
+        ranges: Distances des 2 bords (m)
+        bearings: Angles des 2 bords (rad)
+        expected_width: Largeur attendue de la cage (m)
+
     Returns:
         (x_center, y_center) en mètres
-    
-    Examples:
-        >>> ranges = np.array([5.0, 5.0, 5.0, 5.0])
-        >>> bearings = np.deg2rad(np.array([-10, -5, 5, 10]))
-        >>> x_c, y_c = compute_cage_center(ranges, bearings)
-        >>> assert abs(x_c) < 0.5  # Centré latéralement
     """
     from docking_utils.conversions import polar_to_cartesian
-    
-    # Conversion cartésienne
     points = np.array([polar_to_cartesian(r, b) for r, b in zip(ranges, bearings)])
-    
-    # Centre = moyenne des 4 points
-    x_center = np.mean(points[:, 0])
-    y_center = np.mean(points[:, 1])
-    
+
+    # Centre latéral = milieu entre les deux montants visibles
+    x_center = float(np.mean(points[:, 0]))
+
+    # Profondeur: moyenne des deux bords (approx du plan de façade)
+    y_center = float(np.mean(points[:, 1]))
+
     return x_center, y_center
 
 
-def compute_cage_orientation(ranges: np.ndarray, bearings: np.ndarray) -> float:
+def compute_cage_orientation_from_2_borders(ranges: np.ndarray, bearings: np.ndarray) -> float:
     """
-    Calcule l'orientation de la cage (yaw) par rapport au ROV.
-    
+    Estime l'orientation (yaw) de la cage à partir de 2 bords.
+
+    Approche: vecteur entre les deux montants visibles donne la direction
+    latérale de la cage. L'orientation de la façade est perpendiculaire.
+
     Args:
-        ranges: Distances des 4 bords (m)
-        bearings: Angles des 4 bords (rad)
-    
+        ranges: Distances des 2 bords (m)
+        bearings: Angles des 2 bords (rad)
+
     Returns:
-        Angle de lacet de la cage (rad), 0 = cage alignée frontalement
-    
-    Examples:
-        >>> # Cage parfaitement frontale
-        >>> ranges = np.array([5.0, 5.0, 5.0, 5.0])
-        >>> bearings = np.deg2rad(np.array([-10, -5, 5, 10]))
-        >>> yaw = compute_cage_orientation(ranges, bearings)
-        >>> assert abs(yaw) < np.deg2rad(5)
+        yaw (rad), 0 = façade perpendiculaire à l'axe du ROV (alignée)
     """
-    from docking_utils.conversions import polar_to_cartesian
-    
-    # Conversion cartésienne
+    from docking_utils.conversions import polar_to_cartesian, normalize_angle
     points = np.array([polar_to_cartesian(r, b) for r, b in zip(ranges, bearings)])
-    
-    # Tri gauche->droite
-    sorted_idx = np.argsort(points[:, 0])
-    points_sorted = points[sorted_idx]
-    
-    # Régression linéaire sur bords gauches et droits
-    left_points = points_sorted[:2]
-    right_points = points_sorted[2:]
-    
-    # Angle moyen des colonnes (doit être ~90° si cage frontale)
-    left_angle = np.arctan2(left_points[1, 1] - left_points[0, 1],
-                            left_points[1, 0] - left_points[0, 0])
-    right_angle = np.arctan2(right_points[1, 1] - right_points[0, 1],
-                             right_points[1, 0] - right_points[0, 0])
-    
-    # Déviation par rapport à verticale (90°)
-    mean_angle = (left_angle + right_angle) / 2.0
-    yaw = mean_angle - np.pi / 2.0  # Déviation par rapport à frontal
-    
-    from docking_utils.conversions import normalize_angle
-    return normalize_angle(yaw)
+
+    # Vecteur entre montants (x,y)
+    dx = points[1, 0] - points[0, 0]
+    dy = points[1, 1] - points[0, 1]
+
+    # Direction latérale (angle du segment)
+    segment_angle = np.arctan2(dy, dx)
+
+    # Façade ≈ perpendiculaire au segment (ajouter ±90°)
+    facade_angle = segment_angle + np.pi / 2.0
+
+    return normalize_angle(facade_angle)
 
 
 def check_collision_risk(x: float, y: float, cage_width: float = CAGE_WIDTH,

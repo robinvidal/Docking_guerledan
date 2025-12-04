@@ -1,6 +1,6 @@
 # docking_utils
 
-Bibliothèque de fonctions utilitaires communes pour le système de docking autonome du BlueROV.
+Ce package est une dépendance **de bibliothèque uniquement** (pas de nœuds ROS). Il peut être importé par tous les packages métiers (sonar, traitement, tracking, localisation, control) sans créer de dépendances circulaires.
 
 ## Modules
 
@@ -23,15 +23,15 @@ Filtres de traitement de signal pour images sonar:
 - `contrast_enhancement()`: Amélioration contraste
 - `range_compensation()`: Compensation atténuation distance
 
-### geometry.py
-Validation et calculs géométriques cage:
-- `validate_cage_geometry()`: Vérification cohérence 4 bords
-- `compute_cage_center()`: Position centre cage
-- `compute_cage_orientation()`: Orientation (yaw) cage
+### geometry.py !Pas utilisé!
+Validation et calculs géométriques cage (basés sur 2 bords visibles):
+- `validate_cage_geometry(ranges, bearings)`: Vérification cohérence de 2 bords
+- `compute_cage_center_from_2_borders()`: Estimation du centre à partir de 2 bords
+- `compute_cage_orientation_from_2_borders()`: Orientation (yaw) à partir de 2 bords
 - `check_collision_risk()`: Détection risque collision
 - `estimate_approach_trajectory()`: Génération waypoints approche
 
-### tf_utils.py
+### tf_utils.py !Pas utilisé!
 Utilitaires transformations TF2 ROS:
 - `euler_to_quaternion()`: Euler → Quaternion
 - `quaternion_to_euler()`: Quaternion → Euler
@@ -39,21 +39,6 @@ Utilitaires transformations TF2 ROS:
 - `pose_from_xyyaw()`: Pose 2D + yaw → Pose ROS
 - `transform_point()`: Application transformation à point 3D
 
-## Installation
-
-```bash
-cd ros2_bluerov
-colcon build --packages-select docking_utils
-source install/setup.zsh
-```
-
-## Dépendances
-
-- Python 3.8+
-- NumPy
-- SciPy
-- ROS 2 (rclpy, geometry_msgs)
-- docking_msgs
 
 ## Tests
 
@@ -101,24 +86,29 @@ filtered = median_filter(sonar_image, kernel_size=5)
 enhanced = contrast_enhancement(filtered, clip_limit=2.0)
 ```
 
-### Exemple: Validation géométrie cage
+### Exemple: Validation géométrie cage (2 bords)
 
 ```python
-from docking_utils.geometry import validate_cage_geometry, compute_cage_center
+from docking_utils.geometry import (
+    validate_cage_geometry,
+    compute_cage_center_from_2_borders,
+    compute_cage_orientation_from_2_borders,
+)
 
-# Bords détectés par tracking
-ranges = np.array([5.2, 5.0, 5.1, 5.3])  # Distances (m)
-bearings = np.deg2rad(np.array([-8, -4, 4, 8]))  # Angles (rad)
+# Bords détectés par tracking (2 montants)
+ranges = np.array([5.2, 5.0])  # Distances (m)
+bearings = np.deg2rad(np.array([-6, 6]))  # Angles (rad)
 
 # Validation
-valid, msg = validate_cage_geometry(ranges, bearings, 
-                                   expected_width=2.0, 
+valid, msg = validate_cage_geometry(ranges, bearings,
+                                   expected_width=2.0,
                                    expected_depth=2.0)
+print(msg)
+
 if valid:
-    x_c, y_c = compute_cage_center(ranges, bearings)
-    print(f"Centre cage: x={x_c:.2f}m, y={y_c:.2f}m")
-else:
-    print(f"Géométrie invalide: {msg}")
+    x_c, y_c = compute_cage_center_from_2_borders(ranges, bearings, expected_width=2.0)
+    yaw = compute_cage_orientation_from_2_borders(ranges, bearings)
+    print(f"Centre cage estimé: x={x_c:.2f}m, y={y_c:.2f}m, yaw={np.rad2deg(yaw):.1f}°")
 ```
 
 ### Exemple: Transformations TF
@@ -134,25 +124,3 @@ pose = pose_from_xyyaw(x, y, yaw)
 q = euler_to_quaternion(0.0, 0.0, yaw)
 print(f"Quaternion: w={q.w:.3f}, z={q.z:.3f}")
 ```
-
-## Contribution
-
-Les fonctions utilitaires doivent:
-- Être pures (sans état) autant que possible
-- Inclure docstrings avec exemples
-- Avoir des tests unitaires (couverture > 80%)
-- Gérer les cas limites (divisions par zéro, arrays vides, etc.)
-
-## Architecture
-
-Ce package est une dépendance **de bibliothèque uniquement** (pas de nœuds ROS). Il peut être importé par tous les packages métiers (sonar, traitement, tracking, localisation, control) sans créer de dépendances circulaires.
-
-```
-docking_msgs ──┐
-               ├──> docking_utils ──> [sonar, traitement, tracking, ...]
-std_msgs ──────┘
-```
-
-## License
-
-Apache 2.0
