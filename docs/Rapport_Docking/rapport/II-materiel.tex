@@ -1,3 +1,4 @@
+// ...existing code...
 \newpage
     
 \chapter{Partie II : Matériel et Expérimentation}
@@ -13,7 +14,7 @@ Le vecteur utilisé pour nos travaux est une version modifiée du ROV commercial
 
 \section{Capteur de Perception : Sonar Oculus M750d}
 
-L'élément central de la boucle de perception est le sonar multi-faisceaux (Multibeam Imaging Sonar).
+L'élément central de la boucle de perception est le sonar multi‑faisceaux (Multibeam Imaging Sonar).
 
 \textit{[Instruction : Donnez les spécifications techniques clés du M750d : double fréquence (750kHz / 1.2MHz), ouverture angulaire (130° horizontal / 20° vertical), résolution en portée et en azimut. Expliquez pourquoi ce modèle est adapté au docking (haute résolution à courte portée). Décrivez son montage mécanique sur le ROV (inclinaison "tilt" vers le bas ou alignement horizontal) et l'interface logicielle utilisée pour récupérer les données (driver ROS, SDK Blueprint Subsea).]}
 
@@ -34,3 +35,67 @@ Afin de valider la robustesse du système en conditions réelles, une campagne a
 Cette section synthétise les données collectées lors des deux campagnes d'essais.
 
 \textit{[Instruction : Comparez les trajectoires réelles du ROV avec celles de la simulation. Présentez des statistiques de réussite (ex: "Sur 20 tentatives, 15 ont abouti à un amarrage réussi"). Analysez les échecs : est-ce un problème de perte de la cible au sonar (perception) ou une incapacité des propulseurs à contrer une perturbation (commande) ? Incluez des images sonar réelles montrant la cage vue par le robot à différentes distances.]}
+
+
+\section{Matériel}
+
+Dans cette section, nous présentons le matériel utilisé pour la réalisation de notre projet de docking via notre BlueROV.
+
+Nous présenterons ses spécificités techniques dans les grandes lignes.
+
+\begin{figure}[h!]
+    \centering
+    \includegraphics[width=\textwidth]{images/BlueROV.png}
+    \caption{Illustration de notre BlueROV}
+    \label{fig:bluerov_materiel}
+\end{figure}
+
+Sur la figure ci‑dessus, on peut observer notre BlueROV modifié pour le projet d'amarrage autonome.
+
+Pour la perception et le docking, le ROV embarque le sonar multifaisceaux Oculus M750d (Blueprint Subsea). Exploité en haute fréquence (1.2~MHz), il offre la résolution nécessaire aux manœuvres fines : 2.5~mm en portée et $0.6^{\circ}$ en azimut. Son ouverture ($130^{\circ}$ horizontal / $20^{\circ}$ vertical) impose un montage incliné vers le bas pour optimiser la visibilité de la cible. L'acquisition des données acoustiques est assurée en temps réel via un driver ROS, permettant leur intégration directe dans la boucle de contrôle autonome.
+
+Nous disposons de deux cordes permettant de remonter le ROV à la surface, ainsi que d'un long câble jaune assurant le contrôle à distance et l'alimentation électrique. Des mousses orange supplémentaires pour assurer la flottabilité.
+
+L'architecture propulsive du BlueROV Heavy, articulée autour de huit propulseurs (quatre horizontaux et quatre verticaux), confère au véhicule un caractère holonome complet. En effet, cette configuration vectorielle permet de commander indépendamment et simultanément les six degrés de liberté : les trois translations et les trois rotations (lacet, roulis, tangage). L'avantage majeur de cette disposition réside dans sa capacité à offrir une autorité totale sur la stabilisation de l'assiette (roulis et tangage) tout en assurant le maintien en profondeur. Cette omnidirectionnalité garantit une manœuvrabilité fine, permettant au ROV d'effectuer des déplacements latéraux ou verticaux tout en conservant une orientation angulaire fixe — une caractéristique indispensable pour la précision des relevés et la stabilité des interventions en milieu perturbé.
+
+\section{Contrôle du Robot}
+
+Dans cette partie, nous expliquons la configuration et l'utilisation de la manette. Voici une illustration de celle‑ci :
+
+\begin{figure}[h!]
+    \centering
+    \includegraphics[width=0.6\textwidth]{images/manette.png}
+    \caption{Image de notre manette}
+    \label{fig:manette}
+\end{figure}
+
+Pour pouvoir commander le robot via la manette, il faut d'abord l'armer avec la touche « Start ».
+
+Il s'agit d'une sécurité qui permet aussi de désarmer le robot avec la même touche. Si une mission se déroule mal, il est donc possible de désarmer le ROV : aucune commande ne lui sera alors envoyée.
+
+Les lumières sont contrôlées par le bouton « logitech » au centre de la manette. Initialisées à une valeur PWM de 1000, les lumières sont éteintes. Un appui sur la touche augmente la puissance de 100 jusqu'à la valeur maximale de 2000 ; un nouvel appui la ramène à 1000, éteinte.
+
+Pour pouvoir contrôler les lumières, il faut au moins avoir établi une connexion SSH entre l'ordinateur et le robot une fois, afin d'autoriser les échanges entre le Raspberry Pi (sur lequel sont connectées les lumières) et les codes.
+
+Théoriquement, il devrait être possible de commander l'inclinaison de la caméra avec les flèches « haut / bas » à gauche de la manette, mais des problèmes électroniques nous empêchent actuellement d'utiliser cette fonctionnalité.
+
+Concernant le contrôle directionnel, le robot peut se déplacer en translation avec le joystick gauche (L3).
+
+L'orientation (cap) est contrôlée par le joystick droit (R3) de gauche à droite.
+
+L'altitude du robot est commandée par le joystick droit (R3) poussé vers l'avant/arrière : en le poussant vers l'avant, le ROV remonte ; en le poussant vers l'arrière, il descend.
+
+Un régulateur PID a été implémenté pour maintenir une profondeur donnée. Ce mode peut être activé en appuyant sur « X » : lorsqu'on navigue et que le joystick R3 vient d'être relâché, la profondeur actuelle est mémorisée et le PID stabilise le ROV à cette profondeur. Il faut environ une dizaine de secondes pour obtenir une stabilisation quasi‑parfaite, l'action intégrale du PID contribuant à éliminer l'erreur résiduelle.
+
+Un second régulateur PID permet la stabilisation du cap. Il fonctionne de la même façon que l'asservissement de profondeur : lorsque le joystick responsable de l'orientation est relâché, le PID maintient le cap courant.
+
+
+
+\section{A faire}
+
+Mentionnez l’électronique embarquée (Pixhawk pour le bas niveau, Raspberry Pi 4 ou NVIDIA
+Jetson pour le haut niveau/ROS2)
+Précisez l’autonomie de la batterie
+Expliquez comment ROS2 est installé sur le ROV, et comment la communication entre le Pixhawk (via MAVLink) et le PC
+embarqué est assurée. Mentionnez l’utilisation de mavros pour interfacer ROS2 avec le contrôleur
+de vol. 

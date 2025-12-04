@@ -25,7 +25,10 @@
 \contentsline {section}{\numberline {2.3}Protocole Expérimental en Bassin}{8}{section.2.3}%
 \contentsline {section}{\numberline {2.4}Campagne d'Essais : Lac de Guerlédan}{9}{section.2.4}%
 \contentsline {section}{\numberline {2.5}Analyse des Résultats Expérimentaux}{9}{section.2.5}%
-\contentsline {chapter}{Conclusion}{10}{chapter*.6}%
-\contentsline {section}{\numberline {2.6}Conclusion Générale}{10}{section.2.6}%
-\contentsline {subsection}{\numberline {2.6.1}Synthèse des Réalisations}{10}{subsection.2.6.1}%
-\contentsline {subsection}{\numberline {2.6.2}Limites et Perspectives}{10}{subsection.2.6.2}%
+\contentsline {section}{\numberline {2.6}Matériel}{9}{section.2.6}%
+\contentsline {section}{\numberline {2.7}Contrôle du Robot}{10}{section.2.7}%
+\contentsline {section}{\numberline {2.8}A faire}{11}{section.2.8}%
+\contentsline {chapter}{Conclusion}{12}{chapter*.8}%
+\contentsline {section}{\numberline {2.9}Conclusion Générale}{12}{section.2.9}%
+\contentsline {subsection}{\numberline {2.9.1}Synthèse des Réalisations}{12}{subsection.2.9.1}%
+\contentsline {subsection}{\numberline {2.9.2}Limites et Perspectives}{12}{subsection.2.9.2}%
