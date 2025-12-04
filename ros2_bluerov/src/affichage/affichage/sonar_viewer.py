@@ -464,6 +464,32 @@ class TraitementControlWidget(QWidget):
             ]
         )
         scroll_layout.addWidget(filter_group)
+
+        # === 2b. Filtres avancés ===
+        advanced_group = self.create_group_box(
+            "🧪 Filtres avancés",
+            [
+                # Bilateral
+                ('enable_bilateral', 'Filtre bilatéral', 'bool', False),
+                ('bilateral_d', 'Diamètre voisinage (d)', 'int', 5, 1, 25, 1),
+                ('bilateral_sigma_color', 'Sigma couleur', 'double', 25.0, 1.0, 150.0, 1.0),
+                ('bilateral_sigma_space', 'Sigma espace', 'double', 5.0, 1.0, 50.0, 1.0),
+                # Top-hat
+                ('enable_tophat', 'Top-hat morphologique', 'bool', False),
+                ('tophat_kernel', 'Taille noyau top-hat', 'int', 5, 1, 31, 2),
+                # LoG / DoG
+                ('enable_log_enhance', 'Renforcement LoG', 'bool', False),
+                ('log_sigma', 'Sigma LoG', 'double', 1.0, 0.2, 10.0, 0.2),
+                ('enable_dog_enhance', 'Renforcement DoG', 'bool', False),
+                ('dog_sigma1', 'Sigma1 DoG', 'double', 1.0, 0.2, 10.0, 0.2),
+                ('dog_sigma2', 'Sigma2 DoG', 'double', 2.0, 0.2, 10.0, 0.2),
+                # Matched filter
+                ('enable_matched_filter', 'Filtre adapté (PSF gaussien)', 'bool', False),
+                ('mf_sigma', 'Sigma PSF', 'double', 1.2, 0.2, 10.0, 0.2),
+                ('mf_kernel_size', 'Taille noyau PSF', 'int', 9, 3, 51, 2),
+            ]
+        )
+        scroll_layout.addWidget(advanced_group)
         
         # === 3. SO-CFAR ===
         cfar_group = self.create_group_box(
@@ -661,6 +687,20 @@ class TraitementControlWidget(QWidget):
                 'median_kernel': 3,
                 'enable_gaussian': True,
                 'gaussian_sigma': 1.0,
+                'enable_bilateral': False,
+                'bilateral_d': 5,
+                'bilateral_sigma_color': 25.0,
+                'bilateral_sigma_space': 5.0,
+                'enable_tophat': False,
+                'tophat_kernel': 5,
+                'enable_log_enhance': False,
+                'log_sigma': 1.0,
+                'enable_dog_enhance': False,
+                'dog_sigma1': 1.0,
+                'dog_sigma2': 2.0,
+                'enable_matched_filter': False,
+                'mf_sigma': 1.2,
+                'mf_kernel_size': 9,
                 'enable_so_cfar': True,
                 'cfar_guard_cells': 5,
                 'cfar_window_size': 10,

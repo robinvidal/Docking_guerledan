@@ -22,6 +22,7 @@ setup(
     entry_points={
         'console_scripts': [
             'tracking_node = tracking.tracking_node:main',
+            'blob_tracker_node = tracking.blob_tracker_node:main',
         ],
     },
 )

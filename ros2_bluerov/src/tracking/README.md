@@ -4,7 +4,7 @@ Package de détection et suivi des bords de la cage dans les images sonar.
 
 ## Description
 
-Ce package détecte les 4 montants verticaux de la cage d'amarrage à partir des frames sonar filtrées. Il utilise une approche par projection angulaire et détection de pics pour identifier les bords.
+Ce package détecte les 2 montants verticaux de la cage d'amarrage à partir des frames sonar filtrées. Il utilise une approche par projection angulaire et détection de pics pour identifier les bords.
 
 ## Nœuds
 
@@ -30,7 +30,7 @@ Détecte les bords de la cage dans les frames sonar et publie leurs positions po
 1. **Limitation de zone** - Restriction aux distances [search_range_min, search_range_max]
 2. **Projection angulaire** - Somme des intensités sur les ranges pour chaque bearing
 3. **Détection de pics** - Identification des maxima locaux dépassant le seuil
-4. **Sélection des 4 montants** - Tri par intensité et sélection des 4 pics les plus forts
+2. **Sélection des 2 montants** - Tri par intensité et sélection des 2 pics les plus forts
 5. **Estimation de distance** - Pour chaque bearing, détection du pic radial
 6. **Calcul de confiance** - Basé sur l'intensité normalisée de chaque montant
 7. **Validation géométrique** - Vérification cohérence avec largeur attendue
@@ -38,8 +38,8 @@ Détecte les bords de la cage dans les frames sonar et publie leurs positions po
 ## Message de sortie
 
 Le message `Borders` contient:
-- **ranges[]** - Distances des 4 montants (m)
-- **bearings[]** - Angles des 4 montants (rad)
+- **ranges[]** - Distances des 2 montants (m)
+- **bearings[]** - Angles des 2 montants (rad)
 - **confidences[]** - Confiance de détection pour chaque montant [0-1]
 - **is_valid** - Validité globale de la détection (booléen)
 - **cage_width** - Largeur estimée de la cage (m)

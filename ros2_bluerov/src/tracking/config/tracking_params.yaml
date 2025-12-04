@@ -7,3 +7,13 @@ tracking_node:
     expected_cage_width: 2.0    # Largeur cage attendue (m)
     search_range_min: 2.0       # Distance min recherche (m)
     search_range_max: 20.0      # Distance max recherche (m)
+
+blob_tracker_node:
+  ros__parameters:
+    enable_tracker: true
+    template_size: 21
+    search_radius: 24
+    ncc_threshold: 0.5
+    learning_rate: 0.05
+    init_mode: "max"        # 'max' ou 'center'
+    intensity_threshold: 120
