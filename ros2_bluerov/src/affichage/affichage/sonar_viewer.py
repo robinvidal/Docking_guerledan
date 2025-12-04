@@ -9,9 +9,10 @@ from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                              QHBoxLayout, QLabel, QTabWidget, QPushButton, QGroupBox,
                              QCheckBox, QSlider, QDoubleSpinBox, QSpinBox, QScrollArea,
                              QFormLayout, QFileDialog, QMessageBox)
-from PyQt5.QtCore import Qt, QTimer, pyqtSignal, QObject
+from PyQt5.QtCore import Qt, QTimer, pyqtSignal, QObject, QRectF
 from PyQt5.QtGui import QImage, QPixmap
 import pyqtgraph as pg
+from scipy.ndimage import map_coordinates
 
 import rclpy
 from rclpy.node import Node
@@ -229,9 +230,15 @@ class SonarCartesianWidget(pg.PlotWidget):
         self.setLabel('left', 'Y (frontal, m)', units='m')
         self.setAspectLocked(True)
         
-        # Scatter plot pour les points sonar
+        # Scatter plot pour les points sonar (fallback)
         self.scatter = pg.ScatterPlotItem(size=3, pen=pg.mkPen(None))
         self.addItem(self.scatter)
+
+        # ImageItem pour affichage rapide (reprojection polaire->cartésien)
+        self.image_item = pg.ImageItem()
+        self.addItem(self.image_item)
+        self.image_item.setZValue(-10)  # derrière les scatter
+        self.image_item.hide()
         
         # Overlay pour bords détectés (plus gros et rouge)
         self.borders_scatter = pg.ScatterPlotItem(size=15, pen=pg.mkPen(None), 
@@ -263,6 +270,22 @@ class SonarCartesianWidget(pg.PlotWidget):
             (255, 230, 140)    # or brillant
         ]
         self.custom_colormap = pg.ColorMap(positions, colors)
+        # Precompute arrays for LUT interpolation (for ImageItem)
+        self._lut_positions = np.array(positions)
+        self._lut_colors = np.array(colors, dtype=np.float32) / 255.0  # normalized
+
+        # Cache for reprojection mapping to avoid recompute
+        self._mapping_cache = {
+            'bearing_count': None,
+            'range_count': None,
+            'coords': None,
+            'out_shape': None,
+        }
+        # By default use image fast mode
+        self.use_image = True
+        # Rotation correction for ImageItem: k parameter for np.rot90 (0,1,2,3)
+        # If the image appears rotated, change this to 0/1/2/3 accordingly.
+        self.image_rotation = 1
         
     def update_image(self, frame_msg):
         """Convertit et affiche les données sonar en vue cartésienne."""
@@ -270,47 +293,105 @@ class SonarCartesianWidget(pg.PlotWidget):
         img = np.array(frame_msg.intensities, dtype=np.uint8).reshape(
             (frame_msg.bearing_count, frame_msg.range_count)
         )
-        
         # Grilles polaires
         ranges = np.linspace(frame_msg.min_range, frame_msg.max_range, frame_msg.range_count)
         # Calcul correct des angles à partir de bearing_resolution
         total_angle = frame_msg.bearing_resolution * frame_msg.bearing_count
         bearings = np.linspace(-total_angle/2, total_angle/2, frame_msg.bearing_count)
-        
-        # Conversion polaire -> cartésien
-        points = []
-        intensities = []
-        
-        # Sous-échantillonnage pour performance (tous les N pixels)
-        step = 2
-        
-        for i in range(0, frame_msg.bearing_count, step):
-            for j in range(0, frame_msg.range_count, step):
-                intensity = img[i, j]
-                
-                # Filtrer les intensités faibles pour clarté
-                if intensity > 30:  # Seuil minimal
-                    r = ranges[j]
-                    theta = bearings[i]
-                    
-                    # Conversion polaire -> cartésien
-                    x = r * np.sin(theta)
-                    y = r * np.cos(theta)
-                    
-                    points.append([x, y])
-                    intensities.append(intensity)
-        
-        if points:
-            points = np.array(points)
-            intensities = np.array(intensities)
-            
-            # Colormap custom dorée
-            colors = self.custom_colormap.mapToQColor(intensities / 255.0)
-            brushes = [pg.mkBrush(c) for c in colors]
-            
-            self.scatter.setData(pos=points, brush=brushes)
+
+        # Fast display: reprojection polar->cartesian into ImageItem
+        if self.use_image:
+            bc = frame_msg.bearing_count
+            rc = frame_msg.range_count
+            max_r = frame_msg.max_range
+            min_r = frame_msg.min_range
+            total_angle = frame_msg.bearing_resolution * bc
+
+            # Check cache
+            cache = self._mapping_cache
+            if cache['bearing_count'] != bc or cache['range_count'] != rc:
+                # Define output image shape: width covers [-max_r, max_r], height [0, max_r]
+                out_h = rc
+                out_w = int(2 * rc)
+
+                xs = np.linspace(-max_r, max_r, out_w)
+                ys = np.linspace(0, max_r, out_h)
+                xv, yv = np.meshgrid(xs, ys)
+
+                rr = np.sqrt(xv**2 + yv**2)
+                th = np.arctan2(xv, yv)
+
+                # Map to polar indices (floating)
+                i_float = (th + total_angle/2.0) / total_angle * (bc - 1)
+                j_float = (rr - min_r) / (max_r - min_r) * (rc - 1)
+
+                # Stack coords for map_coordinates (rows, cols)
+                coords = np.vstack((i_float.ravel(), j_float.ravel()))
+
+                cache['bearing_count'] = bc
+                cache['range_count'] = rc
+                cache['coords'] = coords
+                cache['out_shape'] = (out_h, out_w)
+            else:
+                coords = cache['coords']
+                out_h, out_w = cache['out_shape']
+
+            # Sample using scipy map_coordinates (order=1 linear)
+            sampled = map_coordinates(img.astype(np.float32), coords, order=1, mode='constant', cval=0.0)
+            sampled = sampled.reshape((out_h, out_w))
+
+            # Apply colormap via linear interpolation on the predefined color stops
+            v = np.clip(sampled / 255.0, 0.0, 1.0)
+            # interpolate per channel
+            r_chan = np.interp(v, self._lut_positions, self._lut_colors[:, 0])
+            g_chan = np.interp(v, self._lut_positions, self._lut_colors[:, 1])
+            b_chan = np.interp(v, self._lut_positions, self._lut_colors[:, 2])
+
+            rgb = np.stack((r_chan, g_chan, b_chan), axis=-1)
+            rgb_uint8 = (rgb * 255).astype(np.uint8)
+
+            # Apply rotation correction if needed
+            if self.image_rotation and self.image_rotation % 4 != 0:
+                rgb_uint8 = np.rot90(rgb_uint8, k=self.image_rotation)
+
+            # Set image (pyqtgraph expects array with shape (rows, cols, 3))
+            self.image_item.setImage(rgb_uint8, autoLevels=False)
+            # Map the ImageItem to real-world coordinates so axes are in meters
+            try:
+                self.image_item.setRect(QRectF(-max_r, 0.0, 2.0 * max_r, max_r - min_r))
+            except Exception:
+                # Fallback for older pyqtgraph versions
+                self.image_item.setPos(-max_r, 0.0)
+                sx = (2.0 * max_r) / float(rgb_uint8.shape[1])
+                sy = (max_r - min_r) / float(rgb_uint8.shape[0])
+                self.image_item.resetTransform()
+                self.image_item.scale(sx, sy)
+            self.image_item.show()
+            self.scatter.hide()
         else:
-            self.scatter.setData([], [])
+            # Fallback to scatter-based rendering (existing code)
+            points = []
+            intensities = []
+            step = 2
+            for i in range(0, frame_msg.bearing_count, step):
+                for j in range(0, frame_msg.range_count, step):
+                    intensity = img[i, j]
+                    if intensity > 30:
+                        r = ranges[j]
+                        theta = bearings[i]
+                        x = r * np.sin(theta)
+                        y = r * np.cos(theta)
+                        points.append([x, y])
+                        intensities.append(intensity)
+
+            if points:
+                points = np.array(points)
+                intensities = np.array(intensities)
+                colors = self.custom_colormap.mapToQColor(intensities / 255.0)
+                brushes = [pg.mkBrush(c) for c in colors]
+                self.scatter.setData(pos=points, brush=brushes)
+            else:
+                self.scatter.setData([], [])
         
     def update_borders(self, borders_msg):
         """Met à jour l'overlay des bords détectés en coordonnées cartésiennes."""
@@ -898,54 +979,91 @@ class MainWindow(QMainWindow):
         status_group.setLayout(status_layout)
         main_layout.addWidget(status_group)
         
-        # === Onglets pour différentes vues ===
-        self.tabs = QTabWidget()
-        main_layout.addWidget(self.tabs)
-        
-        # Onglet 1: Sonar brut (vue cartésienne)
+        # === Layout principal divisé ===
+        # Nous utilisons un QSplitter horizontal : gauche = zone carré pour sonar, droite = panneaux paramètres
+        splitter = pg.QtWidgets.QSplitter(Qt.Horizontal)
+
+        # --- Left: square container for sonar view(s)
+        left_container = QWidget()
+        left_layout = QVBoxLayout(left_container)
+        left_layout.setContentsMargins(0, 0, 0, 0)
+
+        # Use a tab widget inside the left square to switch between brut/filtré/compare
+        self.sonar_tabs = QTabWidget()
         self.raw_widget = SonarCartesianWidget("Sonar Brut - Vue Cartésienne")
-        self.tabs.addTab(self.raw_widget, "📡 Sonar Brut")
-        
-        # Onglet 2: Sonar filtré (vue cartésienne)
         self.filtered_widget = SonarCartesianWidget("Sonar Filtré - Vue Cartésienne")
-        self.tabs.addTab(self.filtered_widget, "🔍 Sonar Filtré")
-        
-        # Onglet 3: Comparaison côte à côte
+        # Compare view: two side-by-side SonarCartesianWidget
         compare_widget = QWidget()
         compare_layout = QHBoxLayout(compare_widget)
         self.raw_compare = SonarCartesianWidget("Brut")
         self.filtered_compare = SonarCartesianWidget("Filtré")
         compare_layout.addWidget(self.raw_compare)
         compare_layout.addWidget(self.filtered_compare)
-        self.tabs.addTab(compare_widget, "⚖️ Comparaison")
-        
-        # Onglet 4: Graphes pose
+
+        self.sonar_tabs.addTab(self.raw_widget, "📡 Sonar Brut")
+        self.sonar_tabs.addTab(self.filtered_widget, "🔍 Sonar Filtré")
+        self.sonar_tabs.addTab(compare_widget, "⚖️ Comparaison")
+
+        left_layout.addWidget(self.sonar_tabs)
+
+        # Wrap left container in a widget that keeps it square by adjusting width to height
+        class SquareWrapper(QWidget):
+            def __init__(self, child_widget):
+                super().__init__()
+                self.child = child_widget
+                layout = QVBoxLayout(self)
+                layout.setContentsMargins(0, 0, 0, 0)
+                layout.addWidget(self.child)
+
+            def resizeEvent(self, ev):
+                # Force width = height to keep square (limited by available space)
+                h = self.height()
+                w = self.width()
+                # If width is larger than height, shrink width to height
+                if w > h:
+                    self.setFixedWidth(h)
+                else:
+                    # allow expanding again
+                    self.setMaximumWidth(16777215)
+                super().resizeEvent(ev)
+
+        square_left = SquareWrapper(left_container)
+
+        splitter.addWidget(square_left)
+
+        # --- Right: parameters and graphs stacked in tabs
+        right_tabs = QTabWidget()
+        # Graphs tab
         graphs_widget = QWidget()
         graphs_layout = QVBoxLayout(graphs_widget)
-        
         self.pose_plot = pg.PlotWidget(title="Position (x, y)")
         self.pose_plot.setLabel('bottom', 'Temps (échantillons)')
         self.pose_plot.setLabel('left', 'Position (m)')
         self.pose_plot.addLegend()
         self.x_curve = self.pose_plot.plot(pen='r', name='X (latéral)')
         self.y_curve = self.pose_plot.plot(pen='g', name='Y (frontal)')
-        
         self.yaw_plot = pg.PlotWidget(title="Orientation (yaw)")
         self.yaw_plot.setLabel('bottom', 'Temps (échantillons)')
         self.yaw_plot.setLabel('left', 'Angle (°)')
         self.yaw_curve = self.yaw_plot.plot(pen='b', name='Yaw')
-        
         graphs_layout.addWidget(self.pose_plot)
         graphs_layout.addWidget(self.yaw_plot)
-        self.tabs.addTab(graphs_widget, "📊 Graphes Pose")
-        
-        # Onglet 5: Contrôle traitement
+        right_tabs.addTab(graphs_widget, "📊 Graphes Pose")
+
+        # Control widgets
         self.control_widget = TraitementControlWidget(self.ros_node)
-        self.tabs.addTab(self.control_widget, "⚙️ Contrôle Traitement")
-        
-        # Onglet 6: Contrôle sonar mock
+        right_tabs.addTab(self.control_widget, "⚙️ Contrôle Traitement")
         self.sonar_control_widget = SonarMockControlWidget(self.ros_node)
-        self.tabs.addTab(self.sonar_control_widget, "🎛️ Contrôle Sonar Mock")
+        right_tabs.addTab(self.sonar_control_widget, "🎛️ Contrôle Sonar Mock")
+
+        splitter.addWidget(right_tabs)
+
+        # Set initial splitter sizes (left bigger visually)
+        splitter.setStretchFactor(0, 3)
+        splitter.setStretchFactor(1, 2)
+
+        # Add splitter to main layout
+        main_layout.addWidget(splitter)
         
         # Historique des données pour graphes
         self.pose_history_x = []
@@ -979,7 +1097,11 @@ class MainWindow(QMainWindow):
             mean_int = float(arr.mean()) if arr.size > 0 else 0.0
         except Exception:
             mean_int = 0.0
-        self.tabs.setTabText(self.tabs.indexOf(self.raw_widget), f"📡 Sonar Brut ({mean_int:.0f})")
+        # Update the sonar tab title
+        try:
+            self.sonar_tabs.setTabText(self.sonar_tabs.indexOf(self.raw_widget), f"📡 Sonar Brut ({mean_int:.0f})")
+        except Exception:
+            pass
     
     def on_filtered_frame(self, msg):
         """Mise à jour frame filtrée."""
@@ -996,7 +1118,10 @@ class MainWindow(QMainWindow):
             mean_int = float(arr.mean()) if arr.size > 0 else 0.0
         except Exception:
             mean_int = 0.0
-        self.tabs.setTabText(self.tabs.indexOf(self.filtered_widget), f"🔍 Sonar Filtré ({mean_int:.0f})")
+        try:
+            self.sonar_tabs.setTabText(self.sonar_tabs.indexOf(self.filtered_widget), f"🔍 Sonar Filtré ({mean_int:.0f})")
+        except Exception:
+            pass
     
     def on_borders(self, msg):
         """Mise à jour bords détectés."""
