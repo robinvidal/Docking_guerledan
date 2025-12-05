@@ -148,29 +148,29 @@ ros2 topic hz /docking/sonar/filtered
 ┌──────────────┐
 │  sonar_mock  │  Génère frames synthétiques 256×512 @ ~10Hz
 └──────┬───────┘
-                      │ /docking/sonar/raw
-                      ▼
+       │ /docking/sonar/raw
+       ▼
 ┌──────────────────┐
 │ traitement_node  │ Médian + Gaussien + Contraste + Compensation
 └──────┬───────────┘
-                      │ /docking/sonar/filtered
-                      ▼
+       │ /docking/sonar/filtered
+       ▼
 ┌──────────────────┐
 │  tracking_node   │ Détection montants (projection angulaire)
 └──────┬───────────┘
-                      │ /docking/tracking/borders
-                      ▼
+       │ /docking/tracking/borders
+       ▼
 ┌────────────────────┐
 │ localisation_node  │ Calcul (x,y,yaw) + validation géométrique
 └──────┬─────────────┘
-                      │ /docking/localisation/pose
-                      ▼
+       │ /docking/localisation/pose
+       ▼
 ┌──────────────┐         ┌──────────────┐
 │ mission_node │────────▶│ control_node │ PID (x, y, yaw)
 └──────────────┘         └──────┬───────┘
- /docking/mission/state          │ /cmd_vel → (remap) /bluerov/cmd_vel
-                                                                                                                 ▼
-                                                                                           [ BlueROV simulé ]
+ /docking/mission/state         │ /cmd_vel → (remap) /bluerov/cmd_vel
+                                ▼
+                        [ BlueROV simulé ]
 ```
 
 ## Notes

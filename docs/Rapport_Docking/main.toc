@@ -10,13 +10,12 @@
 \contentsline {section}{\numberline {1.2}Modélisation et Loi de Commande}{5}{section.1.2}%
 \contentsline {subsection}{\numberline {1.2.1}Contrôle en profondeur}{5}{subsection.1.2.1}%
 \contentsline {subsection}{\numberline {1.2.2}Modèle Dynamique du ROV}{5}{subsection.1.2.2}%
-\contentsline {subsection}{\numberline {1.2.3}Synthèse de la Loi de Commande}{6}{subsection.1.2.3}%
 \contentsline {section}{\numberline {1.3}Simulation et Validation Numérique}{6}{section.1.3}%
 \contentsline {subsection}{\numberline {1.3.1}Environnement de Simulation}{6}{subsection.1.3.1}%
 \contentsline {subsection}{\numberline {1.3.2}Scénarios de Test et Résultats}{6}{subsection.1.3.2}%
 \contentsline {section}{\numberline {1.4}Algorithme de Traitement d'Image Sonar}{7}{section.1.4}%
 \contentsline {subsection}{\numberline {1.4.1}Choix de la Cage et Configuration des Réflecteurs}{7}{subsection.1.4.1}%
-\contentsline {subsection}{\numberline {1.4.2}Chaîne de Traitement d’Image}{8}{subsection.1.4.2}%
+\contentsline {subsection}{\numberline {1.4.2}Chaîne de Traitement d’Image}{7}{subsection.1.4.2}%
 \contentsline {subsection}{\numberline {1.4.3}Estimation de la Position Relative}{8}{subsection.1.4.3}%
 \contentsline {section}{\numberline {1.5}Résultats Théoriques}{8}{section.1.5}%
 \contentsline {chapter}{\numberline {2}Partie II : Matériel et Expérimentation}{9}{chapter.2}%
