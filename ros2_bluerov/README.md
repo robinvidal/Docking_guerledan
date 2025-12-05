@@ -93,7 +93,7 @@ colcon build --packages-select docking_utils
 colcon build
 ```
 
-## Lancer le launch user_pipeline + téléop clavier
+## Option 1: Lancer la simulation complète avec téléop clavier
 
 Le launch `user_pipeline` démarre la pipeline utile en simulation pour un utilisateur (sonar mock + traitement + tracking + localisation + mission + control, avec les bons remaps/params).
 
@@ -129,6 +129,33 @@ Commandes utiles dans la fenêtre de téléop:
 - e/c : augmenter/diminuer vitesse angulaire
 
 3) (Optionnel) Monitoring dans un troisième terminal:
+
+```bash
+# État de mission
+ros2 topic echo /docking/sonar/raw
+
+# Pose relative estimée
+ros2 topic echo /docking/tracking/borders
+
+# Fréquences
+ros2 topic hz /docking/sonar/raw
+ros2 topic hz /docking/sonar/filtered
+```
+
+## Option 2: Lancer avec le vrai sonar Oculus M750d
+
+Le launch `sonar_pipeline` démarre le vrai sonar (sonar + traitement + tracking + affichage). Utile pour tests réels avec le BlueROV et l’Oculus.
+
+1) Ouvrez un terminal (sondé bash) et lancez le pipeline:
+
+```bash
+cd ~/Desktop/Docking_guerledan/ros2_bluerov
+source install/setup.bash
+
+ros2 launch bringup sonar_pipeline.launch.py
+```
+
+2) (Optionnel) Monitoring dans un troisième terminal:
 
 ```bash
 # État de mission

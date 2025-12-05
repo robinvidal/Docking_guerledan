@@ -24,9 +24,15 @@ sonar_mock:
 
 sonar_node:
   ros__parameters:
-    publish_rate: 10.0
     ip_address: "192.168.1.10"
     port: 52102
-    range: 40.0             # Portée sonar (m)
-    gain: 50.0              # Gain (0-100)
-    frequency: 750          # Fréquence (kHz) - M750d
+    frame_id: "sonar_link"
+    range: 8.0              # Portée sonar (m)
+    gain_percent: 50        # Gain (0-100)
+    master_mode: 1          # 1: LF, 2: HF
+    ping_rate: 0            # 0: auto
+    # Suppression d'une bande d'intensité anormale sur un bord
+    edge_mask_auto: true
+    edge_mask_threshold: 2.5
+    mask_left_bearings: 0
+    mask_right_bearings: 0
