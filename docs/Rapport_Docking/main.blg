@@ -1,17 +1,17 @@
 [0] Config.pm:307> INFO - This is Biber 2.17
 [0] Config.pm:310> INFO - Logfile is 'main.blg'
-[62] biber:340> INFO - === ven. déc.  5, 2025, 09:02:30
-[70] Biber.pm:418> INFO - Reading 'main.bcf'
-[115] Biber.pm:972> INFO - Found 6 citekeys in bib section 0
-[123] Biber.pm:4383> INFO - Processing section 0
-[134] Biber.pm:4574> INFO - Looking for bibtex file 'rapport/references.bib' for section 0
-[135] bibtex.pm:1713> INFO - LaTeX decoding ...
-[145] bibtex.pm:1518> INFO - Found BibTeX data source 'rapport/references.bib'
-[203] UCollate.pm:68> INFO - Overriding locale 'fr-FR' defaults 'normalization = NFD' with 'normalization = prenormalized'
-[203] UCollate.pm:68> INFO - Overriding locale 'fr-FR' defaults 'variable = shifted' with 'variable = non-ignorable'
-[203] Biber.pm:4203> INFO - Sorting list 'none/global//global/global' of type 'entry' with template 'none' and locale 'fr-FR'
-[203] Biber.pm:4209> INFO - No sort tailoring available for locale 'fr-FR'
-[206] bbl.pm:654> INFO - Writing 'main.bbl' with encoding 'UTF-8'
-[208] bbl.pm:757> INFO - Output to main.bbl
-[208] Biber.pm:130> WARN - ISBN '978-0-470-74238-7' in entry 'fossen2011_marine_craft' is invalid - run biber with '--validate_datamodel' for details.
-[209] Biber.pm:132> INFO - WARNINGS: 1
+[45] biber:340> INFO - === ven. déc.  5, 2025, 09:12:48
+[53] Biber.pm:418> INFO - Reading 'main.bcf'
+[84] Biber.pm:972> INFO - Found 6 citekeys in bib section 0
+[91] Biber.pm:4383> INFO - Processing section 0
+[96] Biber.pm:4574> INFO - Looking for bibtex file 'rapport/references.bib' for section 0
+[97] bibtex.pm:1713> INFO - LaTeX decoding ...
+[105] bibtex.pm:1518> INFO - Found BibTeX data source 'rapport/references.bib'
+[148] UCollate.pm:68> INFO - Overriding locale 'fr-FR' defaults 'variable = shifted' with 'variable = non-ignorable'
+[148] UCollate.pm:68> INFO - Overriding locale 'fr-FR' defaults 'normalization = NFD' with 'normalization = prenormalized'
+[148] Biber.pm:4203> INFO - Sorting list 'none/global//global/global' of type 'entry' with template 'none' and locale 'fr-FR'
+[148] Biber.pm:4209> INFO - No sort tailoring available for locale 'fr-FR'
+[151] bbl.pm:654> INFO - Writing 'main.bbl' with encoding 'UTF-8'
+[153] bbl.pm:757> INFO - Output to main.bbl
+[153] Biber.pm:130> WARN - ISBN '978-0-470-74238-7' in entry 'fossen2011_marine_craft' is invalid - run biber with '--validate_datamodel' for details.
+[153] Biber.pm:132> INFO - WARNINGS: 1

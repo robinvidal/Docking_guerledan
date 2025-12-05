@@ -2362,20 +2362,17 @@
     <bcf:citekey order="9">wang2023_acoustic_mfls_docking</bcf:citekey>
     <bcf:citekey order="10">uchihori2019_3dsonar_docking</bcf:citekey>
     <bcf:citekey order="11">yazdani2020_survey_docking</bcf:citekey>
-    <bcf:citekey order="12">wang2023_acoustic_mfls_docking</bcf:citekey>
-    <bcf:citekey order="13">palomeras2016_iauv_panel</bcf:citekey>
-    <bcf:citekey order="14">yazdani2020_survey_docking</bcf:citekey>
-    <bcf:citekey order="15">uchihori2019_3dsonar_docking</bcf:citekey>
-    <bcf:citekey order="16">yazdani2020_survey_docking</bcf:citekey>
-    <bcf:citekey order="17">palomeras2016_iauv_panel</bcf:citekey>
-    <bcf:citekey order="18">wang2023_acoustic_mfls_docking</bcf:citekey>
+    <bcf:citekey order="12">uchihori2019_3dsonar_docking</bcf:citekey>
+    <bcf:citekey order="13">yazdani2020_survey_docking</bcf:citekey>
+    <bcf:citekey order="14">palomeras2016_iauv_panel</bcf:citekey>
+    <bcf:citekey order="15">wang2023_acoustic_mfls_docking</bcf:citekey>
+    <bcf:citekey order="16">uchihori2019_3dsonar_docking</bcf:citekey>
+    <bcf:citekey order="17">yazdani2020_survey_docking</bcf:citekey>
+    <bcf:citekey order="18">palomeras2016_iauv_panel</bcf:citekey>
     <bcf:citekey order="19">uchihori2019_3dsonar_docking</bcf:citekey>
-    <bcf:citekey order="20">yazdani2020_survey_docking</bcf:citekey>
-    <bcf:citekey order="21">palomeras2016_iauv_panel</bcf:citekey>
-    <bcf:citekey order="22">uchihori2019_3dsonar_docking</bcf:citekey>
-    <bcf:citekey order="23">wang2023_acoustic_mfls_docking</bcf:citekey>
-    <bcf:citekey order="24">bourgois2021_safe_underwater_docking</bcf:citekey>
-    <bcf:citekey order="25">fossen2011_marine_craft</bcf:citekey>
+    <bcf:citekey order="20">wang2023_acoustic_mfls_docking</bcf:citekey>
+    <bcf:citekey order="21">bourgois2021_safe_underwater_docking</bcf:citekey>
+    <bcf:citekey order="22">fossen2011_marine_craft</bcf:citekey>
   </bcf:section>
   <!-- SORTING TEMPLATES -->
   <bcf:sortingtemplate name="none">
