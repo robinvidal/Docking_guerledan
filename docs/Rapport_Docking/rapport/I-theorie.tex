@@ -122,18 +122,25 @@ Des études récentes montrent que la performance de la détection dépend forte
 
 Dans notre implémentation, deux réflecteurs verticaux ont été installés de manière symétrique, de façon à générer deux maxima d’intensité distincts dans l’image sonar. Leur espacement connu sert de base à la reconstruction géométrique de l’orientation de la cage.
 
-\subsection{Chaîne de Traitement d’Image}
+\subsection{Chaîne de Traitement d'Image}
 
-La chaîne de traitement retenue suit la logique décrite dans \cite{wang2023_acoustic_mfls_docking} et adaptée aux images retournées par l’Oculus :
+L'algorithme développé pour le traitement des données sonar s'articule autour de la détection de cibles ponctuelles.
 
-\begin{enumerate}
-    \item \textbf{Pré-traitement :}  
-    L’image sonar brute est d’abord convertie en matrice intensity–range. Un filtre médian réduit le bruit speckle, tandis qu’un seuillage adaptatif supprime le bruit de fond dû au plan d’eau ou aux réflexions parasites. Palomeras et al. \cite{palomeras2016_iauv_panel} soulignent que ce pré-traitement est indispensable pour éviter les fausses détections dans l’arrière-plan.
+\subsubsection*{1. Pré-traitement}
+L'image sonar brute est d'abord normalisée. Un \textbf{filtre Gaussien} (noyau $5 \times 5$) est appliqué pour lisser le bruit de \textit{speckle} inhérent à l'imagerie acoustique, suivi d'une correction gamma. Contrairement aux approches adaptatives parfois lourdes en calcul, un \textbf{seuillage binaire global} (fixé expérimentalement à $50\%$ de l'intensité maximale) suffit ici à isoler les échos forts du bruit de fond. Une étape de morphologie mathématique (dilatation puis fermeture) est ensuite appliquée pour consolider les régions d'intérêt. Palomeras et al. [2] soulignent que ce type de pré-traitement est indispensable pour garantir la robustesse de la détection face aux fausses alarmes générées par l'arrière-plan ou la surface.
 
-    \item \textbf{Extraction des caractéristiques :}  
-    Les réflecteurs apparaissent comme deux zones d’intensité saturées. Une détection de ``blobs’’ (méthode basée sur les maxima locaux) est utilisée pour extraire leurs coordonnées polaires $(r, \theta)$.  
-    Une alternative, utilisée dans certains travaux de la littérature \cite{yazdani2020_survey_docking}, serait d’exploiter une transformée de Hough polaire pour détecter les arêtes de la cage ; toutefois, dans la pratique, les points brillants des réflecteurs se révèlent beaucoup plus robustes et simples à exploiter.
-\end{enumerate}
+\subsubsection*{2. Extraction des caractéristiques}
+Les réflecteurs de la cage apparaissent sur l'image traitée comme des zones d'intensité saturées disjointes.
+Plutôt que d'exploiter une transformée de Hough polaire pour détecter les arêtes rectilignes de la cage — une méthode explorée dans certains travaux de la littérature [1] mais sensible aux occultations partielles — notre approche privilégie une détection par \textbf{contours actifs} (\textit{blob detection}).
+
+L'algorithme extrait les contours externes et calcule leurs centroïdes $(c_x, c_y)$. Un filtrage géométrique rigoureux est ensuite appliqué pour rejeter les candidats invalides :
+\begin{itemize}
+    \item \textbf{Filtre de zone morte :} Rejet des échos situés dans l'axe central du faisceau ou trop proches de l'origine ($< 30$ pixels).
+    \item \textbf{Filtre de taille :} Exclusion des objets dont la taille physique projetée dépasse les dimensions réelles d'un réflecteur.
+    \item \textbf{Filtre de densité :} Suppression des détections isolées (bruit impulsif) ou des amas trop denses ne correspondant pas à la topologie de la cage.
+\end{itemize}
+
+Enfin, la validation finale s'effectue en vérifiant que la distance euclidienne entre deux centroïdes candidats correspond à la largeur connue de l'entrée de la cage (entre 0.5m et 1m dans le plan métrique).
 
 \subsection{Estimation de la Position Relative}
 
