@@ -45,3 +45,23 @@ Thumbs.db
 # === Sauvegardes personnelles ===
 *.old
 *.backup
+
+# === Fichiers générés par LaTeX (Rapports) ===
+*.aux
+*.glo
+*.idx
+*.ist
+*.acn
+*.out
+*.pyg
+*.synctex.gz
+*.fls
+*.fdb_latexmk
+*.toc
+*.blg
+*.bbl
+*.pdf
+
+# === Archives et gros fichiers (pour les videos de Mr. Viel) ===
+*.zip
+*.tar.gz
