@@ -490,7 +490,7 @@ class ROV(Node):
                     if self._depth_move_active:
                         self.desired_depth = self.depth
                         # reset integral and previous error to avoid jump
-                        self._depth_integral = -6 #  seems to be approximally the value reached when depth is stable so it avoid jump
+                        self._depth_integral = -9 #  seems to be approximally the value reached when depth is stable so it avoid jump
                         self._depth_error_prev = 0.0
                         self._depth_move_active = False
                     # self.desired_depth = 2

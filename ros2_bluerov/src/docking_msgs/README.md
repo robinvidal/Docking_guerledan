@@ -10,7 +10,7 @@ Données brutes du sonar Oculus M750d. Contient les intensités du ping sonar co
 **Topic**: `/docking/sonar/raw`
 
 ### Borders.msg
-Bords de la cage détectés par le module de tracking. Représente les 4 montants verticaux en coordonnées polaires avec confiances.
+Bords de la cage détectés par le module de tracking. Représente les 2 montants verticaux en coordonnées polaires avec confiances.
 
 **Topic**: `/docking/tracking/borders`
 
@@ -24,25 +24,7 @@ Pose 6DOF du ROV par rapport au centre de la cage, calculée par le module de lo
 
 **Topic**: `/docking/mission/state`
 
-## Dépendances
 
-- `std_msgs`: Header avec timestamps
-- `geometry_msgs`: Types géométriques standards ROS
-
-## Build
-
-```bash
-cd ros2_bluerov
-colcon build --packages-select docking_msgs
-source install/setup.zsh
-```
-
-## Test
-
-```bash
-colcon test --packages-select docking_msgs
-colcon test-result --verbose
-```
 
 ## Usage (Python)
 

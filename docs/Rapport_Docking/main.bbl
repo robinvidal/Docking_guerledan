@@ -16,5 +16,269 @@
   {}
 \endgroup
 
+
+\refsection{0}
+  \datalist[entry]{none/global//global/global}
+    \entry{yazdani2020_survey_docking}{article}{}
+      \name{author}{4}{}{%
+        {{hash=4a898f520da2f82e3baede67d58e8996}{%
+           family={Yazdani},
+           familyi={Y\bibinitperiod},
+           given={A.\bibnamedelimi M.},
+           giveni={A\bibinitperiod\bibinitdelim M\bibinitperiod}}}%
+        {{hash=7ec76405b8f986690d940175a702b09b}{%
+           family={Sammut},
+           familyi={S\bibinitperiod},
+           given={K.},
+           giveni={K\bibinitperiod}}}%
+        {{hash=ddc47401eff243b114fa8ec1b3b1261a}{%
+           family={Yakimenko},
+           familyi={Y\bibinitperiod},
+           given={O.},
+           giveni={O\bibinitperiod}}}%
+        {{hash=a8b82cb75556ac6995a4502962847c33}{%
+           family={Lammas},
+           familyi={L\bibinitperiod},
+           given={A.},
+           giveni={A\bibinitperiod}}}%
+      }
+      \strng{namehash}{393101d7547377098a6db84bdd168342}
+      \strng{fullhash}{4d33cdbd62825b9fe15217d762832195}
+      \strng{bibnamehash}{4d33cdbd62825b9fe15217d762832195}
+      \strng{authorbibnamehash}{4d33cdbd62825b9fe15217d762832195}
+      \strng{authornamehash}{393101d7547377098a6db84bdd168342}
+      \strng{authorfullhash}{4d33cdbd62825b9fe15217d762832195}
+      \field{sortinit}{1}
+      \field{sortinithash}{4f6aaa89bab872aa0999fec09ff8e98a}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{journaltitle}{Robotics and Autonomous Systems}
+      \field{title}{A Survey of Underwater Docking Guidance Systems}
+      \field{volume}{124}
+      \field{year}{2020}
+      \field{pages}{103382}
+      \range{pages}{1}
+      \verb{doi}
+      \verb 10.1016/j.robot.2019.103382
+      \endverb
+    \endentry
+    \entry{palomeras2016_iauv_panel}{article}{}
+      \name{author}{8}{}{%
+        {{hash=f3f36613c1a02f65a579d10e78192106}{%
+           family={Palomeras},
+           familyi={P\bibinitperiod},
+           given={Narcís},
+           giveni={N\bibinitperiod}}}%
+        {{hash=1027be6b50bbe10f85b7026bd1d198c3}{%
+           family={Peñalver},
+           familyi={P\bibinitperiod},
+           given={Antonio},
+           giveni={A\bibinitperiod}}}%
+        {{hash=02f62cbc05925fe893c70c2d86cfd47f}{%
+           family={Massot-Campos},
+           familyi={M\bibinithyphendelim C\bibinitperiod},
+           given={Miquel},
+           giveni={M\bibinitperiod}}}%
+        {{hash=aee83e1eb7b5a411a886bbfbb81cb5cb}{%
+           family={Negre},
+           familyi={N\bibinitperiod},
+           given={Pep\bibnamedelima Lluís},
+           giveni={P\bibinitperiod\bibinitdelim L\bibinitperiod}}}%
+        {{hash=65c0e0a6b436f3aed6f861339b15af0e}{%
+           family={Fernández},
+           familyi={F\bibinitperiod},
+           given={José\bibnamedelima Javier},
+           giveni={J\bibinitperiod\bibinitdelim J\bibinitperiod}}}%
+        {{hash=b4e9393fb586c68275312c7075347efb}{%
+           family={Ridao},
+           familyi={R\bibinitperiod},
+           given={Pere},
+           giveni={P\bibinitperiod}}}%
+        {{hash=7066d17f0d5554a520aa58a404f6eebe}{%
+           family={Sanz},
+           familyi={S\bibinitperiod},
+           given={Pedro\bibnamedelima J.},
+           giveni={P\bibinitperiod\bibinitdelim J\bibinitperiod}}}%
+        {{hash=993fef01a8d612f7e1a2454dcdeb4cec}{%
+           family={Oliver-Codina},
+           familyi={O\bibinithyphendelim C\bibinitperiod},
+           given={Gabriel},
+           giveni={G\bibinitperiod}}}%
+      }
+      \strng{namehash}{6510cf018ca89f48325ce0e5b21451c7}
+      \strng{fullhash}{33bcd6e9da95e0472425a8ba6f935dba}
+      \strng{bibnamehash}{6510cf018ca89f48325ce0e5b21451c7}
+      \strng{authorbibnamehash}{6510cf018ca89f48325ce0e5b21451c7}
+      \strng{authornamehash}{6510cf018ca89f48325ce0e5b21451c7}
+      \strng{authorfullhash}{33bcd6e9da95e0472425a8ba6f935dba}
+      \field{sortinit}{2}
+      \field{sortinithash}{8b555b3791beccb63322c22f3320aa9a}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{journaltitle}{Sensors}
+      \field{number}{10}
+      \field{title}{I-AUV Docking and Panel Intervention at Sea}
+      \field{volume}{16}
+      \field{year}{2016}
+      \field{pages}{1673}
+      \range{pages}{1}
+      \verb{doi}
+      \verb 10.3390/s16101673
+      \endverb
+    \endentry
+    \entry{uchihori2019_3dsonar_docking}{article}{}
+      \name{author}{3}{}{%
+        {{hash=792a4414e0dc8fb3b091bd1cd31b8bfb}{%
+           family={Uchihori},
+           familyi={U\bibinitperiod},
+           given={Hiroshi},
+           giveni={H\bibinitperiod}}}%
+        {{hash=e87460d9a6a98df68a297e608c8975eb}{%
+           family={Yamamoto},
+           familyi={Y\bibinitperiod},
+           given={Ikuo},
+           giveni={I\bibinitperiod}}}%
+        {{hash=ddfe9b53f8288b9a66cd32c217c1f2f6}{%
+           family={Morinaga},
+           familyi={M\bibinitperiod},
+           given={Akihiro},
+           giveni={A\bibinitperiod}}}%
+      }
+      \strng{namehash}{9bccd174c014f224779ced7b88dd34db}
+      \strng{fullhash}{9bccd174c014f224779ced7b88dd34db}
+      \strng{bibnamehash}{9bccd174c014f224779ced7b88dd34db}
+      \strng{authorbibnamehash}{9bccd174c014f224779ced7b88dd34db}
+      \strng{authornamehash}{9bccd174c014f224779ced7b88dd34db}
+      \strng{authorfullhash}{9bccd174c014f224779ced7b88dd34db}
+      \field{sortinit}{2}
+      \field{sortinithash}{8b555b3791beccb63322c22f3320aa9a}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{journaltitle}{Sensors and Materials}
+      \field{number}{12}
+      \field{title}{Concept of Autonomous Underwater Vehicle Docking Using 3D Imaging Sonar}
+      \field{volume}{31}
+      \field{year}{2019}
+      \field{pages}{4223\bibrangedash 4230}
+      \range{pages}{8}
+      \verb{doi}
+      \verb 10.18494/SAM.2019.2498
+      \endverb
+    \endentry
+    \entry{wang2023_acoustic_mfls_docking}{article}{}
+      \name{author}{6}{}{%
+        {{hash=e879808d99137738e801f62283395bcd}{%
+           family={Wang},
+           familyi={W\bibinitperiod},
+           given={Zhao},
+           giveni={Z\bibinitperiod}}}%
+        {{hash=57f5b8e053a86727a7e6d8cc6b8da031}{%
+           family={Guan},
+           familyi={G\bibinitperiod},
+           given={Xiawei},
+           giveni={X\bibinitperiod}}}%
+        {{hash=183f99184af1bd72cd6cc4ae155d6c46}{%
+           family={Liu},
+           familyi={L\bibinitperiod},
+           given={Chuan},
+           giveni={C\bibinitperiod}}}%
+        {{hash=51eca3f5d9235eed7e2c66d765ba99dd}{%
+           family={Yang},
+           familyi={Y\bibinitperiod},
+           given={Shaolong},
+           giveni={S\bibinitperiod}}}%
+        {{hash=172d7fbad63951423d3f604a640a8a69}{%
+           family={Xiang},
+           familyi={X\bibinitperiod},
+           given={Xianbo},
+           giveni={X\bibinitperiod}}}%
+        {{hash=b2dcceb92d2313a3f299f0bec1d21c7c}{%
+           family={Chen},
+           familyi={C\bibinitperiod},
+           given={Hong},
+           giveni={H\bibinitperiod}}}%
+      }
+      \strng{namehash}{e6d90b27ad91a2632cfc45de7672eeed}
+      \strng{fullhash}{8bb330899662174f4f2ff095563f6afb}
+      \strng{bibnamehash}{8bb330899662174f4f2ff095563f6afb}
+      \strng{authorbibnamehash}{8bb330899662174f4f2ff095563f6afb}
+      \strng{authornamehash}{e6d90b27ad91a2632cfc45de7672eeed}
+      \strng{authorfullhash}{8bb330899662174f4f2ff095563f6afb}
+      \field{sortinit}{3}
+      \field{sortinithash}{ad6fe7482ffbd7b9f99c9e8b5dccd3d7}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{journaltitle}{Control Engineering Practice}
+      \field{title}{Acoustic Communication and Imaging Sonar Guided AUV Docking: System Infrastructure, Docking Methodology and Lake Trials}
+      \field{volume}{136}
+      \field{year}{2023}
+      \field{pages}{105529}
+      \range{pages}{1}
+      \verb{doi}
+      \verb 10.1016/j.conengprac.2023.105529
+      \endverb
+    \endentry
+    \entry{bourgois2021_safe_underwater_docking}{thesis}{}
+      \name{author}{1}{}{%
+        {{hash=a4aa345f13f5a5e666062786bf6452c0}{%
+           family={Bourgois},
+           familyi={B\bibinitperiod},
+           given={Auguste},
+           giveni={A\bibinitperiod}}}%
+      }
+      \list{institution}{1}{%
+        {ENSTA Bretagne / Université de Lorraine}%
+      }
+      \list{location}{1}{%
+        {Brest, France}%
+      }
+      \strng{namehash}{a4aa345f13f5a5e666062786bf6452c0}
+      \strng{fullhash}{a4aa345f13f5a5e666062786bf6452c0}
+      \strng{bibnamehash}{a4aa345f13f5a5e666062786bf6452c0}
+      \strng{authorbibnamehash}{a4aa345f13f5a5e666062786bf6452c0}
+      \strng{authornamehash}{a4aa345f13f5a5e666062786bf6452c0}
+      \strng{authorfullhash}{a4aa345f13f5a5e666062786bf6452c0}
+      \field{sortinit}{7}
+      \field{sortinithash}{108d0be1b1bee9773a1173443802c0a3}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{note}{Final version February 22, 2021}
+      \field{title}{Safe \& Collaborative Autonomous Underwater Docking}
+      \field{type}{phdthesis}
+      \field{year}{2021}
+    \endentry
+    \entry{fossen2011_marine_craft}{book}{}
+      \name{author}{1}{}{%
+        {{hash=8eca0c434dd587f3eff346c053ba5948}{%
+           family={Fossen},
+           familyi={F\bibinitperiod},
+           given={Thor\bibnamedelima I.},
+           giveni={T\bibinitperiod\bibinitdelim I\bibinitperiod}}}%
+      }
+      \list{location}{1}{%
+        {Chichester, UK}%
+      }
+      \list{publisher}{1}{%
+        {Wiley}%
+      }
+      \strng{namehash}{8eca0c434dd587f3eff346c053ba5948}
+      \strng{fullhash}{8eca0c434dd587f3eff346c053ba5948}
+      \strng{bibnamehash}{8eca0c434dd587f3eff346c053ba5948}
+      \strng{authorbibnamehash}{8eca0c434dd587f3eff346c053ba5948}
+      \strng{authornamehash}{8eca0c434dd587f3eff346c053ba5948}
+      \strng{authorfullhash}{8eca0c434dd587f3eff346c053ba5948}
+      \field{sortinit}{8}
+      \field{sortinithash}{a231b008ebf0ecbe0b4d96dcc159445f}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{isbn}{978-0-470-74238-7}
+      \field{title}{Handbook of Marine Craft Hydrodynamics and Motion Control}
+      \field{year}{2011}
+      \verb{doi}
+      \verb 10.1002/9781119994138
+      \endverb
+    \endentry
+  \enddatalist
+\endrefsection
 \endinput
 
