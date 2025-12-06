@@ -16,26 +16,6 @@ from .widgets.right_controls import RightControlsPanel
 from .widgets.status_header import StatusHeader
 
 
-class SquareWrapper(QWidget):
-    """Keep child widget square by constraining width to height."""
-
-    def __init__(self, child_widget):
-        super().__init__()
-        self.child = child_widget
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.addWidget(self.child)
-
-    def resizeEvent(self, event):
-        height = self.height()
-        width = self.width()
-        if width > height:
-            self.setFixedWidth(height)
-        else:
-            self.setMaximumWidth(16777215)
-        super().resizeEvent(event)
-
-
 class MainWindow(QMainWindow):
     """Main window assembling stacked panels and wiring signals."""
 
@@ -82,8 +62,7 @@ class MainWindow(QMainWindow):
         self.left_stack.addWidget(self.compare_panel)
         left_layout.addWidget(self.left_stack)
 
-        square_left = SquareWrapper(left_container)
-        splitter.addWidget(square_left)
+        splitter.addWidget(left_container)
 
         right_container = QWidget()
         right_layout = QVBoxLayout(right_container)

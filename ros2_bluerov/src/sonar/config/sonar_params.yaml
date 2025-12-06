@@ -1,38 +1,11 @@
-# Paramètres du sonar
-
 sonar_mock:
   ros__parameters:
-    publish_rate: 10.0      # Hz
-    range_count: 512        # Nombre de bins en distance
-    bearing_count: 256      # Nombre de faisceaux angulaires
-    bearing_angle: 140.0    # Ouverture angulaire totale du sonar (degrés) : ±70°
-    min_range: 1.0          # Distance minimale (m)
-    max_range: 20.0         # Distance maximale (m)
-    cage_distance: 4.0      # Distance de la cage simulée (m)
-    cage_width: 1.0         # Largeur cage (m)
-    noise_level: 10.0       # Niveau de bruit (écart-type gaussien, 0-100)
-    
-    # Paramètres de filtrage (appliqués pour générer se rapprocher du signal réel)
+    noise_level: 2.5
     enable_median: true
-    median_kernel: 3   # Taille du noyau médian (impair)
+    median_kernel: 5
     enable_gaussian: true
-    gaussian_sigma: 2.4   # Écart-type du filtre gaussien
+    gaussian_sigma: 3.5
     enable_contrast: true
-    contrast_clip: 0.35     # Limite de clipping pour contraste (%)
+    contrast_clip: 0.3
     enable_range_comp: false
-    range_comp_alpha: 0.01  # Coefficient d'atténuation volumique (m⁻¹)
-
-sonar_node:
-  ros__parameters:
-    ip_address: "192.168.1.10"
-    port: 52102
-    frame_id: "sonar_link"
-    range: 4.0              # Portée sonar (m)
-    gain_percent: 50        # Gain (0-100)
-    master_mode: 1          # 1: LF, 2: HF
-    ping_rate: 0            # 0: auto
-    # Suppression d'une bande d'intensité anormale sur un bord
-    edge_mask_auto: true
-    edge_mask_threshold: 2.5
-    mask_left_bearings: 0
-    mask_right_bearings: 0
+    range_comp_alpha: 0.01
