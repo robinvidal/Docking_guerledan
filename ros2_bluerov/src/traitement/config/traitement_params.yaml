@@ -1,14 +1,28 @@
 traitement_node:
   ros__parameters:
-    enable_histogram_eq: true
+    enable_histogram_eq: false
     enable_tvg_correction: false
     tvg_alpha: 0.0
     tvg_spreading_loss: 20.0
-    enable_median: true
-    median_kernel: 7
-    enable_gaussian: true
-    gaussian_sigma: 3.0
-    enable_so_cfar: true
+    enable_median: false
+    median_kernel: 3
+    enable_gaussian: false
+    gaussian_sigma: 0.1
+    enable_bilateral: false
+    bilateral_d: 5
+    bilateral_sigma_color: 25.0
+    bilateral_sigma_space: 5.0
+    enable_tophat: false
+    tophat_kernel: 5
+    enable_log_enhance: false
+    log_sigma: 1.0
+    enable_dog_enhance: true
+    dog_sigma1: 5.4
+    dog_sigma2: 10.0
+    enable_matched_filter: false
+    mf_sigma: 1.2
+    mf_kernel_size: 9
+    enable_so_cfar: false
     cfar_guard_cells: 20
     cfar_window_size: 30
     cfar_alpha: 6.5

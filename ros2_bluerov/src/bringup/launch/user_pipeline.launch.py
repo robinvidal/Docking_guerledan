@@ -43,15 +43,6 @@ def generate_launch_description():
         output='screen'
     )
 
-    sonar_viewer = Node(
-        package='affichage',
-        executable='sonar_viewer',
-        name='sonar_viewer',
-        output='screen'
-    )
-
-    # Clavier teleop retiré du launch, à lancer manuellement depuis un terminal
-
     traitement = Node(
         package='traitement',
         executable='traitement_node',
@@ -65,6 +56,13 @@ def generate_launch_description():
         executable='blob_tracker_node',
         name='blob_tracker_node',
         parameters=[tracking_config],
+        output='screen'
+    )
+
+    sonar_viewer = Node(
+        package='affichage',
+        executable='sonar_viewer',
+        name='sonar_viewer',
         output='screen'
     )
 
