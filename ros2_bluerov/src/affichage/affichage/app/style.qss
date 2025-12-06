@@ -13,7 +13,7 @@
 }
 
 QMainWindow, QWidget {
-    background: #F4F4F4;
+    background: #0C2B4E;
 }
 
 QGroupBox {
@@ -70,6 +70,11 @@ QPushButton:pressed {
     background-color: #0C2B4E;
 }
 
+QPushButton:checked {
+    border: 2px solid #F4F4F4;
+    background-color: #0C2B4E;
+}
+
 QPushButton#abortButton {
     background-color: #0C2B4E;
     border: 1px solid #1D546C;
@@ -107,9 +112,10 @@ QTabBar::tab:selected {
     background: #0C2B4E;
 }
 
+
 QSlider::groove:horizontal {
     height: 8px;
-    background: #4A6B88; /* lighter groove for contrast */
+    background: #1A3D64;
     border-radius: 4px;
     margin: 6px 0;
 }
@@ -119,37 +125,93 @@ QSlider::sub-page:horizontal {
     border-radius: 4px;
 }
 
+QSlider::add-page:horizontal {
+    background: #F4F4F4; /* right part for remaining range */
+    border-radius: 4px;
+}
+
 QSlider::handle:horizontal {
     background: #F4F4F4; /* light handle for visibility */
     width: 16px;
-    height: 16px;
+    height: 12px;
     margin: -4px 0; /* center the handle on the groove */
     border-radius: 8px;
     border: 1px solid #1A3D64;
 }
 
 QSlider::handle:horizontal:hover {
-    background: #FFFFFF;
-    border: 1px solid #1D546C;
+    background: #1A3D64;
+    border: 1px solid #1A3D64;
 }
 
 QSpinBox, QDoubleSpinBox {
     background: #FFFFFF;
-    border: 1px solid #1A3D64;
+    border: 1px solid #1D546C;
     border-radius: 4px;
     padding: 4px;
+}
+
+QSpinBox::up-button, QDoubleSpinBox::up-button,
+QSpinBox::down-button, QDoubleSpinBox::down-button {
+    border: 1px solid #1D546C;
+    background: #F4F4F4;
+    width: 18px;
+    subcontrol-origin: border;
+}
+
+QSpinBox::up-button:pressed, QDoubleSpinBox::up-button:pressed,
+QSpinBox::down-button:pressed, QDoubleSpinBox::down-button:pressed {
+    background: #1A3D64;
+    border: 1px solid #1D546C;
 }
 
 QCheckBox::indicator {
     width: 16px;
     height: 16px;
     border: 1px solid #1A3D64;
-    background: #1D546C;
+    background: #FFFFFF;
     border-radius: 3px;
     margin-right: 6px;
 }
 
 QCheckBox::indicator:checked {
+    background: #0C2B4E;
+    border: 1px solid #ffffffff;
+}
+
+/* Scrollbars */
+QScrollBar:vertical, QScrollBar:horizontal {
+    background: #1D546C;
+    border: 1px solid #1D546C;
+    border-radius: 4px;
+    margin: 4px;
+    width: 20px;  /* thicker track */
+    height: 20px; /* thicker track */
+}
+
+QScrollBar::handle:vertical, QScrollBar::handle:horizontal {
+    background: #F4F4F4;
+    border: 1px solid #1D546C;
+    border-radius: 4px;
+    min-height: 24px;
+    min-width: 24px;
+}
+
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical,
+QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
     background: #1A3D64;
     border: 1px solid #1D546C;
+    border-radius: 4px;
+    width: 14px;
+    height: 14px;
+}
+
+QScrollBar::add-line:vertical:pressed, QScrollBar::sub-line:vertical:pressed,
+QScrollBar::add-line:horizontal:pressed, QScrollBar::sub-line:horizontal:pressed {
+    background: #0C2B4E;
+}
+
+QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical,
+QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal {
+    background: transparent;
 }

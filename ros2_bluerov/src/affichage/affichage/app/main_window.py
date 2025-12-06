@@ -65,6 +65,8 @@ class MainWindow(QMainWindow):
         self.raw_btn = QPushButton('📡 Sonar Brut')
         self.filtered_btn = QPushButton('🔍 Sonar Filtré')
         self.compare_btn = QPushButton('⚖️ Comparaison')
+        for btn in (self.raw_btn, self.filtered_btn, self.compare_btn):
+            btn.setCheckable(True)
         left_switch.addWidget(self.raw_btn)
         left_switch.addWidget(self.filtered_btn)
         left_switch.addWidget(self.compare_btn)
@@ -89,6 +91,8 @@ class MainWindow(QMainWindow):
         right_switch = QHBoxLayout()
         self.graphs_btn = QPushButton('📊 Graphes Pose')
         self.controls_btn = QPushButton('🎛️ Contrôles')
+        for btn in (self.graphs_btn, self.controls_btn):
+            btn.setCheckable(True)
         right_switch.addWidget(self.graphs_btn)
         right_switch.addWidget(self.controls_btn)
         right_switch.addStretch()
@@ -107,11 +111,15 @@ class MainWindow(QMainWindow):
 
         main_layout.addWidget(splitter)
 
-        self.raw_btn.clicked.connect(lambda: self.left_stack.setCurrentIndex(0))
-        self.filtered_btn.clicked.connect(lambda: self.left_stack.setCurrentIndex(1))
-        self.compare_btn.clicked.connect(lambda: self.left_stack.setCurrentIndex(2))
-        self.graphs_btn.clicked.connect(lambda: self.right_stack.setCurrentIndex(0))
-        self.controls_btn.clicked.connect(lambda: self.right_stack.setCurrentIndex(1))
+        self.raw_btn.clicked.connect(lambda: self.set_left_view(0))
+        self.filtered_btn.clicked.connect(lambda: self.set_left_view(1))
+        self.compare_btn.clicked.connect(lambda: self.set_left_view(2))
+        self.graphs_btn.clicked.connect(lambda: self.set_right_view(0))
+        self.controls_btn.clicked.connect(lambda: self.set_right_view(1))
+
+        # default selections: start on comparaison (left) and controls/traitement (right)
+        self.set_left_view(2)
+        self.set_right_view(1)
 
         self.ros_node.signals.new_raw_frame.connect(self.on_raw_frame)
         self.ros_node.signals.new_filtered_frame.connect(self.on_filtered_frame)
@@ -160,3 +168,15 @@ class MainWindow(QMainWindow):
 
     def on_state(self, msg):
         self.status_header.update_state(msg)
+
+    def set_left_view(self, index):
+        self.left_stack.setCurrentIndex(index)
+        buttons = (self.raw_btn, self.filtered_btn, self.compare_btn)
+        for i, btn in enumerate(buttons):
+            btn.setChecked(i == index)
+
+    def set_right_view(self, index):
+        self.right_stack.setCurrentIndex(index)
+        buttons = (self.graphs_btn, self.controls_btn)
+        for i, btn in enumerate(buttons):
+            btn.setChecked(i == index)

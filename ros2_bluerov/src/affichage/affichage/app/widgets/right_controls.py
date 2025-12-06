@@ -14,6 +14,8 @@ class RightControlsPanel(QWidget):
         switch_layout = QHBoxLayout()
         self.traitement_btn = QPushButton("Traitement")
         self.sonar_btn = QPushButton("Sonar Mock")
+        for btn in (self.traitement_btn, self.sonar_btn):
+            btn.setCheckable(True)
         switch_layout.addWidget(self.traitement_btn)
         switch_layout.addWidget(self.sonar_btn)
         switch_layout.addStretch()
@@ -26,5 +28,14 @@ class RightControlsPanel(QWidget):
         self.stack.addWidget(self.sonar_widget)
         layout.addWidget(self.stack)
 
-        self.traitement_btn.clicked.connect(lambda: self.stack.setCurrentIndex(0))
-        self.sonar_btn.clicked.connect(lambda: self.stack.setCurrentIndex(1))
+        self.traitement_btn.clicked.connect(lambda: self.set_view(0))
+        self.sonar_btn.clicked.connect(lambda: self.set_view(1))
+
+        # default selection
+        self.set_view(0)
+
+    def set_view(self, index):
+        self.stack.setCurrentIndex(index)
+        buttons = (self.traitement_btn, self.sonar_btn)
+        for i, btn in enumerate(buttons):
+            btn.setChecked(i == index)

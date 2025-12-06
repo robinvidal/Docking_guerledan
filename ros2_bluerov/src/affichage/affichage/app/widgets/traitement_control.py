@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import (
     QWidget,
@@ -33,19 +35,6 @@ class TraitementControlWidget(QWidget):
         scroll.setWidgetResizable(True)
         scroll_content = QWidget()
         scroll_layout = QVBoxLayout(scroll_content)
-
-        header_layout = QHBoxLayout()
-
-        self.save_btn = QPushButton("💾 Sauvegarder dans YAML")
-        self.save_btn.clicked.connect(self.save_to_yaml)
-        header_layout.addWidget(self.save_btn)
-
-        self.reset_btn = QPushButton("🔄 Réinitialiser")
-        self.reset_btn.clicked.connect(self.reset_to_defaults)
-        header_layout.addWidget(self.reset_btn)
-
-        header_layout.addStretch()
-        scroll_layout.addLayout(header_layout)
 
         tvg_group = self.create_group_box(
             "🎚️ Correction TVG",
@@ -121,6 +110,18 @@ class TraitementControlWidget(QWidget):
         scroll_layout.addStretch()
         scroll.setWidget(scroll_content)
         main_layout.addWidget(scroll)
+
+        # footer buttons fixed under parameters
+        footer_layout = QHBoxLayout()
+        footer_layout.addStretch()
+        self.save_btn = QPushButton("💾 Sauvegarder")
+        self.save_btn.clicked.connect(self.save_to_yaml)
+        footer_layout.addWidget(self.save_btn)
+
+        self.reset_btn = QPushButton("🔄 Réinitialiser")
+        self.reset_btn.clicked.connect(self.reset_to_defaults)
+        footer_layout.addWidget(self.reset_btn)
+        main_layout.addLayout(footer_layout)
 
         self._apply_yaml_defaults()
 
@@ -234,10 +235,18 @@ class TraitementControlWidget(QWidget):
         params = self.get_current_params()
         yaml_content = {'traitement_node': {'ros__parameters': params}}
 
+        default_path = (
+            self._find_ros2_root()
+            / "src"
+            / "traitement"
+            / "config"
+            / "traitement_params.yaml"
+        )
+
         file_path, _ = QFileDialog.getSaveFileName(
             self,
             "Sauvegarder paramètres de traitement",
-            "traitement_params.yaml",
+            str(default_path),
             "YAML Files (*.yaml *.yml)",
         )
 
@@ -307,3 +316,10 @@ class TraitementControlWidget(QWidget):
                         widget.setChecked(value)
                     elif isinstance(widget, (QSpinBox, QDoubleSpinBox)):
                         widget.setValue(value)
+
+    def _find_ros2_root(self) -> Path:
+        """Find ros2_bluerov root regardless of nesting depth."""
+        for parent in Path(__file__).resolve().parents:
+            if parent.name == "ros2_bluerov":
+                return parent
+        return Path(__file__).resolve().parents[5]

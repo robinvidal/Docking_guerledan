@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import (
     QWidget,
@@ -184,43 +186,21 @@ class SonarMockControlWidget(QWidget):
         filters_group.setLayout(filters_layout)
         scroll_layout.addWidget(filters_group)
 
-        geom_group = QGroupBox("📐 Géométrie Sonar")
-        geom_layout = QFormLayout()
-
-        bearing_layout_h = QHBoxLayout()
-        bearing_slider = QSlider(Qt.Horizontal)
-        bearing_slider.setMinimum(60)
-        bearing_slider.setMaximum(180)
-        bearing_slider.setValue(140)
-        bearing_spin = QDoubleSpinBox()
-        bearing_spin.setMinimum(60.0)
-        bearing_spin.setMaximum(180.0)
-        bearing_spin.setValue(140.0)
-        bearing_spin.setSingleStep(5.0)
-        bearing_slider.valueChanged.connect(bearing_spin.setValue)
-        bearing_spin.valueChanged.connect(lambda v: bearing_slider.setValue(int(v)))
-        bearing_spin.valueChanged.connect(lambda v: self.on_param_changed('bearing_angle', v))
-        bearing_layout_h.addWidget(bearing_slider, 3)
-        bearing_layout_h.addWidget(bearing_spin, 1)
-        geom_layout.addRow('Ouverture (°):', bearing_layout_h)
-        self.param_widgets['bearing_angle'] = bearing_spin
-
-        geom_group.setLayout(geom_layout)
-        scroll_layout.addWidget(geom_group)
-
-        btn_layout = QHBoxLayout()
-        save_btn = QPushButton("💾 Sauvegarder")
-        save_btn.clicked.connect(self.save_to_yaml)
-        btn_layout.addWidget(save_btn)
-
-        reset_btn = QPushButton("🔄 Réinitialiser")
-        reset_btn.clicked.connect(self.reset_to_defaults)
-        btn_layout.addWidget(reset_btn)
-        scroll_layout.addLayout(btn_layout)
-
         scroll_layout.addStretch()
         scroll.setWidget(scroll_content)
         main_layout.addWidget(scroll)
+
+        # footer buttons fixed under parameters
+        footer_layout = QHBoxLayout()
+        footer_layout.addStretch()
+        save_btn = QPushButton("💾 Sauvegarder")
+        save_btn.clicked.connect(self.save_to_yaml)
+        footer_layout.addWidget(save_btn)
+
+        reset_btn = QPushButton("🔄 Réinitialiser")
+        reset_btn.clicked.connect(self.reset_to_defaults)
+        footer_layout.addWidget(reset_btn)
+        main_layout.addLayout(footer_layout)
 
         self._apply_yaml_defaults()
 
@@ -242,8 +222,19 @@ class SonarMockControlWidget(QWidget):
         params = self.get_current_params()
         yaml_content = {'sonar_mock': {'ros__parameters': params}}
 
+        default_path = (
+            self._find_ros2_root()
+            / "src"
+            / "sonar"
+            / "config"
+            / "sonar_params.yaml"
+        )
+
         file_path, _ = QFileDialog.getSaveFileName(
-            self, "Sauvegarder paramètres sonar_mock", "sonar_params.yaml", "YAML Files (*.yaml *.yml)"
+            self,
+            "Sauvegarder paramètres sonar_mock",
+            str(default_path),
+            "YAML Files (*.yaml *.yml)",
         )
 
         if file_path:
@@ -266,6 +257,13 @@ class SonarMockControlWidget(QWidget):
             self.param_widgets['enable_range_comp'].setChecked(False)
             self.param_widgets['range_comp_alpha'].setValue(0.01)
             self.param_widgets['bearing_angle'].setValue(140.0)
+
+    def _find_ros2_root(self) -> Path:
+        """Find ros2_bluerov root regardless of nesting depth."""
+        for parent in Path(__file__).resolve().parents:
+            if parent.name == "ros2_bluerov":
+                return parent
+        return Path(__file__).resolve().parents[5]
 
     def _apply_yaml_defaults(self):
         params = load_yaml_params('sonar', 'sonar_params.yaml', self.ros_node.get_logger())
