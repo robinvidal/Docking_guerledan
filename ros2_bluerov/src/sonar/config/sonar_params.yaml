@@ -1,11 +1,21 @@
 sonar_mock:
   ros__parameters:
-    noise_level: 2.5
-    enable_median: true
-    median_kernel: 5
+    noise_level: 32.0
+    noise_point_count: 40000
+    noise_i_min: 150.0
+    noise_i_max: 200.0
+    noise_blur_sigma: 1.0
+    noise_blur_iters: 1
+    bearing_angle: 140.0
+    min_range: 0.1
+    max_range: 10.0
+    enable_median: false
+    median_kernel: 11
     enable_gaussian: true
-    gaussian_sigma: 3.5
-    enable_contrast: true
+    gaussian_sigma: 5.0
+    enable_contrast: false
     contrast_clip: 0.3
     enable_range_comp: false
     range_comp_alpha: 0.01
+    post_intensity_left: 150.0
+    post_intensity_right: 150.0

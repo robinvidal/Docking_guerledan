@@ -100,6 +100,7 @@ Le launch `user_pipeline` démarre la pipeline utile en simulation pour un utili
 1) Ouvrez un terminal (sondé bash) et lancez le pipeline:
 
 ```bash
+# ! Chemin à adapter selon votre installation !
 cd ~/Desktop/Docking_guerledan/ros2_bluerov
 source install/setup.bash
 
@@ -113,6 +114,7 @@ ros2 launch bringup user_pipeline.launch.py
 sudo apt-get update
 sudo apt-get install ros-humble-teleop-twist-keyboard
 ```
+
 
 ```bash
 # Lancer le téléop et remapper vers /bluerov/cmd_vel
@@ -149,6 +151,7 @@ Le launch `sonar_pipeline` démarre le vrai sonar (sonar + traitement + tracking
 1) Ouvrez un terminal (sondé bash) et lancez le pipeline:
 
 ```bash
+# ! Chemin à adapter selon votre installation !
 cd ~/Desktop/Docking_guerledan/ros2_bluerov
 source install/setup.bash
 

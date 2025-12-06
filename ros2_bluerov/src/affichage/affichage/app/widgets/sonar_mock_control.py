@@ -73,6 +73,96 @@ class SonarMockControlWidget(QWidget):
         noise_group.setLayout(noise_layout)
         scroll_layout.addWidget(noise_group)
 
+        # Point-cloud noise parameters
+        point_group = QGroupBox("🌌 Bruit par Points")
+        point_layout = QFormLayout()
+
+        npoints_spin = QSpinBox()
+        npoints_spin.setMinimum(0)
+        npoints_spin.setMaximum(100000)
+        npoints_spin.setValue(200)
+        npoints_spin.setSingleStep(50)
+        npoints_spin.valueChanged.connect(lambda v: self.on_param_changed('noise_point_count', v))
+        point_layout.addRow('Nombre de points:', npoints_spin)
+        self.param_widgets['noise_point_count'] = npoints_spin
+
+        i_min_spin = QDoubleSpinBox()
+        i_min_spin.setMinimum(0.0)
+        i_min_spin.setMaximum(255.0)
+        i_min_spin.setValue(5.0)
+        i_min_spin.setSingleStep(1.0)
+        i_min_spin.valueChanged.connect(lambda v: self.on_param_changed('noise_i_min', v))
+        point_layout.addRow('Intensité min:', i_min_spin)
+        self.param_widgets['noise_i_min'] = i_min_spin
+
+        i_max_spin = QDoubleSpinBox()
+        i_max_spin.setMinimum(0.0)
+        i_max_spin.setMaximum(255.0)
+        i_max_spin.setValue(120.0)
+        i_max_spin.setSingleStep(1.0)
+        i_max_spin.valueChanged.connect(lambda v: self.on_param_changed('noise_i_max', v))
+        point_layout.addRow('Intensité max:', i_max_spin)
+        self.param_widgets['noise_i_max'] = i_max_spin
+
+        blur_sigma_spin = QDoubleSpinBox()
+        blur_sigma_spin.setMinimum(0.0)
+        blur_sigma_spin.setMaximum(10.0)
+        blur_sigma_spin.setValue(1.2)
+        blur_sigma_spin.setSingleStep(0.1)
+        blur_sigma_spin.setDecimals(2)
+        blur_sigma_spin.valueChanged.connect(lambda v: self.on_param_changed('noise_blur_sigma', v))
+        point_layout.addRow('Flou sigma:', blur_sigma_spin)
+        self.param_widgets['noise_blur_sigma'] = blur_sigma_spin
+
+        blur_iters_spin = QSpinBox()
+        blur_iters_spin.setMinimum(1)
+        blur_iters_spin.setMaximum(10)
+        blur_iters_spin.setValue(1)
+        blur_iters_spin.setSingleStep(1)
+        blur_iters_spin.valueChanged.connect(lambda v: self.on_param_changed('noise_blur_iters', v))
+        point_layout.addRow('Itérations flou:', blur_iters_spin)
+        self.param_widgets['noise_blur_iters'] = blur_iters_spin
+
+        point_group.setLayout(point_layout)
+        scroll_layout.addWidget(point_group)
+
+        # Geometry / portée
+        geom_group = QGroupBox("📐 Géométrie / Portée")
+        geom_layout = QFormLayout()
+
+        bearing_spin = QDoubleSpinBox()
+        bearing_spin.setMinimum(10.0)
+        bearing_spin.setMaximum(360.0)
+        bearing_spin.setValue(140.0)
+        bearing_spin.setSingleStep(1.0)
+        bearing_spin.setDecimals(1)
+        bearing_spin.valueChanged.connect(lambda v: self.on_param_changed('bearing_angle', v))
+        geom_layout.addRow("Ouverture (deg):", bearing_spin)
+        self.param_widgets['bearing_angle'] = bearing_spin
+
+        min_range_spin = QDoubleSpinBox()
+        min_range_spin.setMinimum(0.1)
+        min_range_spin.setMaximum(1000.0)
+        min_range_spin.setValue(1.0)
+        min_range_spin.setSingleStep(0.0)
+        min_range_spin.setDecimals(2)
+        min_range_spin.valueChanged.connect(lambda v: self.on_param_changed('min_range', v))
+        geom_layout.addRow("Portée min (m):", min_range_spin)
+        self.param_widgets['min_range'] = min_range_spin
+
+        max_range_spin = QDoubleSpinBox()
+        max_range_spin.setMinimum(0.5)
+        max_range_spin.setMaximum(2000.0)
+        max_range_spin.setValue(40.0)
+        max_range_spin.setSingleStep(0.5)
+        max_range_spin.setDecimals(2)
+        max_range_spin.valueChanged.connect(lambda v: self.on_param_changed('max_range', v))
+        geom_layout.addRow("Portée max (m):", max_range_spin)
+        self.param_widgets['max_range'] = max_range_spin
+
+        geom_group.setLayout(geom_layout)
+        scroll_layout.addWidget(geom_group)
+
         filters_group = QGroupBox("🔍 Filtres Pré-appliqués")
         filters_layout = QFormLayout()
 
@@ -145,11 +235,11 @@ class SonarMockControlWidget(QWidget):
         contrast_slider.setMaximum(100)
         contrast_slider.setValue(7)
         contrast_spin = QDoubleSpinBox()
-        contrast_spin.setMinimum(0.05)
-        contrast_spin.setMaximum(5.0)
-        contrast_spin.setValue(0.35)
-        contrast_spin.setSingleStep(0.05)
-        contrast_spin.setDecimals(2)
+        contrast_spin.setMinimum(0.00)
+        contrast_spin.setMaximum(1.0)
+        contrast_spin.setValue(0.1)
+        contrast_spin.setSingleStep(0.002)
+        contrast_spin.setDecimals(3)
         contrast_slider.valueChanged.connect(lambda v: contrast_spin.setValue(v / 20.0))
         contrast_spin.valueChanged.connect(lambda v: contrast_slider.setValue(int(v * 20)))
         contrast_spin.valueChanged.connect(lambda v: self.on_param_changed('contrast_clip', v))
@@ -182,6 +272,30 @@ class SonarMockControlWidget(QWidget):
         range_comp_layout_h.addWidget(range_comp_spin, 1)
         filters_layout.addRow('  Alpha (m⁻¹):', range_comp_layout_h)
         self.param_widgets['range_comp_alpha'] = range_comp_spin
+
+        posts_group = QGroupBox("📍 Montants de la cage")
+        posts_layout = QFormLayout()
+
+        post_left_spin = QDoubleSpinBox()
+        post_left_spin.setMinimum(0.0)
+        post_left_spin.setMaximum(255.0)
+        post_left_spin.setValue(230.0)
+        post_left_spin.setSingleStep(5.0)
+        post_left_spin.valueChanged.connect(lambda v: self.on_param_changed('post_intensity_left', v))
+        posts_layout.addRow('Intensité montant gauche:', post_left_spin)
+        self.param_widgets['post_intensity_left'] = post_left_spin
+
+        post_right_spin = QDoubleSpinBox()
+        post_right_spin.setMinimum(0.0)
+        post_right_spin.setMaximum(255.0)
+        post_right_spin.setValue(230.0)
+        post_right_spin.setSingleStep(5.0)
+        post_right_spin.valueChanged.connect(lambda v: self.on_param_changed('post_intensity_right', v))
+        posts_layout.addRow('Intensité montant droit:', post_right_spin)
+        self.param_widgets['post_intensity_right'] = post_right_spin
+
+        posts_group.setLayout(posts_layout)
+        scroll_layout.addWidget(posts_group)
 
         filters_group.setLayout(filters_layout)
         scroll_layout.addWidget(filters_group)
@@ -248,6 +362,14 @@ class SonarMockControlWidget(QWidget):
     def reset_to_defaults(self):
         if QMessageBox.question(self, "Confirmer", "Réinitialiser?") == QMessageBox.Yes:
             self.param_widgets['noise_level'].setValue(10.0)
+            self.param_widgets['noise_point_count'].setValue(200)
+            self.param_widgets['noise_i_min'].setValue(5.0)
+            self.param_widgets['noise_i_max'].setValue(120.0)
+            self.param_widgets['noise_blur_sigma'].setValue(1.2)
+            self.param_widgets['noise_blur_iters'].setValue(1)
+            self.param_widgets['bearing_angle'].setValue(140.0)
+            self.param_widgets['min_range'].setValue(1.0)
+            self.param_widgets['max_range'].setValue(40.0)
             self.param_widgets['enable_median'].setChecked(True)
             self.param_widgets['median_kernel'].setValue(3)
             self.param_widgets['enable_gaussian'].setChecked(True)
@@ -256,7 +378,8 @@ class SonarMockControlWidget(QWidget):
             self.param_widgets['contrast_clip'].setValue(0.35)
             self.param_widgets['enable_range_comp'].setChecked(False)
             self.param_widgets['range_comp_alpha'].setValue(0.01)
-            self.param_widgets['bearing_angle'].setValue(140.0)
+            self.param_widgets['post_intensity_left'].setValue(230.0)
+            self.param_widgets['post_intensity_right'].setValue(230.0)
 
     def _find_ros2_root(self) -> Path:
         """Find ros2_bluerov root regardless of nesting depth."""

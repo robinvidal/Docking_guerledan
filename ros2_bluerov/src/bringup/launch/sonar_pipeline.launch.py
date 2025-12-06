@@ -14,10 +14,10 @@ import os
 
 def generate_launch_description():
     # Chemins des fichiers de config installés
-    sonar_config = os.path.join(
+    sonar_node_config = os.path.join(
         get_package_share_directory('sonar'),
         'config',
-        'sonar_params.yaml'
+        'sonar_node_params.yaml'
     )
 
     traitement_config = os.path.join(
@@ -37,7 +37,7 @@ def generate_launch_description():
         package='sonar',
         executable='sonar_node',
         name='sonar_node',
-        parameters=[sonar_config],
+        parameters=[sonar_node_config],
         output='screen'
     )
 

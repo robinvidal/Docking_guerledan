@@ -31,6 +31,12 @@ class SonarCartesianWidget(pg.PlotWidget):
         self.addItem(self.center_line)
         self.center_line.setData([0, 0], [0, 50])
 
+        # Sonar field-of-view boundaries (drawn from origin to max range)
+        self.fov_left = pg.PlotCurveItem(pen=pg.mkPen('c', width=1, style=Qt.DashLine))
+        self.fov_right = pg.PlotCurveItem(pen=pg.mkPen('c', width=1, style=Qt.DashLine))
+        self.addItem(self.fov_left)
+        self.addItem(self.fov_right)
+
         self.rov_marker = pg.ScatterPlotItem(
             pos=[(0, 0)], size=20, symbol='t', pen=pg.mkPen('g', width=2), brush=pg.mkBrush(0, 255, 0, 100)
         )
@@ -65,7 +71,23 @@ class SonarCartesianWidget(pg.PlotWidget):
         )
         ranges = np.linspace(frame_msg.min_range, frame_msg.max_range, frame_msg.range_count)
         total_angle = frame_msg.bearing_resolution * frame_msg.bearing_count
-        bearings = np.linspace(-total_angle / 2, total_angle / 2, frame_msg.bearing_count)
+        # Invert bearing sign to correct horizontal mirroring (left/right)
+        bearings = -np.linspace(-total_angle / 2, total_angle / 2, frame_msg.bearing_count)
+
+        # Update field-of-view boundary lines using current angle and max range
+        try:
+            half_angle = total_angle / 2.0
+            max_r = frame_msg.max_range
+            x_left = max_r * np.sin(+half_angle)
+            y_left = max_r * np.cos(+half_angle)
+            x_right = max_r * np.sin(-half_angle)
+            y_right = max_r * np.cos(-half_angle)
+            self.fov_left.setData([0, x_left], [0, y_left])
+            self.fov_right.setData([0, x_right], [0, y_right])
+        except Exception:
+            # If something goes wrong, hide the FOV indicators
+            self.fov_left.setData([], [])
+            self.fov_right.setData([], [])
 
         if self.use_image:
             bc = frame_msg.bearing_count
@@ -84,7 +106,9 @@ class SonarCartesianWidget(pg.PlotWidget):
                 xv, yv = np.meshgrid(xs, ys)
 
                 rr = np.sqrt(xv**2 + yv**2)
-                th = np.arctan2(xv, yv)
+                # use -xv so positive angles map to the same side as the
+                # `bearings` sign convention above (fix horizontal mirroring)
+                th = np.arctan2(-xv, yv)
 
                 i_float = (th + total_angle / 2.0) / total_angle * (bc - 1)
                 j_float = (rr - min_r) / (max_r - min_r) * (rc - 1)

@@ -1,0 +1,13 @@
+sonar_node:
+  ros__parameters:
+    ip_address: 192.168.1.10
+    port: 52102
+    range: 8.0
+    gain_percent: 50
+    master_mode: 1
+    ping_rate: 0
+    frame_id: sonar_link
+    mask_left_bearings: 5
+    mask_right_bearings: 0
+    edge_mask_auto: false
+    edge_mask_threshold: 2.5

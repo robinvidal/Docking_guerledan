@@ -13,6 +13,7 @@ from docking_utils.filters import (
     range_compensation
 )
 import time
+from rcl_interfaces.msg import SetParametersResult
 
 
 class SonarMockNode(Node):
@@ -29,9 +30,18 @@ class SonarMockNode(Node):
         self.declare_parameter('min_range', 1.0)  # m
         self.declare_parameter('max_range', 40.0)  # m
         self.declare_parameter('cage_distance', 8.0)  # m (distance initiale)
-        self.declare_parameter('cage_width', 2.0)  # m
+        self.declare_parameter('cage_width', 1.0)  # m
         self.declare_parameter('noise_level', 20.0)  # 0-100
         self.declare_parameter('cmd_vel_topic', '/bluerov/cmd_vel')  # Topic commandes
+        # Noise as point cloud parameters
+        self.declare_parameter('noise_point_count', 200)
+        self.declare_parameter('noise_i_min', 5.0)
+        self.declare_parameter('noise_i_max', 120.0)
+        self.declare_parameter('noise_blur_sigma', 1.2)
+        self.declare_parameter('noise_blur_iters', 1)
+        # Post intensities (left / right)
+        self.declare_parameter('post_intensity_left', 230.0)
+        self.declare_parameter('post_intensity_right', 230.0)
         
         # Paramètres de filtrage
         self.declare_parameter('enable_median', True)
@@ -52,6 +62,13 @@ class SonarMockNode(Node):
         cage_distance_init = self.get_parameter('cage_distance').value
         self.cage_width = self.get_parameter('cage_width').value
         self.noise_level = self.get_parameter('noise_level').value
+        self.noise_point_count = int(self.get_parameter('noise_point_count').value)
+        self.noise_i_min = float(self.get_parameter('noise_i_min').value)
+        self.noise_i_max = float(self.get_parameter('noise_i_max').value)
+        self.noise_blur_sigma = float(self.get_parameter('noise_blur_sigma').value)
+        self.noise_blur_iters = int(self.get_parameter('noise_blur_iters').value)
+        self.post_intensity_left = float(self.get_parameter('post_intensity_left').value)
+        self.post_intensity_right = float(self.get_parameter('post_intensity_right').value)
         cmd_vel_topic = self.get_parameter('cmd_vel_topic').value
         
         # === Pré-calcul des grilles polaires (OPTIMISATION) ===
@@ -77,6 +94,8 @@ class SonarMockNode(Node):
         # Temps de la dernière mise à jour physique
         self.last_update_time = time.time()
         
+        # Parameters update callback (live reconfigure via `ros2 param set`)
+        self.add_on_set_parameters_callback(self._on_set_parameters)
         # Subscriber pour commandes de vitesse
         self.cmd_sub = self.create_subscription(
             Twist,
@@ -139,7 +158,7 @@ class SonarMockNode(Node):
         # Déplacements inverses (cage vue depuis ROV qui bouge)
         delta_x = -self.cmd_vx * dt
         delta_y = -self.cmd_vy * dt
-        delta_theta = -self.cmd_omega * dt
+        delta_theta = self.cmd_omega * dt  # inverted rotation direction
         
         # Translation de la cage
         cage_x_translated = self.cage_x + delta_x
@@ -163,6 +182,65 @@ class SonarMockNode(Node):
                 f'Cage relative: x={self.cage_x:.2f}m, y={self.cage_y:.2f}m, '
                 f'θ={np.rad2deg(self.cage_theta):.1f}°'
             )
+
+    def _on_set_parameters(self, params):
+        """Callback invoked when parameters are changed at runtime.
+
+        Update internal attributes for immediate effect and refresh derived grids
+        (ranges, bearings) when angle/ranges are changed.
+        """
+        successful = True
+
+        new_min_range = self.min_range
+        new_max_range = self.max_range
+        new_bearing_angle = self.bearing_angle
+
+        for p in params:
+            name = p.name
+            try:
+                if name == 'noise_point_count':
+                    self.noise_point_count = int(p.value)
+                elif name == 'noise_i_min':
+                    self.noise_i_min = float(p.value)
+                elif name == 'noise_i_max':
+                    self.noise_i_max = float(p.value)
+                elif name == 'noise_blur_sigma':
+                    self.noise_blur_sigma = float(p.value)
+                elif name == 'noise_blur_iters':
+                    self.noise_blur_iters = int(p.value)
+                elif name == 'post_intensity_left':
+                    self.post_intensity_left = float(p.value)
+                elif name == 'post_intensity_right':
+                    self.post_intensity_right = float(p.value)
+                elif name == 'noise_level':
+                    self.noise_level = float(p.value)
+                elif name == 'min_range':
+                    new_min_range = float(p.value)
+                elif name == 'max_range':
+                    new_max_range = float(p.value)
+                elif name == 'bearing_angle':
+                    new_bearing_angle = float(p.value)
+            except Exception:
+                successful = False
+
+        # Validate and apply range changes
+        if new_min_range <= 0 or new_min_range >= new_max_range:
+            successful = False
+        else:
+            self.min_range = new_min_range
+            self.max_range = new_max_range
+            self.ranges = np.linspace(self.min_range, self.max_range, self.range_count)
+
+        # Validate and apply bearing angle change
+        if new_bearing_angle <= 0:
+            successful = False
+        else:
+            self.bearing_angle = new_bearing_angle
+            half_angle = self.bearing_angle / 2.0
+            self.bearings = np.linspace(-half_angle * np.pi / 180, half_angle * np.pi / 180, self.bearing_count)
+            self.half_angle_rad = half_angle * np.pi / 180.0
+
+        return SetParametersResult(successful=successful)
     
     def generate_synthetic_frame(self) -> np.ndarray:
         """Génère une frame sonar synthétique avec cage à la position courante."""
@@ -173,87 +251,35 @@ class SonarMockNode(Node):
         std = max(1.0, float(self.noise_level))
         mean_bg = std * 0.2
         
-        # Bruit gaussien de base
-        intensities = np.random.normal(
-            loc=mean_bg, 
-            scale=std,
-            size=(self.bearing_count, self.range_count)
-        ).astype(np.float32)  # float32 plus rapide que float64
-        
-        # Speckle optimisé (une seule allocation mémoire)
-        sp_prob = min(0.12, self.noise_level / 400.0)
-        if sp_prob > 0.0:
-            # Génération en une fois du masque et des valeurs
-            rand_vals = np.random.rand(self.bearing_count, self.range_count)
-            speckle_mask = rand_vals < sp_prob
-            
-            if np.any(speckle_mask):
-                # Vectorisation : toutes les valeurs d'un coup
-                high_mask = rand_vals[speckle_mask] < (sp_prob * 0.7)
-                speckle_values = np.where(
-                    high_mask,
-                    np.random.randint(200, 255, size=high_mask.shape),
-                    0
-                )
-                intensities[speckle_mask] = speckle_values
-        
-        # Clip et conversion finale
+        # Option: point-based noise (scatter n points then blur)
+        intensities = np.full((self.bearing_count, self.range_count), mean_bg, dtype=np.float32)
+
+        # Scatter random points
+        if self.noise_point_count > 0 and (self.noise_i_max > self.noise_i_min):
+            n = max(0, int(self.noise_point_count))
+            bear_idx = np.random.randint(0, self.bearing_count, size=n)
+            range_idx = np.random.randint(0, self.range_count, size=n)
+            vals = np.random.uniform(self.noise_i_min, self.noise_i_max, size=n)
+            intensities[bear_idx, range_idx] = vals
+
+        # Add light Gaussian speckle background if desired
+        if self.noise_level > 0:
+            intensities += np.random.normal(loc=0.0, scale=self.noise_level * 0.2,
+                                            size=intensities.shape).astype(np.float32)
+
+        # Apply blur / spreading to make points look natural
+        for _ in range(max(1, int(self.noise_blur_iters))):
+            if float(self.noise_blur_sigma) > 0.0:
+                try:
+                    intensities = gaussian_filter(intensities, float(self.noise_blur_sigma)).astype(np.float32)
+                except Exception:
+                    # If gaussian_filter fails, ignore and leave intensities as-is
+                    pass
+
+        # Clip and convert
         intensities = np.clip(intensities, 0, 255).astype(np.uint8)
-        
-        # === OPTIMISATION 3 : Dessin des montants optimisé ===
-        cage_half_width = self.cage_width / 2.0
-        
-        # Pré-calcul trigonométrie (une seule fois)
-        cos_theta = np.cos(self.cage_theta)
-        sin_theta = np.sin(self.cage_theta)
-        
-        # Positions des 4 montants (numpy array pour vectorisation partielle)
-        montant_offsets = np.array([
-            [-cage_half_width, 0.0],
-            [-cage_half_width * 0.7, 0.0],
-            [cage_half_width * 0.7, 0.0],
-            [cage_half_width, 0.0]
-        ])
-        
-        # Boucle sur les montants (peu nombreux, pas critique)
-        for offset in montant_offsets:
-            offset_x, offset_y = offset
-            
-            # Transformation en une ligne (rotation + translation)
-            montant_x = self.cage_x + (offset_x * cos_theta - offset_y * sin_theta)
-            montant_y = self.cage_y + (offset_x * sin_theta + offset_y * cos_theta)
-            
-            # Conversion polaire
-            montant_range = np.sqrt(montant_x**2 + montant_y**2)
-            montant_bearing = np.arctan2(montant_x, montant_y)
-            
-            # Vérifications rapides (early exit)
-            if not (self.min_range <= montant_range <= self.max_range):
-                continue
-            if abs(montant_bearing) > self.half_angle_rad:
-                continue
-            
-            # OPTIMISATION 4 : Recherche d'index optimisée (searchsorted plus rapide que argmin)
-            bearing_idx = np.searchsorted(self.bearings, montant_bearing)
-            range_idx = int((montant_range - self.min_range) / (self.max_range - self.min_range) * (self.range_count - 1))
-            
-            # Borner les index
-            bearing_idx = np.clip(bearing_idx, 0, self.bearing_count - 1)
-            range_idx = np.clip(range_idx, 0, self.range_count - 1)
-            
-            # OPTIMISATION 5 : Dessin par slicing NumPy (plus rapide que boucles imbriquées)
-            range_width = 2
-            bearing_width = 3
-            
-            # Calcul des bornes du patch
-            b_min = max(0, bearing_idx - bearing_width)
-            b_max = min(self.bearing_count, bearing_idx + bearing_width + 1)
-            r_min = max(0, range_idx - range_width)
-            r_max = min(self.range_count, range_idx + range_width + 1)
-            
-            # Remplissage par slicing (beaucoup plus rapide)
-            intensities[b_min:b_max, r_min:r_max] = np.random.randint(200, 255)
-        
+
+        # Return intensities (posts will be added after filtering)
         return intensities
     
     def publish_frame(self):
@@ -284,7 +310,17 @@ class SonarMockNode(Node):
         if self.get_parameter('enable_contrast').value:
             clip = self.get_parameter('contrast_clip').value
             filtered = contrast_enhancement(filtered, clip)
-        
+
+        # Add cage posts after filters so posts are not affected by filters
+        try:
+            self.add_posts(filtered)
+        except Exception:
+            # If adding posts fails, continue without stopping the node
+            pass
+
+        # Ensure integers 0..255 before publishing
+        filtered = np.clip(filtered, 0, 255).astype(np.uint8)
+
         # OPTIMISATION 8 : Conversion liste optimisée
         # flatten() + tolist() est plus rapide que flatten().tolist()
         intensities_list = filtered.ravel().tolist()
@@ -304,6 +340,77 @@ class SonarMockNode(Node):
         msg.gain = 50
         
         self.publisher_.publish(msg)
+
+
+    def add_posts(self, arr: np.ndarray):
+        """Ajoute les deux montants de la cage à l'image `arr` en-place.
+
+        `arr` peut être float32 ou uint8; la méthode écrit des valeurs d'intensité
+        directement dans le tableau (en convertissant si nécessaire).
+        """
+        # Work on float copy to avoid issues with uint8 wrapping
+        if arr.dtype != np.float32 and arr.dtype != np.float64:
+            work = arr.astype(np.float32)
+        else:
+            work = arr
+
+        cage_half_width = self.cage_width / 2.0
+        cos_theta = np.cos(self.cage_theta)
+        sin_theta = np.sin(self.cage_theta)
+        post_offsets = [(-cage_half_width, 0.0), (cage_half_width, 0.0)]
+
+        for i, offset in enumerate(post_offsets):
+            offset_x, offset_y = offset
+            post_x = self.cage_x + (offset_x * cos_theta - offset_y * sin_theta)
+            post_y = self.cage_y + (offset_x * sin_theta + offset_y * cos_theta)
+
+            post_range = np.sqrt(post_x**2 + post_y**2)
+            post_bearing = np.arctan2(post_x, post_y)
+
+            if not (self.min_range <= post_range <= self.max_range):
+                continue
+            if abs(post_bearing) > self.half_angle_rad:
+                continue
+
+            bearing_idx = np.searchsorted(self.bearings, post_bearing)
+            range_idx = int((post_range - self.min_range) / (self.max_range - self.min_range) * (self.range_count - 1))
+            bearing_idx = np.clip(bearing_idx, 0, self.bearing_count - 1)
+            range_idx = np.clip(range_idx, 0, self.range_count - 1)
+
+            intensity_val = self.post_intensity_left if i == 0 else self.post_intensity_right
+
+            # Patch size based on physical diameter (30 cm)
+            diameter_m = 0.30
+            radius_m = diameter_m / 2.0
+            range_res = (self.max_range - self.min_range) / max(self.range_count, 1)
+            bearing_res = (self.bearing_angle * np.pi / 180.0) / max(self.bearing_count, 1)
+
+            range_width = max(1, int(np.ceil(radius_m / max(range_res, 1e-6))))
+            bearing_width = max(
+                1,
+                int(
+                    np.ceil(
+                        np.arctan2(radius_m, max(post_range, 1e-6)) / max(bearing_res, 1e-6)
+                    )
+                ),
+            )
+
+            b_min = max(0, bearing_idx - bearing_width)
+            b_max = min(self.bearing_count, bearing_idx + bearing_width + 1)
+            r_min = max(0, range_idx - range_width)
+            r_max = min(self.range_count, range_idx + range_width + 1)
+
+            work[b_min:b_max, r_min:r_max] = float(np.clip(intensity_val, 0, 255))
+
+        # Write back into original array in-place if possible
+        if work is not arr:
+            # Attempt to cast back to original dtype in-place
+            try:
+                arr[:] = work.astype(arr.dtype)
+            except Exception:
+                # If that fails, return the work array (caller may ignore)
+                return work
+        return arr
 
 
 def main(args=None):
