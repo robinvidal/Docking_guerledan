@@ -156,7 +156,7 @@ class SonarMockNode(Node):
         self.last_update_time = current_time
         
         # Déplacements inverses (cage vue depuis ROV qui bouge)
-        delta_x = -self.cmd_vx * dt
+        delta_x = self.cmd_vx * dt
         delta_y = -self.cmd_vy * dt
         delta_theta = self.cmd_omega * dt  # inverted rotation direction
         
