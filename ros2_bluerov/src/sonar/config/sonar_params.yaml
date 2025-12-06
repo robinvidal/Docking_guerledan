@@ -27,7 +27,7 @@ sonar_node:
     ip_address: "192.168.1.10"
     port: 52102
     frame_id: "sonar_link"
-    range: 8.0              # Portée sonar (m)
+    range: 4.0              # Portée sonar (m)
     gain_percent: 50        # Gain (0-100)
     master_mode: 1          # 1: LF, 2: HF
     ping_rate: 0            # 0: auto
