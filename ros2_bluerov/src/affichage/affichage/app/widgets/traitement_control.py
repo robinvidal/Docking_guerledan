@@ -54,6 +54,8 @@ class TraitementControlWidget(QWidget):
                 ('median_kernel', 'Taille kernel médian', 'int', 3, 3, 11, 2),
                 ('enable_gaussian', 'Filtre gaussien', 'bool', True),
                 ('gaussian_sigma', 'Sigma gaussien', 'double', 1.0, 0.1, 5.0, 0.1),
+                ('enable_simple_threshold', 'Seuillage binaire', 'bool', False),
+                ('simple_threshold', 'Seuil (0-255)', 'int', 128, 0, 255, 1),
             ],
         )
         scroll_layout.addWidget(filter_group)
@@ -286,6 +288,8 @@ class TraitementControlWidget(QWidget):
                 'median_kernel': 3,
                 'enable_gaussian': True,
                 'gaussian_sigma': 1.0,
+                'enable_simple_threshold': False,
+                'simple_threshold': 128,
                 'enable_bilateral': False,
                 'bilateral_d': 5,
                 'bilateral_sigma_color': 25.0,

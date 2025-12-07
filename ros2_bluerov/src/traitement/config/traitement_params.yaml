@@ -8,6 +8,8 @@ traitement_node:
     median_kernel: 3
     enable_gaussian: false
     gaussian_sigma: 0.1
+    enable_simple_threshold: true
+    simple_threshold: 128
     enable_bilateral: false
     bilateral_d: 5
     bilateral_sigma_color: 25.0
@@ -17,7 +19,7 @@ traitement_node:
     enable_log_enhance: false
     log_sigma: 1.0
     enable_dog_enhance: true
-    dog_sigma1: 5.4
+    dog_sigma1: 1.8
     dog_sigma2: 10.0
     enable_matched_filter: false
     mf_sigma: 1.2

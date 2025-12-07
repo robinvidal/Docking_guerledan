@@ -31,6 +31,8 @@ class TraitementNode(Node):
         self.declare_parameter('median_kernel', 3)
         self.declare_parameter('enable_gaussian', True)
         self.declare_parameter('gaussian_sigma', 1.0)
+        self.declare_parameter('enable_simple_threshold', False)
+        self.declare_parameter('simple_threshold', 128)
         # Filtre bilatéral (lissage tout en préservant bords)
         self.declare_parameter('enable_bilateral', False)
         self.declare_parameter('bilateral_d', 5)            # diamètre voisinage
@@ -282,6 +284,11 @@ class TraitementNode(Node):
         if self.get_parameter('enable_gaussian').value:
             sigma = self.get_parameter('gaussian_sigma').value
             filtered = ndimage.gaussian_filter(filtered, sigma=sigma)
+
+        # 4b. Seuillage binaire simple (optionnel)
+        if self.get_parameter('enable_simple_threshold').value:
+            thr = float(self.get_parameter('simple_threshold').value)
+            filtered = np.where(filtered >= thr, 255, 0).astype(np.uint8)
 
         # 5. Filtre bilatéral
         if self.get_parameter('enable_bilateral').value:
