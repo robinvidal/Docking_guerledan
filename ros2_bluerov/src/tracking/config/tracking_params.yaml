@@ -1,19 +1,19 @@
-# Paramètres de tracking
-
-tracking_node:
-  ros__parameters:
-    intensity_threshold: 150    # Seuil intensité pour détection pics
-    min_confidence: 0.7         # Confiance minimale pour validation
-    expected_cage_width: 2.0    # Largeur cage attendue (m)
-    search_range_min: 2.0       # Distance min recherche (m)
-    search_range_max: 20.0      # Distance max recherche (m)
-
 blob_tracker_node:
   ros__parameters:
     enable_tracker: true
     template_size: 21
-    search_radius: 24
+    search_radius: 30
+    intensity_threshold: 150
+    distance_expected: 1.0
+    distance_epsilon: 0.3
+    distance_sigma: 0.2
     ncc_threshold: 0.5
-    learning_rate: 0.05
-    init_mode: "max"        # 'max' ou 'center'
-    intensity_threshold: 120
+    weight_ncc: 0.6
+    weight_stability: 0.25
+    weight_distance: 0.15
+    min_total_score: 0.3
+    stability_window: 5
+    stability_threshold: 0.4
+    max_jump_m: 1.0
+    top_k_candidates: 20
+    recovery_enabled: true

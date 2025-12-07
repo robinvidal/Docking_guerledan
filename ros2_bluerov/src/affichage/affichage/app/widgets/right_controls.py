@@ -2,6 +2,7 @@ from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QSta
 
 from .traitement_control import TraitementControlWidget
 from .sonar_mock_control import SonarMockControlWidget
+from .tracker_control import TrackerControlWidget
 
 
 class RightControlsPanel(QWidget):
@@ -24,12 +25,19 @@ class RightControlsPanel(QWidget):
         self.stack = QStackedWidget()
         self.traitement_widget = TraitementControlWidget(ros_node)
         self.sonar_widget = SonarMockControlWidget(ros_node)
+        self.tracker_widget = TrackerControlWidget(ros_node)
         self.stack.addWidget(self.traitement_widget)
         self.stack.addWidget(self.sonar_widget)
+        self.stack.addWidget(self.tracker_widget)
         layout.addWidget(self.stack)
 
         self.traitement_btn.clicked.connect(lambda: self.set_view(0))
         self.sonar_btn.clicked.connect(lambda: self.set_view(1))
+        # Add tracker button and handler
+        self.tracker_btn = QPushButton("Tracker")
+        self.tracker_btn.setCheckable(True)
+        switch_layout.insertWidget(2, self.tracker_btn)
+        self.tracker_btn.clicked.connect(lambda: self.set_view(2))
 
         # default selection
         self.set_view(0)

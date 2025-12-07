@@ -121,6 +121,48 @@ class SonarViewerNode(Node):
         self.get_logger().warn('Service de paramètres sonar_mock non disponible')
         return False
 
+    def set_tracking_parameter(self, param_name, value):
+        if not hasattr(self, 'tracker_param_client') or self.tracker_param_client is None:
+            from rcl_interfaces.srv import SetParameters
+
+            self.tracker_param_client = self.create_client(SetParameters, '/blob_tracker_node/set_parameters')
+
+        if isinstance(value, bool):
+            param_type = ParameterType.PARAMETER_BOOL
+        elif isinstance(value, int):
+            param_type = ParameterType.PARAMETER_INTEGER
+        elif isinstance(value, float):
+            param_type = ParameterType.PARAMETER_DOUBLE
+        else:
+            self.get_logger().error(f'Type de paramètre non supporté: {type(value)}')
+            return False
+
+        from rcl_interfaces.srv import SetParameters
+        from rcl_interfaces.msg import Parameter as ParameterMsg, ParameterValue
+
+        request = SetParameters.Request()
+        param = ParameterMsg()
+        param.name = param_name
+        param.value = ParameterValue()
+        param.value.type = param_type
+
+        if param_type == ParameterType.PARAMETER_BOOL:
+            param.value.bool_value = value
+        elif param_type == ParameterType.PARAMETER_INTEGER:
+            param.value.integer_value = value
+        elif param_type == ParameterType.PARAMETER_DOUBLE:
+            param.value.double_value = value
+
+        request.parameters = [param]
+
+        if self.tracker_param_client.service_is_ready():
+            self.tracker_param_client.call_async(request)
+            self.get_logger().debug(f'Paramètre tracker.{param_name} = {value}')
+            return True
+
+        self.get_logger().warn('Service de paramètres blob_tracker_node non disponible')
+        return False
+
     def raw_callback(self, msg):
         try:
             arr = np.array(msg.intensities, dtype=np.float32)
