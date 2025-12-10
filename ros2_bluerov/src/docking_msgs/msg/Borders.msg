@@ -11,7 +11,3 @@ float32[] bearings    # Taille: 2 (un par montant)
 # Qualité de détection
 float32[] confidences # Confiance par bord (0.0-1.0), taille 2
 bool is_valid         # True si les 2 bords sont détectés
-
-# Métadonnées géométrie cage
-float32 cage_width    # Largeur cage estimée (m)
-float32 cage_depth    # Distance moyenne à la cage (m)

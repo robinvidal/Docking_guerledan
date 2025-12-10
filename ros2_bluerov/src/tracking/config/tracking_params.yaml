@@ -3,7 +3,7 @@ blob_tracker_node:
     enable_tracker: true
     template_size: 21
     search_radius: 30
-    intensity_threshold: 150
+    intensity_threshold: 120
     distance_expected: 1.0
     distance_epsilon: 0.3
     distance_sigma: 0.2

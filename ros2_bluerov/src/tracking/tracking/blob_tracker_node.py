@@ -434,15 +434,11 @@ class BlobTrackerNode(Node):
             out.ranges = []
             out.bearings = []
             out.confidences = []
-            out.cage_width = 0.0
-            out.cage_depth = 0.0
         else:
             out.is_valid = True
             out.ranges = [rng_a, rng_b]
             out.bearings = [brg_a, brg_b]
             out.confidences = [float(np.clip(conf, 0.0, 1.0)), float(np.clip(conf, 0.0, 1.0))]
-            out.cage_width = 0.0
-            out.cage_depth = 0.0
         self.pub.publish(out)
 
 

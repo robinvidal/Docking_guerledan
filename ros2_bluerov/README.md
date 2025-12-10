@@ -14,9 +14,9 @@ Les messages et utilitaires communs sont dans `docking_msgs` et `docking_utils`.
 
 | Package | Description | Status |
 |---------|-------------|--------|
-| [sonar](src/sonar/README.md) | Acquisition données sonar (mock + future interface Oculus) | 🟨 |
-| [traitement](src/traitement/README.md) | Pipeline de filtrage d'images | 🟨 |
-| [tracking](src/tracking/README.md) | Détection bords de cage | 🟧 |
+| [sonar](src/sonar/README.md) | Acquisition données sonar (mock + interface Oculus + lecture des fichiers .oculus) | 🟨 |
+| [traitement](src/traitement/README.md) | Pipeline de filtrage d'images | 🟩 |
+| [tracking](src/tracking/README.md) | Détection bords de cage | 🟩 |
 | [localisation](src/localisation/README.md) | Calcul pose relative 6DOF | 🟥 |
 | [control](src/control/README.md) | Asservissement PID multi-axes | 🟥 |
 | [mission](src/mission/README.md) | Machine d'états de docking | 🟥 |
