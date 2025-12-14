@@ -8,7 +8,7 @@ La mise en œuvre pratique du docking autonome nécessite une intégration maté
 
 Dans cette section, nous présentons le matériel utilisé pour la réalisation de notre projet de docking via notre BlueROV.
 
-Nous présenterons ses spécificités techniques dans les grandes lignes.
+Nous présenterons ses spécificités techniques dans les grandes lignes, étant donné que nous n'avons pas modifié le matériel, ni l'électronique du BlueROV.
 
 
 \subsection{Matériel}
@@ -22,9 +22,11 @@ Nous présenterons ses spécificités techniques dans les grandes lignes.
 
 La figure \ref{fig:bluerov_materiel} montre notre BlueROV modifié pour le projet de docking autonome.
 
-Pour la perception et le docking, le ROV embarque le sonar multifaisceaux Oculus M750d (Blueprint Subsea). Exploité en haute fréquence (1.2~MHz), il offre la résolution nécessaire aux manœuvres fines : 2.5~mm en portée et $0.6^{\circ}$ en azimut. Il possède une portée allant jusqu'à 120~m. Son ouverture ($130^{\circ}$ horizontal / $20^{\circ}$ vertical) impose un montage incliné vers le bas pour optimiser la visibilité de la cible. L'acquisition des données acoustiques est assurée en temps réel via un driver ROS, permettant leur intégration directe dans la boucle de contrôle autonome.
+Pour la perception et le docking, le ROV embarque le sonar multifaisceaux Oculus M750d (Blueprint Subsea). Exploité en haute fréquence (1.2~MHz), il offre la résolution nécessaire aux manœuvres fines : 2.5~mm en portée et $0.6^{\circ}$ en azimut. Il possède une portée allant jusqu'à 120~m. Son ouverture ($130^{\circ}$ horizontal / $20^{\circ}$ vertical) impose un montage incliné vers le bas pour optimiser la visibilité de la cible.
 
 Nous disposons de deux cordes permettant de remonter le ROV à la surface, ainsi que d'un long câble jaune assurant le contrôle à distance et l'alimentation électrique. Des mousses orange supplémentaires assurent la flottabilité.
+
+Le robot est alimenté par deux Batterie Lipo 4S 14,8V, offrant une autonomie d'environ 2 heures en utilisation normale.
 
 L'architecture propulsive du BlueROV Heavy, articulée autour de huit propulseurs (quatre horizontaux et quatre verticaux), confère au véhicule un caractère holonome complet. En effet, cette configuration vectorielle permet de commander indépendamment et simultanément les six degrés de liberté : les trois translations et les trois rotations (lacet, roulis, tangage). L'avantage majeur de cette disposition réside dans sa capacité à offrir une autorité totale sur la stabilisation de l'assiette (roulis et tangage) tout en assurant le maintien en profondeur. Cette omnidirectionnalité garantit une manœuvrabilité fine, permettant au ROV d'effectuer des déplacements latéraux ou verticaux tout en conservant une orientation angulaire fixe — une caractéristique indispensable pour la précision des relevés et la stabilité des interventions en milieu perturbé.
 
@@ -130,11 +132,6 @@ Un régulateur PID a été implémenté pour maintenir une profondeur donnée. C
 
 Un second régulateur PID permet la stabilisation du cap. Il fonctionne de la même façon que l'asservissement de profondeur : lorsque le joystick responsable de l'orientation est relâché, le PID maintient le cap courant.
 
-
-
-\subsection{A Faire}
-
-- Préciser l'autonomie de la batterie.
 
 \section{Protocole Expérimental en Bassin}
 
