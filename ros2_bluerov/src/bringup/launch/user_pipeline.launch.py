@@ -34,6 +34,12 @@ def generate_launch_description():
         'tracking_params.yaml'
     )
 
+    localisation_config = os.path.join(
+        get_package_share_directory('localisation'),
+        'config',
+        'localisation_params.yaml'
+    )
+
     # Nodes
     sonar_mock = Node(
         package='sonar',
@@ -66,9 +72,19 @@ def generate_launch_description():
         output='screen'
     )
 
+    localisation = Node(
+        package='localisation',
+        executable='localisation_node',
+        name='localisation_node',
+        parameters=[localisation_config],
+        output='screen'
+    )
+
+
     return LaunchDescription([
         sonar_mock,
         traitement,
         blob_tracker,
         sonar_viewer,
+        localisation,
     ])

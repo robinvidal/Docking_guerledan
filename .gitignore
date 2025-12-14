@@ -24,6 +24,7 @@ env/
 build/
 install/
 log/
+rosbag/
 .colcon/
 .deps/
 CMakeFiles/

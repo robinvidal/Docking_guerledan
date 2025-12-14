@@ -25,10 +25,10 @@ Calcule la pose relative à partir des bords détectés par le tracking.
 
 ## Algorithme de localisation
 
-1. **Validation des entrées** - Vérification de 4 bords valides avec confiance suffisante
+1. **Validation des entrées** - Vérification de 2 bords valides avec confiance suffisante
 2. **Validation géométrique** - Cohérence avec dimensions attendues (via `docking_utils.geometry`)
 3. **Conversion polaire → cartésien** - Transformation en coordonnées métriques
-4. **Calcul du centre** - Position moyenne des 4 montants
+4. **Calcul du centre** - Position moyenne des 2 montants
 5. **Calcul d'orientation** - Angle de la cage par régression linéaire sur les colonnes
 6. **Transformation de repère** - Inversion pour obtenir pose ROV dans repère cage
 7. **Estimation de covariance** - Matrice 6×6 basée sur distance et confiance
@@ -94,7 +94,3 @@ La précision se dégrade avec:
 
 ## TODO
 
-- [ ] Fusion avec IMU pour estimation de roll/pitch
-- [ ] Filtrage de Kalman étendu pour lissage temporel
-- [ ] Détection d'outliers et rejet de mesures aberrantes
-- [ ] Support de géométries de cage variables

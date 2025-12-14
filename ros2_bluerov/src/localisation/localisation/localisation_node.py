@@ -39,7 +39,8 @@ class LocalisationNode(Node):
         pose_msg = PoseRelative()
         pose_msg.header = msg.header
         
-        if not msg.is_valid or len(msg.ranges) != 4:
+        # Le message Borders contient deux bords (gauche, droite)
+        if not msg.is_valid or len(msg.ranges) != 2 or len(msg.bearings) != 2:
             pose_msg.is_valid = False
             pose_msg.confidence = 0.0
             self.publisher_.publish(pose_msg)
@@ -81,7 +82,7 @@ class LocalisationNode(Node):
         pose_msg.pitch = 0.0
         pose_msg.roll = 0.0
         
-        # Confiance = moyenne des confidences de détection
+        # Confiance = moyenne des confidences de détection (2 bords)
         pose_msg.confidence = float(np.mean(confidences))
         pose_msg.is_valid = pose_msg.confidence >= self.get_parameter('min_borders_confidence').value
         
