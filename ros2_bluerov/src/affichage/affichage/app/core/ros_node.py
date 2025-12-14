@@ -164,21 +164,9 @@ class SonarViewerNode(Node):
         return False
 
     def raw_callback(self, msg):
-        try:
-            arr = np.array(msg.intensities, dtype=np.float32)
-            mean_int = float(arr.mean()) if arr.size > 0 else 0.0
-        except Exception:  # noqa: BLE001
-            mean_int = 0.0
-        self.get_logger().info(f"raw_callback: mean intensity={mean_int:.1f}")
         self.signals.new_raw_frame.emit(msg)
 
     def filtered_callback(self, msg):
-        try:
-            arr = np.array(msg.intensities, dtype=np.float32)
-            mean_int = float(arr.mean()) if arr.size > 0 else 0.0
-        except Exception:  # noqa: BLE001
-            mean_int = 0.0
-        self.get_logger().info(f"filtered_callback: mean intensity={mean_int:.1f}")
         self.signals.new_filtered_frame.emit(msg)
 
     def borders_callback(self, msg):

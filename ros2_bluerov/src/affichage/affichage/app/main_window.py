@@ -114,13 +114,6 @@ class MainWindow(QMainWindow):
         if self.ros_node.current_borders:
             self.raw_panel.update_borders(self.ros_node.current_borders)
 
-        try:
-            arr = np.array(msg.intensities, dtype=np.float32)
-            mean_int = float(arr.mean()) if arr.size > 0 else 0.0
-        except Exception:  # noqa: BLE001
-            mean_int = 0.0
-        self.raw_btn.setText(f'📡 Sonar Brut ({mean_int:.0f})')
-
     def on_filtered_frame(self, msg):
         self.last_filtered_frame = msg
         self.filtered_panel.update_frame(msg)
@@ -128,13 +121,6 @@ class MainWindow(QMainWindow):
 
         if self.ros_node.current_borders:
             self.filtered_panel.update_borders(self.ros_node.current_borders)
-
-        try:
-            arr = np.array(msg.intensities, dtype=np.float32)
-            mean_int = float(arr.mean()) if arr.size > 0 else 0.0
-        except Exception:  # noqa: BLE001
-            mean_int = 0.0
-        self.filtered_btn.setText(f'🔍 Sonar Filtré ({mean_int:.0f})')
 
     def on_borders(self, msg):
         self.raw_panel.update_borders(msg)

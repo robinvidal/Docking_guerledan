@@ -100,10 +100,6 @@ Le launch `user_pipeline` démarre la pipeline utile en simulation pour un utili
 1) Ouvrez un terminal (sondé bash) et lancez le pipeline:
 
 ```bash
-# ! Chemin à adapter selon votre installation !
-cd ~/Desktop/Docking_guerledan/ros2_bluerov
-source install/setup.bash
-
 ros2 launch bringup user_pipeline.launch.py
 ```
 
@@ -130,7 +126,7 @@ Commandes utiles dans la fenêtre de téléop:
 - w/x : augmenter/diminuer vitesse linéaire
 - e/c : augmenter/diminuer vitesse angulaire
 
-3) (Optionnel) Monitoring dans un troisième terminal:
+3) (Optionnel) Monitoring dans un troisième terminal (sondé bash):
 
 ```bash
 # État de mission
@@ -150,15 +146,12 @@ Le launch `sonar_pipeline` démarre le vrai sonar (sonar + traitement + tracking
 
 1) Ouvrez un terminal (sondé bash) et lancez le pipeline:
 
-```bash
-# ! Chemin à adapter selon votre installation !
-cd ~/Desktop/Docking_guerledan/ros2_bluerov
-source install/setup.bash
 
+```bash
 ros2 launch bringup sonar_pipeline.launch.py
 ```
 
-2) (Optionnel) Monitoring dans un troisième terminal:
+2) (Optionnel) Monitoring dans un troisième terminal (sondé bash):
 
 ```bash
 # État de mission
@@ -172,9 +165,50 @@ ros2 topic hz /docking/sonar/raw
 ros2 topic hz /docking/sonar/filtered
 ```
 
-## Architecture
+## Option 3: Lancer la pipeline avec un rosbag de données sonar
 
+Le launch `rosbag_pipeline` démarre le pipeline avec des données sonar préenregistrées dans un rosbag (lecture rosbag + traitement + tracking + affichage).
+
+1) Assurez-vous d’avoir un rosbag de données sonar au format .db3 (ROS2 Humble). 
+Placez-le dans un dossier accessible, par exemple `~/Desktop/Docking_guerledan/ros2_bluerov/rosbag/` (cf. Google Drive du projet).
+
+2) Ouvrez un terminal (sondé bash) et lancez le pipeline:
+
+```bash
+ros2 launch bringup rosbag_pipeline.launch.py bag_path:=/chemin/vers/votre/rosbag_file.db3
+```  
+3) (Optionnel) Monitoring dans un troisième terminal (sondé bash):
+
+```bash
+# État de mission
+ros2 topic echo /docking/sonar/raw
+# Pose relative estimée
+ros2 topic echo /docking/tracking/borders
+# Fréquences
+ros2 topic hz /docking/sonar/raw
+ros2 topic hz /docking/sonar/filtered
 ```
+
+## Option 4: Lancer la pipeline complète avec le BlueROV réel et téléop manette
+
+```markdown
+Le launch `complete_pipeline` démarre le sonar réel avec le contrôle manuel via manette (sonar + traitement + tracking + affichage + téléop manette).
+1) Après avoir connecté et allumé le BlueROV, branché la manette, ouvrez QgroundControl pour initialiser la connexion avec le ROV. Puis fermez le.
+
+2) Ouvrez un terminal (sondé bash) et lancez le pipeline:
+
+```bash
+# ! Chemin à adapter selon votre installation !
+cd ~/Desktop/Docking_guerledan/ros2_bluerov
+source install/setup.bash   
+```
+```bash
+ros2 launch bringup complete_pipeline.launch.py
+```    
+
+## Architecture du pipeline
+
+```plaintext
 ┌──────────────┐
 │  sonar_mock  │  Génère frames synthétiques 256×512 @ ~10Hz
 └──────┬───────┘
