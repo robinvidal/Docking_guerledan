@@ -87,7 +87,7 @@ Pour éprouver la robustesse du contrôleur PID local, nous avons défini un sc�
     \item \textbf{Cas ``aveugle'' (déclenchement de la recherche) :} le véhicule est orienté de telle sorte que les bouées sont initialement hors de son champ de vision, ce qui teste la bascule automatique vers l’état \textit{Search}, puis le passage en suivi une fois la cible acquise.
 \end{enumerate}
 
-\textbf{Critère de succès :} la simulation est considérée comme validée lorsque le robot stabilise sa position à moins de $10$~cm du point de consigne virtuel (situé $1$~m devant le plan des bouées) et que les vitesses résiduelles sont quasi nulles. Les résultats numériques obtenus avec le simulateur cinématique, qui pourront être testés par la suite avec le simulateur dynamique, montrent une convergence systématique pour les quatre cas de figure en moins de $120$s, confirmant que la stratégie basée sur le référentiel local reste efficace.
+\textbf{Critère de succès :} la simulation est considérée comme validée lorsque le robot stabilise sa position à moins de $10$~cm du point de consigne virtuel (situé $1$~m devant le plan des bouées) et que les vitesses résiduelles sont quasi nulles. Les résultats numériques obtenus avec le simulateur cinématique, qui pourront être testés par la suite avec le simulateur dynamique, montrent une convergence systématique pour les quatre cas de figure en moins de $120$s, confirmant que la stratégie basée sur le référentiel local reste efficace ~\ref{fig:simu_control1} ~\ref{fig:simu_control2}.
 
 \begin{figure}[htbp]
     \centering
@@ -118,9 +118,9 @@ Des études récentes montrent que la performance de la détection dépend forte
 
 Dans notre implémentation, plusieurs configurations ont été testées dont deux réflecteurs verticaux ont été installés de manière symétrique, de façon à générer deux maxima d’intensité distincts dans l’image sonar. Leur espacement connu sert de base à la reconstruction géométrique de l’orientation de la cage.
 
-Cependant, la présence d'un grillage métallique dans le fond de la cage génére des échos reconnaissables à une profondeur spécifique formant un motif caractéristique. Ainsi, l'exploitation de ce phénomène demeure une piste envisageable pour améliorer la robustesse de la détection.
+Cependant, la présence d'un grillage métallique dans le fond de la cage génére des échos reconnaissables à une profondeur spécifique formant un motif caractéristique ~\ref{fig:sonar_cage_pvc_cordes}. Ainsi, l'exploitation de ce phénomène demeure une piste envisageable pour améliorer la robustesse de la détection.
 
-Pour appuyer cette configuration, une configuration expérimentale a été mise en place en bassin, où la cage a vu 3 de ses faces recouvertes de panneaux acoustiquement absorbants (PVC) et celles-ci ont été entourées de cordages qui eux sont au contraire très réfléchissants. Cette disposition vise à minimiser les échos parasites et à renforcer la signature caractéristique (carrée) de la cage.
+Pour appuyer cette configuration, une configuration expérimentale a été mise en place en bassin, où la cage a vu 3 de ses faces recouvertes de panneaux acoustiquement absorbants (PVC) et celles-ci ont été entourées de cordages qui eux sont au contraire très réfléchissants ~\ref{fig:cage_pvc_cordes}. Cette disposition vise à minimiser les échos parasites et à renforcer la signature caractéristique (carrée) de la cage.
 
 \begin{figure}[!h]
     \centering
@@ -129,6 +129,16 @@ Pour appuyer cette configuration, une configuration expérimentale a été mise 
         \includegraphics[width=\linewidth]{images/cage_pvc_cordes.JPEG}
         \caption{Cage de docking avec panneaux absorbants et cordages réfléchissants}
         \label{fig:cage_pvc_cordes}
+    \end{minipage}
+\end{figure}
+
+\begin{figure}[!h]
+    \centering
+    \begin{minipage}{0.80\textwidth}
+        \centering
+        \includegraphics[width=\linewidth]{images/sonar_cage_piscine.png}
+        \caption{Image sonar de la cage en bassin}
+        \label{fig:sonar_cage_pvc_cordes}
     \end{minipage}
 \end{figure}
 
@@ -183,13 +193,5 @@ y_\text{target}
 Cette estimation directe, robuste et peu coûteuse computationnellement, est cohérente avec les recommandations de \cite{uchihori2019_3dsonar_docking}, qui préconisent des algorithmes simples et déterministes pour la phase d’approche terminale, la plus sensible aux perturbations.
 
 \section{Résultats Théoriques}
-
-Les performances théoriques d’un système d’amarrage guidé au sonar peuvent être déduites de l’état de l’art. Les revues de Yazdani \cite{yazdani2020_survey_docking} et Palomeras \cite{palomeras2016_iauv_panel} montrent que l’information la plus déterminante pour un docking acoustique est l’orientation relative de la station, l’estimation angulaire étant généralement plus sensible au bruit que la distance.
-
-Wang et al. \cite{wang2023_acoustic_mfls_docking} démontrent qu’une approche géométrique simple, basée sur la détection de points brillants dans l’image sonar, permet une convergence fiable lorsque la signature acoustique de la cage est bien définie. Une commande locale de type proportionnelle ou PD suffit alors pour stabiliser la phase d’approche lente.
-
-Enfin, les travaux d’Uchihori \cite{uchihori2019_3dsonar_docking} confirment que l’utilisation de deux réflecteurs passifs produit une signature robuste permettant une estimation stable de l’orientation et une précision d’amarrage compatible avec les exigences opérationnelles.
-
-Dans l’ensemble, la littérature indique qu’un système combinant géométrie simple de la cage, extraction locale de l’azimut et commande réactive peut garantir un amarrage acoustique fiable dans un environnement faiblement perturbé.
 
 Nos résultats s'inscrivent en cohérence avec ces principes théoriques. Les simulations numériques, menées initialement sur un modèle cinématique puis sur un simulateur dynamique, montrent une convergence systématique pour les quatre cas de figure étudiés en moins de 120 secondes. Ces essais confirment que la stratégie de commande basée sur le référentiel local conserve son efficacité même lorsque les effets d'inertie et de traînée hydrodynamique sont pris en compte. La prochaine étape consistera à intégrer notre modèle dynamique complet au sein de l'environnement de simulation, afin d'éprouver et de valider la robustesse du contrôleur dans des conditions de fidélité accrue.

@@ -25,6 +25,16 @@ Ce positionnement impose cependant des défis spécifiques : traitement d’imag
 
 Le système conçu dans ce travail s’appuie sur un BlueROV2 Heavy (8 propulseurs) équipé d’un sonar Oculus M750d, piloté sous ROS~2, avec pour objectif d’accomplir un docking entièrement autonome dans une cage en aluminium munie de réflecteurs passifs.
 
+
+Les performances théoriques d’un système d’amarrage guidé au sonar peuvent être déduites de l’état de l’art. Les revues de Yazdani \cite{yazdani2020_survey_docking} et Palomeras \cite{palomeras2016_iauv_panel} montrent que l’information la plus déterminante pour un docking acoustique est l’orientation relative de la station, l’estimation angulaire étant généralement plus sensible au bruit que la distance.
+
+Wang et al. \cite{wang2023_acoustic_mfls_docking} démontrent qu’une approche géométrique simple, basée sur la détection de points brillants dans l’image sonar, permet une convergence fiable lorsque la signature acoustique de la cage est bien définie. Une commande locale de type proportionnelle ou PD suffit alors pour stabiliser la phase d’approche lente.
+
+Enfin, les travaux d’Uchihori \cite{uchihori2019_3dsonar_docking} confirment que l’utilisation de deux réflecteurs passifs produit une signature robuste permettant une estimation stable de l’orientation et une précision d’amarrage compatible avec les exigences opérationnelles.
+
+Dans l’ensemble, la littérature indique qu’un système combinant géométrie simple de la cage, extraction locale de l’azimut et commande réactive peut garantir un amarrage acoustique fiable dans un environnement faiblement perturbé.
+
+
 \section{Annonce du Plan}
 
 Ce rapport détaille la méthodologie et les résultats de cette démarche à travers deux parties principales.

@@ -84,7 +84,7 @@ def generate_launch_description():
         bag_path_arg,
         rosbag_play,
         traitement,
-        blob_tracker,
-        localisation,
+        #blob_tracker,
+        #localisation,
         sonar_viewer,
     ])
