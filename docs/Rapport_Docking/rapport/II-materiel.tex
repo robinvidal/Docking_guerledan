@@ -2,7 +2,7 @@
     
 \chapter{Partie II : Matériel et Expérimentation}
 
-La mise en œuvre pratique de l'amarrage autonome nécessite une intégration matérielle rigoureuse et une validation progressive. Cette partie décrit la plateforme robotique, le capteur principal, ainsi que les deux phases expérimentales menées pour valider nos algorithmes.
+La mise en œuvre pratique du docking autonome nécessite une intégration matérielle rigoureuse et une validation progressive. Cette partie décrit la plateforme robotique, le capteur principal, ainsi que les deux phases expérimentales menées pour valider nos algorithmes.
 
 \section{Plateforme Robotique : BlueROV Heavy}
 
@@ -17,10 +17,10 @@ Nous présenterons ses spécificités techniques dans les grandes lignes.
     \centering
     \includegraphics[width=\textwidth]{images/BlueROV.png}
     \caption{Illustration de notre BlueROV}
-    \label{fig:bluerov_materiel}
+    \label{fig:bluerov_materiel} % Ensure this label is defined
 \end{figure}
 
-La figure \ref{fig:bluerov_materiel} montre notre BlueROV modifié pour le projet d'amarrage autonome.
+La figure \ref{fig:bluerov_materiel} montre notre BlueROV modifié pour le projet de docking autonome.
 
 Pour la perception et le docking, le ROV embarque le sonar multifaisceaux Oculus M750d (Blueprint Subsea). Exploité en haute fréquence (1.2~MHz), il offre la résolution nécessaire aux manœuvres fines : 2.5~mm en portée et $0.6^{\circ}$ en azimut. Il possède une portée allant jusqu'à 120~m. Son ouverture ($130^{\circ}$ horizontal / $20^{\circ}$ vertical) impose un montage incliné vers le bas pour optimiser la visibilité de la cible. L'acquisition des données acoustiques est assurée en temps réel via un driver ROS, permettant leur intégration directe dans la boucle de contrôle autonome.
 
@@ -32,22 +32,20 @@ L'architecture propulsive du BlueROV Heavy, articulée autour de huit propulseur
 
 Lors de ce projet, nous avons dû concevoir une cage afin de faire amarer le ROV.
 
-Pour commencer, quelques tests ont été réalisés afin de valider le bon fonctionnement de notre algorithme de docking ; nous avons conçu une cage simple en PVC, visible sur la figure \ref{fig:cage} :
+Pour commencer, quelques tests ont été réalisés afin de valider le bon fonctionnement de notre algorithme de docking ; nous avons conçu une "porte" simple en PVC, visible sur la figure \ref{fig:cage} :
 
-\begin{figure}[h!]
+\begin{figure}[H]
     \centering
     \includegraphics[width=0.6\textwidth]{images/Cage.png}
-    \caption{Image de notre cage en PVC}
+    \caption{Photographie du premier prototype de cage pour le docking ne représentant qu'une porte}
     \label{fig:cage}
 \end{figure}
 
-Afin de la rendre plus visible par ce dernier, nous avons ajouté des mousses oranges sur les côtés verticaux de la cage.
+Afin de la rendre plus visible par ce dernier, nous avons ajouté des pavés de mousses sur les côtés verticaux de la cage.
 
 Nous avons testé plusieurs types de supports permettant de repérer la cage par le sonar. Voici une photo des différents supports testés sur la figure \ref{fig:support_cage} :
 
-\clearpage
-
-\begin{figure}[h!]
+\begin{figure}[H]
     \centering
     \includegraphics[width=0.8\textwidth]{images/mousses.jpg}
     \caption{Différents supports testés pour la cage}
@@ -56,25 +54,24 @@ Nous avons testé plusieurs types de supports permettant de repérer la cage par
 
 Voici les résultats des données sonar obtenues lors d'un test en bassin avec la cage équipée des différents supports illustrés sur la figure \ref{fig:support_cage} :
 
-\begin{figure}[h!]
+
+
+\begin{figure}[H]
     \centering
     % --- Première image ---
     \begin{subfigure}[b]{0.32\textwidth}
         \centering
-        % Important : ici width=\textwidth signifie la largeur de la SOUS-FIGURE
         \includegraphics[width=\textwidth]{images/mousses_oranges.png}
-        \caption{Image sonar avec mousses Oranges}
+        \caption{Image sonar avec bouées en mousses}
         \label{fig:mousse_a}
     \end{subfigure}
-    \hfill % \hfill ajoute un espace élastique entre les images pour les écarter
     % --- Deuxième image ---
     \begin{subfigure}[b]{0.32\textwidth}
         \centering
         \includegraphics[width=\textwidth]{images/parbates.png}
-        \caption{Image sonar avec parbates}
+        \caption{Image sonar avec parre-battages}
         \label{fig:mousse_b}
     \end{subfigure}
-    \hfill
     % --- Troisième image ---
     \begin{subfigure}[b]{0.32\textwidth}
         \centering
@@ -88,22 +85,18 @@ Voici les résultats des données sonar obtenues lors d'un test en bassin avec l
     \label{fig:supports_cage_tous}
 \end{figure}
 
-\clearpage
-
-Le but de la cage est de permettre au ROV de s'amarrer. Il faut donc une cage complète (un cube), permettant au ROV d'entrer complètement à l'intérieur.
+Le but de la cage est de permettre à l'AUV de se docker. Il faut donc une cage complète (un cube), permettant à l'AUV d'entrer complètement à l'intérieur et d'être maintenu en place lors de manoeuvres de relevage.
 
 Voici une illustration de la cage cubique, en cours de conception, sur la figure \ref{fig:cage_cubique} :
 
-\begin{figure}[h!]
+\begin{figure}[H]
     \centering
     \includegraphics[width=0.6\textwidth]{images/cage_cubique.JPEG}
-    \caption{Image de notre cage cubique en cours de conception}
+    \caption{Image de notre cage cubique en cours d'assemblage}
     \label{fig:cage_cubique}
 \end{figure}
 
-Un grillage est en cours d'installation sur la face arrière et sur la face inférieure de la cage, afin de permettre au robot de rester correctement à l'intérieur.
-
-Nous prévoyons également d'installer un entonnoir à l'entrée de la cage pour faciliter l'amarrage du ROV.
+Nous prévoyons d'installer un entonnoir à l'entrée de la cage pour faciliter le docking de l'AUV, le sonar ne nous offrant pas une précision suffisante pour garantir un amarrage parfait sans aide mécanique.
 
 \subsection{Contrôle du robot}
 
@@ -116,7 +109,6 @@ Dans cette partie, nous expliquons la configuration et l'utilisation de la manet
     \label{fig:manette}
 \end{figure}
 
-\clearpage
 
 Pour pouvoir commander le robot via la manette, il faut d'abord l'armer avec la touche « Start ».
 
@@ -140,17 +132,20 @@ Un second régulateur PID permet la stabilisation du cap. Il fonctionne de la m�
 
 
 
-\subsection{Architecture Électronique Embarquée}
-
-Rappelons brièvement l'architecture embarquée : le bas niveau est assuré par un Pixhawk, et le haut niveau (ROS2) tourne sur un ordinateur embarqué Raspberry Pi. L'interface entre ROS2 et le contrôleur de vol est assurée par le paquet \texttt{mavros}.
-
 \subsection{A Faire}
 
 - Préciser l'autonomie de la batterie.
 
 \section{Protocole Expérimental en Bassin}
 
-La première phase de validation a été réalisée en environnement contrôlé afin de caractériser les performances du système sans perturbations externes majeures.
+Une phase préliminaire de conception a été consacrée à la sélection de la géométrie de la cage de docking ainsi qu’au choix des matériaux constitutifs, dans l’objectif de maximiser sa signature acoustique tout en garantissant une intégration mécanique simple. À cette fin, une série de tests exploratoires a été menée en bassin à l’ENSTA. Une cage instrumentée, fixée au centre du bassin, a permis d’évaluer différentes configurations géométriques et solutions matérielles, notamment en termes de réflectivité acoustique et de lisibilité sonar, avant la validation de la configuration retenue pour les essais ultérieurs.
+
+\begin{figure}[h!]
+    \centering
+    \includegraphics[width=0.6\textwidth]{images/cage_mousse.JPEG}
+    \caption{Photographie de la cage instrumentée en bassin}
+    \label{fig:cage_bassin}
+\end{figure}
 
 \textit{[Instruction : Décrivez les dimensions du bassin (longueur, largeur, profondeur). Expliquez la mise en place de la cage (fixée au fond ou suspendue). Détaillez le scénario de test : position de départ du ROV, procédure de lancement de l'autonomie, critères de succès (entrée complète dans la cage). Mentionnez les outils de vérité terrain utilisés si disponibles (ex: caméras externes pour filmer l'essai).]}
 

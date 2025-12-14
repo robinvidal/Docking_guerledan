@@ -3,7 +3,7 @@
 
 \section{Contexte Stratégique et Nécessité du Docking}
 
-L'évolution de la robotique sous-marine marque une transition fondamentale, passant de missions expéditionnaires ponctuelles à des déploiements persistants de systèmes résidents. Dans ce nouveau paradigme, les Véhicules Sous-marins Autonomes (AUV) et les Véhicules Télécommandés (ROV) hybrides ne sont plus systématiquement récupérés en surface après chaque intervention. Ils doivent au contraire être capables de s'amarrer de manière autonome à des infrastructures immergées pour recharger leurs batteries et transférer les données collectées, condition indispensable au fonctionnement des systèmes dits \textit{long-endurance}.
+L'évolution de la robotique sous-marine marque une transition fondamentale, passant de missions expéditionnaires ponctuelles à des déploiements persistants de systèmes résidents. Dans ce nouveau paradigme, les Véhicules Sous-marins Autonomes (AUV) et les Véhicules Télécommandés (ROV) hybrides ne sont plus systématiquement récupérés en surface après chaque intervention. Ils doivent au contraire être capables d'effectuer une phase d'approche et de capture de manière autonome par des infrastructures immergées pour recharger leurs batteries et transférer les données collectées, condition indispensable au fonctionnement des systèmes dits \textit{long-endurance}.
 
 Cette capacité d'amarrage autonome, ou \textit{docking}, constitue l’un des verrous technologiques majeurs pour l’essor de l’économie bleue. Plusieurs travaux récents soulignent que cette manœuvre est comparable à un appontage ou à un ravitaillement en vol, mais réalisée dans un fluide dense et perturbé \cite{yazdani2020_survey_docking}. La difficulté centrale réside dans l’alignement précis du véhicule avec l’axe d’entrée de la station, généralement avec des tolérances centimétriques, tout en compensant les effets du courant, les interactions hydrodynamiques de proximité et l'incertitude de navigation.
 
@@ -11,7 +11,7 @@ L’environnement sous-marin impose en effet des contraintes sévères qui rende
 
 \section{État de l'Art et Positionnement du Sujet}
 
-La littérature scientifique décompose généralement la séquence d’amarrage en trois phases, chacune reposant sur une modalité de capteur spécifique \cite{yazdani2020_survey_docking, wang2023_acoustic_mfls_docking} :
+La littérature scientifique décompose généralement la séquence de docking en trois phases, chacune reposant sur une modalité de capteur spécifique \cite{yazdani2020_survey_docking, wang2023_acoustic_mfls_docking} :
 
 \begin{enumerate}
     \item \textbf{Phase de ralliement (longue portée)} : guidage par systèmes acoustiques (LBL/USBL), efficaces mais peu précis à courte distance.
@@ -19,11 +19,11 @@ La littérature scientifique décompose généralement la séquence d’amarrage
     \item \textbf{Phase terminale (courte portée, < 2 m)} : la plupart des travaux basculent sur un guidage visuel ou inertiel \cite{palomeras2016_iauv_panel}, le sonar étant traditionnellement jugé difficile à exploiter en raison des zones d’ombre, des multi-trajets et de la saturation acoustique.
 \end{enumerate}
 
-\textbf{Notre approche se démarque de cet état de l'art par un choix technologique fort : maintenir le guidage sonar durant la phase terminale.} Les travaux utilisant un sonar 3D pour l’amarrage \cite{uchihori2019_3dsonar_docking} ou combinant imagerie acoustique et communication pour le docking \cite{wang2023_acoustic_mfls_docking} montrent que cette stratégie est prometteuse, mais rarement poussée jusqu’à l’entrée dans le dock lui-même. Dans des environnements fortement turbides, comme les ports ou les estuaires, les caméras deviennent rapidement inopérantes, ce qui renforce la pertinence d’un guidage entièrement acoustique.
+\textbf{Notre approche se démarque de cet état de l'art par un choix technologique fort : maintenir le guidage sonar durant la phase terminale.} Les travaux utilisant un sonar 3D pour le docking \cite{uchihori2019_3dsonar_docking} ou combinant imagerie acoustique et communication \cite{wang2023_acoustic_mfls_docking} montrent que cette stratégie est prometteuse, mais rarement poussée jusqu’à l’entrée dans le dock lui-même. Dans des environnements fortement turbides, comme les ports ou les estuaires, les caméras deviennent rapidement inopérantes, ce qui renforce la pertinence d’un guidage entièrement acoustique.
 
 Ce positionnement impose cependant des défis spécifiques : traitement d’image acoustique à très courte portée, extraction robuste de la pose relative, et conception mécanique du dock pour maximiser sa signature acoustique. Ces problématiques rejoignent également des approches plus théoriques visant à garantir la robustesse du docking en présence d’incertitudes, qu’elles soient liées au capteur ou à la dynamique \cite{bourgois2021_safe_underwater_docking}.
 
-Le système conçu dans ce travail s’appuie sur un BlueROV2 Heavy (8 propulseurs) équipé d’un sonar Oculus M750d, piloté sous ROS~2, avec pour objectif d’accomplir un amarrage entièrement autonome dans une cage en aluminium munie de réflecteurs passifs.
+Le système conçu dans ce travail s’appuie sur un BlueROV2 Heavy (8 propulseurs) équipé d’un sonar Oculus M750d, piloté sous ROS~2, avec pour objectif d’accomplir un docking entièrement autonome dans une cage en aluminium munie de réflecteurs passifs.
 
 \section{Annonce du Plan}
 
