@@ -16,6 +16,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/Frame.msg"
   "msg/FrameCartesian.msg"
   "msg/Borders.msg"
+  "msg/DetectedLines.msg"
   "msg/PoseRelative.msg"
   "msg/State.msg"
   DEPENDENCIES std_msgs geometry_msgs

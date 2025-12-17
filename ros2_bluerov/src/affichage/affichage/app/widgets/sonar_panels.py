@@ -47,6 +47,9 @@ class CartesianFilteredSonarPanel(QWidget):
 
     def update_borders(self, borders_msg):
         self.viewer.update_borders(borders_msg)
+    
+    def update_detected_lines(self, lines_msg):
+        self.viewer.update_detected_lines(lines_msg)
 
 
 class CompareSonarPanel(QWidget):
@@ -68,3 +71,6 @@ class CompareSonarPanel(QWidget):
     def update_borders(self, borders_msg):
         self.raw_viewer.update_borders(borders_msg)
         self.cartesian_viewer.update_borders(borders_msg)
+    
+    def update_detected_lines(self, lines_msg):
+        self.cartesian_viewer.update_detected_lines(lines_msg)

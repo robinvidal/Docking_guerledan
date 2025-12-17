@@ -41,6 +41,9 @@ class SonarCartesianImageWidget(pg.PlotWidget):
         )
         self.addItem(self.rov_marker)
 
+        # Lignes détectées par Hough
+        self.hough_lines = []  # Liste de PlotCurveItem
+        
         self.showGrid(x=True, y=True, alpha=0.3)
 
         # Colormap personnalisée (style sonar)
@@ -126,3 +129,34 @@ class SonarCartesianImageWidget(pg.PlotWidget):
 
         if points:
             self.borders_scatter.setData(pos=np.array(points))
+    
+    def update_detected_lines(self, lines_msg):
+        """Met à jour l'affichage des lignes détectées par Hough."""
+        # Nettoyer les anciennes lignes
+        for line_item in self.hough_lines:
+            self.removeItem(line_item)
+        self.hough_lines.clear()
+        
+        if not lines_msg or not lines_msg.is_valid or lines_msg.num_lines == 0:
+            return
+        
+        # Afficher chaque ligne
+        for i in range(lines_msg.num_lines):
+            x1 = lines_msg.x1_points[i]
+            y1 = lines_msg.y1_points[i]
+            x2 = lines_msg.x2_points[i]
+            y2 = lines_msg.y2_points[i]
+            confidence = lines_msg.confidences[i]
+            
+            # Couleur en fonction de la confiance (vert = haute confiance, jaune = faible)
+            # RGB: vert (0, 255, 0) -> jaune (255, 255, 0)
+            red = int(255 * (1.0 - confidence))
+            green = 255
+            blue = 0
+            
+            line_item = pg.PlotCurveItem(
+                pen=pg.mkPen((red, green, blue), width=2, style=Qt.SolidLine)
+            )
+            line_item.setData([x1, x2], [y1, y2])
+            self.addItem(line_item)
+            self.hough_lines.append(line_item)

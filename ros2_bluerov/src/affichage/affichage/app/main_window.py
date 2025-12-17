@@ -115,6 +115,7 @@ class MainWindow(QMainWindow):
         self.ros_node.signals.new_polar_filtered_frame.connect(self.on_polar_filtered_frame)
         self.ros_node.signals.new_cartesian_filtered_frame.connect(self.on_cartesian_filtered_frame)
         self.ros_node.signals.new_borders.connect(self.on_borders)
+        self.ros_node.signals.new_detected_lines.connect(self.on_detected_lines)
         self.ros_node.signals.new_pose.connect(self.on_pose)
         self.ros_node.signals.new_state.connect(self.on_state)
 
@@ -145,6 +146,10 @@ class MainWindow(QMainWindow):
         self.raw_panel.update_borders(msg)
         self.filtered_panel.update_borders(msg)
         self.compare_panel.update_borders(msg)
+    
+    def on_detected_lines(self, msg):
+        self.cartesian_filtered_panel.update_detected_lines(msg)
+        self.compare_panel.update_detected_lines(msg)
 
     def on_pose(self, msg):
         self.status_header.update_pose(msg)

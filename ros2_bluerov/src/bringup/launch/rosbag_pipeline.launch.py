@@ -75,6 +75,14 @@ def generate_launch_description():
         output='screen'
     )
 
+    hough_lines = Node(
+        package='tracking',
+        executable='hough_lines_node',
+        name='hough_lines_node',
+        parameters=[tracking_config],
+        output='screen'
+    )
+
     localisation = Node(
         package='localisation',
         executable='localisation_node',
@@ -95,6 +103,7 @@ def generate_launch_description():
         rosbag_play,
         traitement_polar,
         traitement_cartesian,
+        hough_lines,
         #blob_tracker,
         #localisation,
         sonar_viewer,

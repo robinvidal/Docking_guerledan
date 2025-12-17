@@ -8,5 +8,6 @@ class ROSSignals(QObject):
     new_polar_filtered_frame = pyqtSignal(object)
     new_cartesian_filtered_frame = pyqtSignal(object)
     new_borders = pyqtSignal(object)
+    new_detected_lines = pyqtSignal(object)
     new_pose = pyqtSignal(object)
     new_state = pyqtSignal(object)
