@@ -1,0 +1,128 @@
+"""
+Widget d'affichage pour données cartésiennes (FrameCartesian).
+Affichage simple et direct de l'image cartésienne.
+"""
+
+import numpy as np
+import pyqtgraph as pg
+from PyQt5.QtCore import Qt, QRectF
+
+
+class SonarCartesianImageWidget(pg.PlotWidget):
+    """Vue cartésienne pour FrameCartesian avec affichage image direct."""
+
+    def __init__(self, title="Sonar Cartésien"):
+        super().__init__()
+        self.setTitle(title)
+        self.setLabel('bottom', 'X (latéral, m)', units='m')
+        self.setLabel('left', 'Y (frontal, m)', units='m')
+        self.setAspectLocked(True)
+
+        self.image_item = pg.ImageItem()
+        self.addItem(self.image_item)
+
+        self.borders_scatter = pg.ScatterPlotItem(
+            size=15, pen=pg.mkPen(None), brush=pg.mkBrush(255, 0, 0, 255)
+        )
+        self.addItem(self.borders_scatter)
+
+        self.center_line = pg.PlotCurveItem(pen=pg.mkPen('w', width=1, style=Qt.DashLine))
+        self.addItem(self.center_line)
+
+        # FOV boundaries
+        self.fov_left = pg.PlotCurveItem(pen=pg.mkPen('c', width=1, style=Qt.DashLine))
+        self.fov_right = pg.PlotCurveItem(pen=pg.mkPen('c', width=1, style=Qt.DashLine))
+        self.addItem(self.fov_left)
+        self.addItem(self.fov_right)
+
+        self.rov_marker = pg.ScatterPlotItem(
+            pos=[(0, 0)], size=20, symbol='t', 
+            pen=pg.mkPen('g', width=2), brush=pg.mkBrush(0, 255, 0, 100)
+        )
+        self.addItem(self.rov_marker)
+
+        self.showGrid(x=True, y=True, alpha=0.3)
+
+        # Colormap personnalisée (style sonar)
+        positions = [0.0, 0.25, 0.5, 0.75, 1.0]
+        colors = [
+            (15, 10, 5),
+            (80, 60, 20),
+            (180, 140, 50),
+            (230, 190, 80),
+            (255, 230, 140),
+        ]
+        self.custom_colormap = pg.ColorMap(positions, colors)
+        self._lut_positions = np.array(positions)
+        self._lut_colors = np.array(colors, dtype=np.float32) / 255.0
+
+    def update_cartesian_frame(self, frame_msg):
+        """Met à jour l'affichage avec un message FrameCartesian."""
+        # Reconstruction de l'image cartésienne
+        img = np.array(frame_msg.intensities, dtype=np.uint8).reshape(
+            (frame_msg.height, frame_msg.width)
+        )
+        
+        # Application du colormap
+        v = np.clip(img / 255.0, 0.0, 1.0)
+        r_chan = np.interp(v, self._lut_positions, self._lut_colors[:, 0])
+        g_chan = np.interp(v, self._lut_positions, self._lut_colors[:, 1])
+        b_chan = np.interp(v, self._lut_positions, self._lut_colors[:, 2])
+        
+        rgb = np.stack((r_chan, g_chan, b_chan), axis=-1)
+        rgb_uint8 = (rgb * 255).astype(np.uint8)
+        
+        # Rotation de 90° pour correspondre à l'orientation correcte
+        # (même transformation que dans sonar_display.py)
+        rgb_uint8 = np.rot90(rgb_uint8, k=1)
+        
+        self.image_item.setImage(rgb_uint8, autoLevels=False)
+        
+        # Positionnement de l'image (identique à sonar_display.py)
+        max_r = frame_msg.max_range
+        min_r = frame_msg.min_range
+        
+        # Rectangle: (x, y, width, height) en mètres
+        # x: de -max_r à +max_r (centré)
+        # y: de 0 à max_r (vers l'avant)
+        # width: 2 * max_r
+        # height: max_r - min_r (zone visible du sonar)
+        try:
+            self.image_item.setRect(QRectF(-max_r, 0.0, 2.0 * max_r, max_r - min_r))
+        except Exception:
+            self.image_item.setPos(-max_r, 0.0)
+            sx = (2.0 * max_r) / float(rgb_uint8.shape[1])
+            sy = (max_r - min_r) / float(rgb_uint8.shape[0])
+            self.image_item.resetTransform()
+            self.image_item.scale(sx, sy)
+        
+        # Mise à jour des limites FOV
+        try:
+            half_angle = frame_msg.total_angle / 2.0
+            x_left = max_r * np.sin(+half_angle)
+            y_left = max_r * np.cos(+half_angle)
+            x_right = max_r * np.sin(-half_angle)
+            y_right = max_r * np.cos(-half_angle)
+            self.fov_left.setData([0, x_left], [0, y_left])
+            self.fov_right.setData([0, x_right], [0, y_right])
+        except Exception:
+            self.fov_left.setData([], [])
+            self.fov_right.setData([], [])
+        
+        # Ligne centrale
+        self.center_line.setData([0, 0], [0, max_r])
+
+    def update_borders(self, borders_msg):
+        """Met à jour l'affichage des bordures."""
+        if not borders_msg or not borders_msg.is_valid:
+            self.borders_scatter.setData([], [])
+            return
+
+        points = []
+        for r_val, theta in zip(borders_msg.ranges, borders_msg.bearings):
+            x = r_val * np.sin(theta)
+            y = r_val * np.cos(theta)
+            points.append([x, y])
+
+        if points:
+            self.borders_scatter.setData(pos=np.array(points))

@@ -14,6 +14,7 @@ find_package(geometry_msgs REQUIRED)
 # Declare message files
 rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/Frame.msg"
+  "msg/FrameCartesian.msg"
   "msg/Borders.msg"
   "msg/PoseRelative.msg"
   "msg/State.msg"

@@ -22,6 +22,8 @@ setup(
     entry_points={
         'console_scripts': [
             'traitement_node = traitement.traitement_node:main',
+            'traitement_polar_node = traitement.traitement_polar_node:main',
+            'traitement_cartesian_node = traitement.traitement_cartesian_node:main',
         ],
     },
 )

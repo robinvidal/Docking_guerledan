@@ -49,10 +49,20 @@ def generate_launch_description():
     )
 
     # ==== Pipeline nodes ====
-    traitement = Node(
+    # Filtrage polaire
+    traitement_polar = Node(
         package='traitement',
-        executable='traitement_node',
-        name='traitement_node',
+        executable='traitement_polar_node',
+        name='traitement_polar_node',
+        parameters=[traitement_config],
+        output='screen'
+    )
+
+    # Filtrage cartésien
+    traitement_cartesian = Node(
+        package='traitement',
+        executable='traitement_cartesian_node',
+        name='traitement_cartesian_node',
         parameters=[traitement_config],
         output='screen'
     )
@@ -83,7 +93,8 @@ def generate_launch_description():
     return LaunchDescription([
         bag_path_arg,
         rosbag_play,
-        traitement,
+        traitement_polar,
+        traitement_cartesian,
         #blob_tracker,
         #localisation,
         sonar_viewer,

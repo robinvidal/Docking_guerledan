@@ -2,7 +2,7 @@ import numpy as np
 import rclpy
 from rclpy.node import Node
 from rcl_interfaces.msg import ParameterType
-from docking_msgs.msg import Frame, Borders, PoseRelative, State
+from docking_msgs.msg import Frame, FrameCartesian, Borders, PoseRelative, State
 from std_msgs.msg import Bool
 
 
@@ -13,11 +13,13 @@ class SonarViewerNode(Node):
         super().__init__('sonar_viewer')
         self.signals = signals
 
-        self.traitement_param_client = None
+        self.polar_param_client = None
+        self.cartesian_param_client = None
         self.sonar_mock_param_client = None
 
         self.raw_sub = self.create_subscription(Frame, '/docking/sonar/raw', self.raw_callback, 10)
-        self.filtered_sub = self.create_subscription(Frame, '/docking/sonar/filtered', self.filtered_callback, 10)
+        self.polar_filtered_sub = self.create_subscription(Frame, '/docking/sonar/polar_filtered', self.polar_filtered_callback, 10)
+        self.cartesian_filtered_sub = self.create_subscription(FrameCartesian, '/docking/sonar/cartesian_filtered', self.cartesian_filtered_callback, 10)
         self.borders_sub = self.create_subscription(Borders, '/docking/tracking/borders', self.borders_callback, 10)
         self.pose_sub = self.create_subscription(PoseRelative, '/docking/localisation/pose', self.pose_callback, 10)
         self.state_sub = self.create_subscription(State, '/docking/mission/state', self.state_callback, 10)
@@ -30,12 +32,12 @@ class SonarViewerNode(Node):
 
         self.get_logger().info('Sonar Viewer démarré')
 
-    def set_traitement_parameter(self, param_name, value):
-        if not self.traitement_param_client:
+    def set_polar_parameter(self, param_name, value):
+        if not self.polar_param_client:
             from rcl_interfaces.srv import SetParameters
 
-            self.traitement_param_client = self.create_client(
-                self.get_parameter_service_type(), '/traitement_node/set_parameters'
+            self.polar_param_client = self.create_client(
+                SetParameters, '/traitement_polar_node/set_parameters'
             )
 
         if isinstance(value, bool):
@@ -66,18 +68,57 @@ class SonarViewerNode(Node):
 
         request.parameters = [param]
 
-        if self.traitement_param_client.service_is_ready():
-            self.traitement_param_client.call_async(request)
-            self.get_logger().debug(f'Paramètre {param_name} = {value} envoyé')
+        if self.polar_param_client.service_is_ready():
+            self.polar_param_client.call_async(request)
+            self.get_logger().debug(f'Polar param {param_name} = {value}')
             return True
 
-        self.get_logger().warn('Service de paramètres traitement_node non disponible')
+        self.get_logger().warn('Service traitement_polar_node non disponible')
         return False
 
-    def get_parameter_service_type(self):
-        from rcl_interfaces.srv import SetParameters
+    def set_cartesian_parameter(self, param_name, value):
+        if not self.cartesian_param_client:
+            from rcl_interfaces.srv import SetParameters
 
-        return SetParameters
+            self.cartesian_param_client = self.create_client(
+                SetParameters, '/traitement_cartesian_node/set_parameters'
+            )
+
+        if isinstance(value, bool):
+            param_type = ParameterType.PARAMETER_BOOL
+        elif isinstance(value, int):
+            param_type = ParameterType.PARAMETER_INTEGER
+        elif isinstance(value, float):
+            param_type = ParameterType.PARAMETER_DOUBLE
+        else:
+            self.get_logger().error(f'Type de paramètre non supporté: {type(value)}')
+            return False
+
+        from rcl_interfaces.srv import SetParameters
+        from rcl_interfaces.msg import Parameter as ParameterMsg, ParameterValue
+
+        request = SetParameters.Request()
+        param = ParameterMsg()
+        param.name = param_name
+        param.value = ParameterValue()
+        param.value.type = param_type
+
+        if param_type == ParameterType.PARAMETER_BOOL:
+            param.value.bool_value = value
+        elif param_type == ParameterType.PARAMETER_INTEGER:
+            param.value.integer_value = value
+        elif param_type == ParameterType.PARAMETER_DOUBLE:
+            param.value.double_value = value
+
+        request.parameters = [param]
+
+        if self.cartesian_param_client.service_is_ready():
+            self.cartesian_param_client.call_async(request)
+            self.get_logger().debug(f'Cartesian param {param_name} = {value}')
+            return True
+
+        self.get_logger().warn('Service traitement_cartesian_node non disponible')
+        return False
 
     def set_sonar_mock_parameter(self, param_name, value):
         if not self.sonar_mock_param_client:
@@ -166,8 +207,11 @@ class SonarViewerNode(Node):
     def raw_callback(self, msg):
         self.signals.new_raw_frame.emit(msg)
 
-    def filtered_callback(self, msg):
-        self.signals.new_filtered_frame.emit(msg)
+    def polar_filtered_callback(self, msg):
+        self.signals.new_polar_filtered_frame.emit(msg)
+
+    def cartesian_filtered_callback(self, msg):
+        self.signals.new_cartesian_filtered_frame.emit(msg)
 
     def borders_callback(self, msg):
         self.current_borders = msg
