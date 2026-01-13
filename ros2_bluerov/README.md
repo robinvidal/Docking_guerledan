@@ -1,4 +1,13 @@
 # ROS2 BlueROV Docking Pipeline
+
+Partie ROS2 du projet. Pour un test rapide, dans le dossier ros2_bluerov, lancez:
+
+```bash
+colcon build
+source install/setup.bash
+ros2 launch bringup rosbag_pipeline.launch.py
+```
+
 ## Vue d’ensemble du workspace ROS2
 
 Pipeline complet: Sonar → Filtrage → Détection → Localisation → Contrôle → Mission.  
@@ -15,8 +24,8 @@ Les messages et utilitaires communs sont dans `docking_msgs` et `docking_utils`.
 | Package | Description | Status |
 |---------|-------------|--------|
 | [sonar](src/sonar/README.md) | Acquisition données sonar (mock + interface Oculus + lecture des fichiers .oculus) | 🟨 |
-| [traitement](src/traitement/README.md) | Pipeline de filtrage d'images | 🟩 |
-| [tracking](src/tracking/README.md) | Détection bords de cage | 🟩 |
+| [traitement](src/traitement/README.md) | Pipeline de filtrage d'images | 🟨 |
+| [tracking](src/tracking/README.md) | Détection bords de cage | 🟨 |
 | [localisation](src/localisation/README.md) | Calcul pose relative 6DOF | 🟥 |
 | [control](src/control/README.md) | Asservissement PID multi-axes | 🟥 |
 | [mission](src/mission/README.md) | Machine d'états de docking | 🟥 |

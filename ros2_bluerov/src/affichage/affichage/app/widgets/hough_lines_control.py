@@ -2,11 +2,15 @@
 Widget de contrôle pour la détection de lignes par Hough.
 """
 
+from pathlib import Path
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QSlider, QSpinBox,
-    QCheckBox, QGroupBox, QPushButton, QDoubleSpinBox
+    QCheckBox, QGroupBox, QPushButton, QDoubleSpinBox, QFileDialog, QMessageBox
 )
 from PyQt5.QtCore import Qt, pyqtSignal
+import yaml
+
+from ..core.utils import load_yaml_params
 
 
 class HoughLinesControlWidget(QWidget):
@@ -15,9 +19,11 @@ class HoughLinesControlWidget(QWidget):
     # Signaux pour changements de paramètres
     parameter_changed = pyqtSignal(str, object)
     
-    def __init__(self, parent=None):
+    def __init__(self, ros_node, parent=None):
         super().__init__(parent)
+        self.ros_node = ros_node
         self.init_ui()
+        self.load_from_yaml()
     
     def init_ui(self):
         layout = QVBoxLayout(self)
@@ -176,7 +182,11 @@ class HoughLinesControlWidget(QWidget):
         # Boutons de gestion
         buttons_layout = QHBoxLayout()
         
-        reset_btn = QPushButton("Réinitialiser")
+        save_btn = QPushButton("💾 Sauvegarder")
+        save_btn.clicked.connect(self.save_to_yaml)
+        buttons_layout.addWidget(save_btn)
+        
+        reset_btn = QPushButton("🔄 Réinitialiser")
         reset_btn.clicked.connect(self.reset_parameters)
         buttons_layout.addWidget(reset_btn)
         
@@ -206,3 +216,79 @@ class HoughLinesControlWidget(QWidget):
             'min_line_length': self.min_length_spin.value(),
             'max_line_gap': self.max_gap_spin.value(),
         }
+    
+    def save_to_yaml(self):
+        """Sauvegarde les paramètres actuels dans un fichier YAML."""
+        params = self.get_parameters()
+        yaml_content = {'hough_lines_node': {'ros__parameters': params}}
+        
+        default_path = (
+            self._find_ros2_root() / "src" / "tracking" / "config" / "tracking_params.yaml"
+        )
+        
+        file_path, _ = QFileDialog.getSaveFileName(
+            self, "Sauvegarder paramètres Hough", str(default_path), "YAML Files (*.yaml *.yml)",
+        )
+        
+        if file_path:
+            try:
+                # Si c'est le fichier tracking_params.yaml, on fusionne avec l'existant
+                if Path(file_path).name == 'tracking_params.yaml' and Path(file_path).exists():
+                    with open(file_path, 'r', encoding='utf-8') as f:
+                        existing = yaml.safe_load(f) or {}
+                    existing['hough_lines_node'] = yaml_content['hough_lines_node']
+                    yaml_content = existing
+                
+                with open(file_path, 'w', encoding='utf-8') as f:
+                    yaml.dump(yaml_content, f, default_flow_style=False, sort_keys=False)
+                QMessageBox.information(self, "Sauvegarde réussie", f"Paramètres Hough sauvegardés: {file_path}")
+            except Exception as exc:
+                QMessageBox.critical(self, "Erreur", f"Impossible de sauvegarder: {exc}")
+    
+    def _find_ros2_root(self) -> Path:
+        """Trouve la racine du workspace ROS2."""
+        for parent in Path(__file__).resolve().parents:
+            if parent.name == "ros2_bluerov":
+                return parent
+        return Path(__file__).resolve().parents[5]
+    
+    def load_from_yaml(self):
+        """Charge les valeurs depuis le fichier YAML."""
+        params = load_yaml_params('tracking', 'tracking_params.yaml', self.ros_node.get_logger())
+        hough_params = params.get('hough_lines_node', {}).get('ros__parameters', {}) if isinstance(params, dict) else {}
+        
+        if not hough_params:
+            return
+        
+        # Bloquer les signaux pendant le chargement pour éviter d'envoyer des updates
+        widgets = [
+            self.enable_check, self.num_lines_slider, self.threshold_slider,
+            self.rho_spin, self.theta_spin, self.prob_check,
+            self.min_length_spin, self.max_gap_spin
+        ]
+        for widget in widgets:
+            widget.blockSignals(True)
+        
+        try:
+            if 'enable_detection' in hough_params:
+                self.enable_check.setChecked(bool(hough_params['enable_detection']))
+            if 'num_lines' in hough_params:
+                self.num_lines_slider.setValue(int(hough_params['num_lines']))
+            if 'threshold' in hough_params:
+                self.threshold_slider.setValue(int(hough_params['threshold']))
+            if 'rho_resolution' in hough_params:
+                self.rho_spin.setValue(float(hough_params['rho_resolution']))
+            if 'theta_resolution' in hough_params:
+                self.theta_spin.setValue(float(hough_params['theta_resolution']))
+            if 'use_probabilistic' in hough_params:
+                self.prob_check.setChecked(bool(hough_params['use_probabilistic']))
+            if 'min_line_length' in hough_params:
+                self.min_length_spin.setValue(int(hough_params['min_line_length']))
+            if 'max_line_gap' in hough_params:
+                self.max_gap_spin.setValue(int(hough_params['max_line_gap']))
+        except Exception as exc:
+            if self.ros_node:
+                self.ros_node.get_logger().warn(f'Erreur chargement params Hough: {exc}')
+        finally:
+            for widget in widgets:
+                widget.blockSignals(False)

@@ -10,7 +10,11 @@ setup(
         ('share/ament_index/resource_index/packages',
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
-        ('share/' + package_name + '/config', ['config/traitement_params.yaml']),
+        ('share/' + package_name + '/config', [
+            'config/traitement_params.yaml',
+            'config/traitement_polar_params.yaml',
+            'config/traitement_cartesian_params.yaml',
+        ]),
     ],
     install_requires=['setuptools', 'numpy>=1.17.3,<1.25.0', 'scipy', 'opencv-python'],
     zip_safe=True,

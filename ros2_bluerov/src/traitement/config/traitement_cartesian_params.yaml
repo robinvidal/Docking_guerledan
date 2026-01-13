@@ -3,8 +3,8 @@ traitement_cartesian_node:
     subscribe_to_filtered: true
     cartesian_scale_factor: 2.0
     cart_enable_canny: false
-    cart_canny_threshold1: 50.0
+    cart_canny_threshold1: 100.0
     cart_canny_threshold2: 150.0
     cart_canny_aperture: 3
     cart_enable_percentile_binarization: true
-    cart_percentile_threshold: 99.0
+    cart_percentile_threshold: 95.0

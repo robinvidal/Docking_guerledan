@@ -33,7 +33,7 @@ class RightControlsPanel(QWidget):
         self.cartesian_widget = TraitementCartesianControlWidget(ros_node)
         self.sonar_widget = SonarMockControlWidget(ros_node)
         self.tracker_widget = TrackerControlWidget(ros_node)
-        self.hough_widget = HoughLinesControlWidget()
+        self.hough_widget = HoughLinesControlWidget(ros_node)
         
         # Connecter les changements de paramètres Hough au ROS node
         self.hough_widget.parameter_changed.connect(

@@ -17,14 +17,13 @@ blob_tracker_node:
     max_jump_m: 1.0
     top_k_candidates: 20
     recovery_enabled: true
-
 hough_lines_node:
   ros__parameters:
     enable_detection: true
-    num_lines: 5
+    num_lines: 20
+    threshold: 50
     rho_resolution: 1.0
     theta_resolution: 1.0
-    threshold: 50
-    min_line_length: 20
-    max_line_gap: 10
     use_probabilistic: true
+    min_line_length: 30
+    max_line_gap: 10
