@@ -48,11 +48,29 @@ def generate_launch_description():
         output='screen'
     )
 
+    # Option 1: Blob tracker (ancien système)
     blob_tracker = Node(
         package='tracking',
         executable='blob_tracker_node',
         name='blob_tracker_node',
         parameters=[tracking_config],
+        output='screen'
+    )
+
+    # Option 2: CSRT tracker avec sélection manuelle
+    csrt_tracker = Node(
+        package='tracking',
+        executable='csrt_tracker_node',
+        name='csrt_tracker_node',
+        parameters=[{
+            'enable_tracking': True,
+            'selection_mode': 'manual',
+            'use_hog': True,
+            'use_gray': True,
+            'padding': 3.0,
+            'filter_lr': 0.02,
+            'psr_threshold': 0.035,
+        }],
         output='screen'
     )
 
@@ -130,7 +148,8 @@ def generate_launch_description():
         # Sonar pipeline
         sonar_node,
         traitement,
-        blob_tracker,
+        # blob_tracker,        # Ancien système (décommenter si besoin)
+        csrt_tracker,          # Nouveau système CSRT (sélection: Ctrl+Clic dans Sonar Viewer)
         sonar_viewer,
 
         # PX4 / MAVROS + control stack

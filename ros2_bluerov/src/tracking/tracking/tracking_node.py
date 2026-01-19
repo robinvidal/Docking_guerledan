@@ -20,7 +20,7 @@ class TrackingNode(Node):
         self.declare_parameter('intensity_threshold', 150)
         self.declare_parameter('min_confidence', 0.7)
         self.declare_parameter('expected_cage_width', 2.0)
-        self.declare_parameter('search_range_min', 2.0)  # m
+        self.declare_parameter('search_range_min', 0.0)  # m
         self.declare_parameter('search_range_max', 20.0)  # m
         
         # Subscription

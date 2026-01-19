@@ -1,10 +1,11 @@
 """
-Launch file pour démarrer automatiquement les 5 terminaux demandés:
+Launch file pour démarrer automatiquement le pipeline utilisateur:
 - sonar_mock
 - sonar_viewer
-- teleop_twist_keyboard (remappé vers /bluerov/cmd_vel)
 - traitement_node (avec params)
-- blob_tracker_node (avec params)
+- blob_tracker_node ou csrt_tracker_node (avec params)
+- bbox_selector_node (pour sélection manuelle CSRT)
+- localisation
 """
 
 from launch import LaunchDescription
@@ -57,11 +58,30 @@ def generate_launch_description():
         output='screen'
     )
 
+    # Option 1: Blob tracker (ancien système)
     blob_tracker = Node(
         package='tracking',
         executable='blob_tracker_node',
         name='blob_tracker_node',
         parameters=[tracking_config],
+        output='screen'
+    )
+
+    # Option 2: CSRT tracker avec sélection manuelle
+    csrt_tracker = Node(
+        package='tracking',
+        executable='csrt_tracker_node',
+        name='csrt_tracker_node',
+        parameters=[{
+            'enable_tracking': True,
+            'selection_mode': 'manual',
+            'use_hog': True,
+            'use_gray': True,
+            'use_color_names': False,
+            'padding': 3.0,
+            'filter_lr': 0.02,
+            'psr_threshold': 0.035,
+        }],
         output='screen'
     )
 
@@ -80,11 +100,13 @@ def generate_launch_description():
         output='screen'
     )
 
-
+    # NOTE: Décommenter blob_tracker OU csrt_tracker selon besoin
+    # Sélection bbox: Ctrl+Clic dans Sonar Viewer (image cartésienne)
     return LaunchDescription([
         sonar_mock,
         traitement,
-        blob_tracker,
+        # blob_tracker,        # Ancien système (décommenter si besoin)
+        csrt_tracker,          # Nouveau système CSRT
         sonar_viewer,
         localisation,
     ])

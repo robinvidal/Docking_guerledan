@@ -25,6 +25,7 @@ setup(
             'blob_tracker_node = tracking.blob_tracker_node:main',
             'hough_lines_node = tracking.hough_lines_node:main',
             'csrt_tracker_node = tracking.csrt_tracker_node:main',
+            'bbox_selector_node = tracking.bbox_selector_node:main',
         ],
     },
 )

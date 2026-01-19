@@ -77,6 +77,10 @@ class MainWindow(QMainWindow):
         self.cartesian_filtered_panel.viewer.click_position.connect(self.on_click_position)
         self.compare_panel.cartesian_viewer.click_position.connect(self.on_click_position)
         
+        # Connecter les signaux de sélection de bbox
+        self.cartesian_filtered_panel.viewer.bbox_selected.connect(self.on_bbox_selected)
+        self.compare_panel.cartesian_viewer.bbox_selected.connect(self.on_bbox_selected)
+        
         # Charger les dimensions de la cage depuis le YAML et les appliquer aux vues
         cage_width, cage_height = get_cage_dimensions()
         self.cartesian_filtered_panel.viewer.set_cage_dimensions(cage_width, cage_height)
@@ -103,6 +107,14 @@ class MainWindow(QMainWindow):
         self.right_stack.addWidget(self.graphs_panel)
         self.right_stack.addWidget(self.controls_panel)
         right_layout.addWidget(self.right_stack)
+        
+        # Connecter le bouton de sélection du tracker aux vues cartésiennes (après création du controls_panel)
+        self.controls_panel.tracker_widget.bbox_selection_requested.connect(
+            lambda enabled: self.cartesian_filtered_panel.viewer.set_bbox_selection_mode(enabled)
+        )
+        self.controls_panel.tracker_widget.bbox_selection_requested.connect(
+            lambda enabled: self.compare_panel.cartesian_viewer.set_bbox_selection_mode(enabled)
+        )
 
         splitter.addWidget(right_container)
         splitter.setStretchFactor(0, 3)
@@ -189,3 +201,7 @@ class MainWindow(QMainWindow):
     def on_click_position(self, x_m, y_m):
         """Gère un clic sur le sonar cartésien."""
         self.ros_node.publish_click_position(x_m, y_m)
+    
+    def on_bbox_selected(self, x, y, width, height):
+        """Gère la sélection d'une bbox sur le sonar cartésien."""
+        self.ros_node.publish_bbox_selection(x, y, width, height)

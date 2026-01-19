@@ -2,7 +2,7 @@ import numpy as np
 import rclpy
 from rclpy.node import Node
 from rcl_interfaces.msg import ParameterType
-from docking_msgs.msg import Frame, FrameCartesian, Borders, DetectedLines, ClickPosition, PoseRelative, State, TrackedObject
+from docking_msgs.msg import Frame, FrameCartesian, Borders, DetectedLines, ClickPosition, BBoxSelection, PoseRelative, State, TrackedObject
 from std_msgs.msg import Bool
 
 
@@ -29,6 +29,7 @@ class SonarViewerNode(Node):
 
         self.abort_pub = self.create_publisher(Bool, '/docking/mission/abort', 10)
         self.click_pub = self.create_publisher(ClickPosition, '/docking/sonar/click_position', 10)
+        self.bbox_pub = self.create_publisher(BBoxSelection, '/docking/sonar/bbox_selection', 10)
 
         self.current_borders = None
         self.current_pose = None
@@ -298,3 +299,17 @@ class SonarViewerNode(Node):
         
         self.click_pub.publish(msg)
         self.get_logger().info(f'Clic publié: x={x_m:.2f}m, y={y_m:.2f}m')
+    
+    def publish_bbox_selection(self, x: int, y: int, width: int, height: int):
+        """Publie une bounding box sélectionnée manuellement."""
+        msg = BBoxSelection()
+        msg.header.stamp = self.get_clock().now().to_msg()
+        msg.header.frame_id = 'sonar'
+        msg.x = int(x)
+        msg.y = int(y)
+        msg.width = int(width)
+        msg.height = int(height)
+        msg.is_valid = True
+        
+        self.bbox_pub.publish(msg)
+        self.get_logger().info(f'BBox publiée: ({x}, {y}, {width}, {height})')

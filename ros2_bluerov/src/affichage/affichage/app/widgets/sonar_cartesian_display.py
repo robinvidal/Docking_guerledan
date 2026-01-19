@@ -13,6 +13,9 @@ class SonarCartesianImageWidget(pg.PlotWidget):
     
     # Signal émis lors d'un clic (x_m, y_m en mètres)
     click_position = pyqtSignal(float, float)
+    
+    # Signal émis lors de la sélection d'une bbox (x, y, width, height en pixels)
+    bbox_selected = pyqtSignal(int, int, int, int)
 
     def __init__(self, title="Sonar Cartésien"):
         super().__init__()
@@ -97,8 +100,29 @@ class SonarCartesianImageWidget(pg.PlotWidget):
         self.click_timer.setSingleShot(True)
         self.click_timer.timeout.connect(self._hide_click_marker)
         
-        # Activer les événements de clic
+        # Mode de sélection de bbox (activé via bouton dans le panneau de contrôle)
+        self.bbox_selection_mode = False
+        self.bbox_start_point = None
+        self.bbox_current_point = None
+        self.bbox_selection_rect = pg.PlotCurveItem(
+            pen=pg.mkPen('yellow', width=3, style=Qt.DashLine)
+        )
+        self.bbox_selection_rect.setZValue(101)
+        self.addItem(self.bbox_selection_rect)
+        self.bbox_selection_rect.hide()
+        
+        # Pause pour la sélection
+        self.is_paused = False
+        self.paused_frame = None
+        
+        # Stocker les dimensions de l'image pour conversion pixels
+        self.image_width = 0
+        self.image_height = 0
+        self.origin_x = 0
+        
+        # Activer les événements de clic et drag
         self.scene().sigMouseClicked.connect(self._on_mouse_clicked)
+        self.scene().sigMouseMoved.connect(self._on_mouse_moved)
         
         self.showGrid(x=True, y=True, alpha=0.3)
 
@@ -117,6 +141,16 @@ class SonarCartesianImageWidget(pg.PlotWidget):
 
     def update_cartesian_frame(self, frame_msg):
         """Met à jour l'affichage avec un message FrameCartesian."""
+        # Si en pause, ne pas mettre à jour
+        if self.is_paused:
+            return
+        
+        # Stocker les dimensions pour la conversion
+        self.image_width = frame_msg.width
+        self.image_height = frame_msg.height
+        self.origin_x = frame_msg.origin_x
+        self.current_resolution = frame_msg.resolution
+        
         # Reconstruction de l'image cartésienne
         img = np.array(frame_msg.intensities, dtype=np.uint8).reshape(
             (frame_msg.height, frame_msg.width)
@@ -221,20 +255,49 @@ class SonarCartesianImageWidget(pg.PlotWidget):
             self.hough_lines.append(line_item)
     
     def _on_mouse_clicked(self, event):
-        """Gère le clic souris sur le widget."""
-        # Vérifier que c'est un clic gauche
+        """Gère les clics souris pour sélection de bbox ou clic simple."""
         if event.button() != Qt.LeftButton:
             return
         
-        # Convertir la position du clic en coordonnées du graphique (mètres)
         pos = event.scenePos()
         mouse_point = self.plotItem.vb.mapSceneToView(pos)
         x_m = mouse_point.x()
         y_m = mouse_point.y()
         
+        # Mode sélection de bbox activé par le bouton
+        if self.bbox_selection_mode:
+            if self.bbox_start_point is None:
+                # Début de la sélection
+                self.bbox_start_point = (x_m, y_m)
+                self.bbox_current_point = (x_m, y_m)
+                self.bbox_selection_rect.show()
+                self._update_bbox_selection_display()
+            else:
+                # Fin de la sélection
+                self.bbox_current_point = (x_m, y_m)
+                self._finalize_bbox_selection()
+                # Désactiver le mode et reprendre
+                self.set_bbox_selection_mode(False)
+            return
+        
+        # Clic normal (sans mode sélection)
         # Afficher le marker (point rouge)
         self.click_marker.setData(pos=[(x_m, y_m)])
         self.click_marker.show()
+        
+        # Afficher la bounding box rouge (taille cage estimée)
+        half_w = self.cage_width / 2.0
+        half_h = self.cage_height / 2.0
+        x_coords = [x_m - half_w, x_m + half_w, x_m + half_w, x_m - half_w, x_m - half_w]
+        y_coords = [y_m - half_h, y_m - half_h, y_m + half_h, y_m + half_h, y_m - half_h]
+        self.click_bbox.setData(x_coords, y_coords)
+        self.click_bbox.show()
+        
+        # Démarrer le timer pour masquer après 1 seconde
+        self.click_timer.start(1000)
+        
+        # Émettre le signal
+        self.click_position.emit(float(x_m), float(y_m))
         
         # Afficher la bounding box rouge (taille cage estimée)
         half_w = self.cage_width / 2.0
@@ -254,6 +317,74 @@ class SonarCartesianImageWidget(pg.PlotWidget):
         """Masque le marker et la bbox de clic."""
         self.click_marker.hide()
         self.click_bbox.hide()
+    
+    def _on_mouse_moved(self, pos):
+        """Gère le mouvement de la souris pendant la sélection de bbox."""
+        if not self.bbox_selection_mode or self.bbox_start_point is None:
+            return
+        
+        mouse_point = self.plotItem.vb.mapSceneToView(pos)
+        x_m = mouse_point.x()
+        y_m = mouse_point.y()
+        
+        self.bbox_current_point = (x_m, y_m)
+        self._update_bbox_selection_display()
+    
+    def set_bbox_selection_mode(self, enabled):
+        """Active ou désactive le mode sélection de bbox."""
+        self.bbox_selection_mode = enabled
+        
+        if enabled:
+            # Pause et préparer la sélection
+            self.is_paused = True
+            self.bbox_start_point = None
+            self.bbox_current_point = None
+        else:
+            # Reprendre et nettoyer
+            self.is_paused = False
+            self.bbox_start_point = None
+            self.bbox_current_point = None
+            self.bbox_selection_rect.hide()
+    
+    def _update_bbox_selection_display(self):
+        """Met à jour l'affichage du rectangle de sélection."""
+        if self.bbox_start_point is None or self.bbox_current_point is None:
+            return
+        
+        x1, y1 = self.bbox_start_point
+        x2, y2 = self.bbox_current_point
+        
+        # Dessiner le rectangle
+        x_coords = [x1, x2, x2, x1, x1]
+        y_coords = [y1, y1, y2, y2, y1]
+        self.bbox_selection_rect.setData(x_coords, y_coords)
+    
+    def _finalize_bbox_selection(self):
+        """Finalise la sélection et émet le signal avec bbox en pixels."""
+        if self.bbox_start_point is None or self.bbox_current_point is None:
+            return
+        
+        x1_m, y1_m = self.bbox_start_point
+        x2_m, y2_m = self.bbox_current_point
+        
+        # Convertir en pixels
+        x1_px = int((x1_m / self.current_resolution) + self.origin_x)
+        y1_px = int(self.image_height - (y1_m / self.current_resolution))
+        x2_px = int((x2_m / self.current_resolution) + self.origin_x)
+        y2_px = int(self.image_height - (y2_m / self.current_resolution))
+        
+        # Normaliser (x, y = coin supérieur gauche)
+        bbox_x = min(x1_px, x2_px)
+        bbox_y = min(y1_px, y2_px)
+        bbox_w = abs(x2_px - x1_px)
+        bbox_h = abs(y2_px - y1_px)
+        
+        # Émettre le signal
+        self.bbox_selected.emit(bbox_x, bbox_y, bbox_w, bbox_h)
+        
+        # Réinitialiser
+        self.bbox_start_point = None
+        self.bbox_current_point = None
     
     def set_cage_dimensions(self, width_m: float, height_m: float):
         """Met à jour les dimensions estimées de la cage (en mètres)."""
@@ -288,8 +419,5 @@ class SonarCartesianImageWidget(pg.PlotWidget):
         self.tracker_center.setData(pos=[(cx, cy)])
         self.tracker_center.show()
         
-        # Afficher la confiance
-        confidence_pct = tracked_msg.confidence * 100
-        self.tracker_text.setText(f'CSRT: {confidence_pct:.0f}%')
-        self.tracker_text.setPos(cx - half_w, cy + half_h)
-        self.tracker_text.show()
+        # Masquer le texte de confiance (non pertinent pour les trackers OpenCV)
+        self.tracker_text.hide()

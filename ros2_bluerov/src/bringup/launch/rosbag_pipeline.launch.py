@@ -19,7 +19,7 @@ def generate_launch_description():
     # Argument pour le chemin du rosbag
     bag_path_arg = DeclareLaunchArgument(
         'bag_path',
-        default_value='/home/maxxlef/Desktop/Docking_guerledan/ros2_bluerov/rosbag/cage_complete2',
+        default_value='/home/clementdunot/Documents/Docking/src/ros2_bluerov/rosbag/cage_complete2',
         description='Chemin vers le fichier rosbag (.db3 ou répertoire)'
     )
 
@@ -83,11 +83,29 @@ def generate_launch_description():
         output='screen'
     )
 
+    # Option 1: Blob tracker (ancien système)
+    blob_tracker = Node(
+        package='tracking',
+        executable='blob_tracker_node',
+        name='blob_tracker_node',
+        parameters=[tracking_config],
+        output='screen'
+    )
+
+    # Option 2: CSRT tracker avec sélection manuelle
     csrt_tracker = Node(
         package='tracking',
         executable='csrt_tracker_node',
         name='csrt_tracker_node',
-        parameters=[tracking_config],
+        parameters=[{
+            'enable_tracking': True,
+            'selection_mode': 'manual',
+            'use_hog': True,
+            'use_gray': True,
+            'padding': 3.0,
+            'filter_lr': 0.02,
+            'psr_threshold': 0.035,
+        }],
         output='screen'
     )
 
@@ -106,14 +124,15 @@ def generate_launch_description():
         output='screen'
     )
 
+    # NOTE: Sélection bbox via Ctrl+Clic dans Sonar Viewer
     return LaunchDescription([
         bag_path_arg,
         rosbag_play,
         traitement_polar,
         traitement_cartesian,
         hough_lines,
-        csrt_tracker,
-        #blob_tracker,
-        #localisation,
+        # blob_tracker,       # Décommenter pour utiliser l'ancien tracker
+        csrt_tracker,         # Nouveau tracker CSRT
+        # localisation,
         sonar_viewer,
     ])

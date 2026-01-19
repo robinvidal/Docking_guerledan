@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtWidgets import (
     QWidget,
     QVBoxLayout,
@@ -24,6 +24,9 @@ from ..core.utils import load_yaml_params
 
 class TrackerControlWidget(QWidget):
     """Control panel for blob tracker parameters."""
+    
+    # Signal émis pour activer/désactiver le mode sélection de bbox
+    bbox_selection_requested = pyqtSignal(bool)  # True = activer, False = désactiver
 
     def __init__(self, ros_node):
         super().__init__()
@@ -39,6 +42,40 @@ class TrackerControlWidget(QWidget):
         header = QLabel("🎛️ <b>Contrôles Tracker</b><br><small>Réglez les paramètres du tracker en temps réel.</small>")
         header.setWordWrap(True)
         scroll_layout.addWidget(header)
+        
+        # Bouton de sélection de cage (CSRT)
+        selection_layout = QHBoxLayout()
+        self.select_bbox_btn = QPushButton("📦 Sélectionner Cage (CSRT)")
+        self.select_bbox_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #2ecc71;
+                color: white;
+                font-weight: bold;
+                padding: 10px;
+                border-radius: 5px;
+            }
+            QPushButton:hover {
+                background-color: #27ae60;
+            }
+            QPushButton:pressed {
+                background-color: #229954;
+            }
+            QPushButton:checked {
+                background-color: #e74c3c;
+            }
+        """)
+        self.select_bbox_btn.setCheckable(True)
+        self.select_bbox_btn.clicked.connect(self.on_select_bbox_clicked)
+        selection_layout.addWidget(self.select_bbox_btn)
+        scroll_layout.addLayout(selection_layout)
+        
+        help_label = QLabel(
+            "<small><b>Mode sélection:</b> Cliquez sur le bouton, puis dessinez un rectangle "
+            "avec la souris sur l'image cartésienne. Le tracker démarre automatiquement.</small>"
+        )
+        help_label.setWordWrap(True)
+        help_label.setStyleSheet("color: #95a5a6; padding: 5px;")
+        scroll_layout.addWidget(help_label)
 
         general = QGroupBox("⚙️ Général")
         gform = QFormLayout()
@@ -182,6 +219,16 @@ class TrackerControlWidget(QWidget):
         main_layout.addWidget(scroll)
 
         self._apply_yaml_defaults()
+    
+    def on_select_bbox_clicked(self, checked):
+        """Gère le clic sur le bouton de sélection de cage."""
+        if checked:
+            self.select_bbox_btn.setText("❌ Annuler Sélection")
+        else:
+            self.select_bbox_btn.setText("📦 Sélectionner Cage (CSRT)")
+        
+        # Émettre le signal pour activer/désactiver le mode sélection
+        self.bbox_selection_requested.emit(checked)
 
     def on_param_changed(self, name, value):
         success = self.ros_node.set_tracking_parameter(name, value)

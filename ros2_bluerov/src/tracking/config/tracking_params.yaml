@@ -19,7 +19,7 @@ blob_tracker_node:
     recovery_enabled: true
 hough_lines_node:
   ros__parameters:
-    enable_detection: true
+    enable_detection: false
     num_lines: 20
     threshold: 50
     rho_resolution: 1.0
@@ -34,8 +34,8 @@ csrt_tracker_node:
     enable_tracking: true
     
     # Dimensions réelles de la cage (en mètres)
-    cage_width: 0.9
-    cage_height: 0.5
+    cage_width: 1
+    cage_height: 1
     
     # Paramètres CSRT OpenCV
     use_hog: true
