@@ -83,6 +83,14 @@ def generate_launch_description():
         output='screen'
     )
 
+    csrt_tracker = Node(
+        package='tracking',
+        executable='csrt_tracker_node',
+        name='csrt_tracker_node',
+        parameters=[tracking_config],
+        output='screen'
+    )
+
     localisation = Node(
         package='localisation',
         executable='localisation_node',
@@ -104,6 +112,7 @@ def generate_launch_description():
         traitement_polar,
         traitement_cartesian,
         hough_lines,
+        csrt_tracker,
         #blob_tracker,
         #localisation,
         sonar_viewer,

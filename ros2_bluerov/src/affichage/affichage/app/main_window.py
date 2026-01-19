@@ -19,6 +19,7 @@ from .widgets.sonar_panels import (
 from .widgets.pose_graphs import PoseGraphsWidget
 from .widgets.right_controls import RightControlsPanel
 from .widgets.status_header import StatusHeader
+from .core.config_loader import get_cage_dimensions
 
 
 class MainWindow(QMainWindow):
@@ -71,6 +72,15 @@ class MainWindow(QMainWindow):
         self.left_stack.addWidget(self.cartesian_filtered_panel)
         self.left_stack.addWidget(self.compare_panel)
         left_layout.addWidget(self.left_stack)
+        
+        # Connecter les signaux de clic sur les vues cartésiennes
+        self.cartesian_filtered_panel.viewer.click_position.connect(self.on_click_position)
+        self.compare_panel.cartesian_viewer.click_position.connect(self.on_click_position)
+        
+        # Charger les dimensions de la cage depuis le YAML et les appliquer aux vues
+        cage_width, cage_height = get_cage_dimensions()
+        self.cartesian_filtered_panel.viewer.set_cage_dimensions(cage_width, cage_height)
+        self.compare_panel.cartesian_viewer.set_cage_dimensions(cage_width, cage_height)
 
         splitter.addWidget(left_container)
 
@@ -116,6 +126,7 @@ class MainWindow(QMainWindow):
         self.ros_node.signals.new_cartesian_filtered_frame.connect(self.on_cartesian_filtered_frame)
         self.ros_node.signals.new_borders.connect(self.on_borders)
         self.ros_node.signals.new_detected_lines.connect(self.on_detected_lines)
+        self.ros_node.signals.new_tracked_object.connect(self.on_tracked_object)
         self.ros_node.signals.new_pose.connect(self.on_pose)
         self.ros_node.signals.new_state.connect(self.on_state)
 
@@ -150,6 +161,11 @@ class MainWindow(QMainWindow):
     def on_detected_lines(self, msg):
         self.cartesian_filtered_panel.update_detected_lines(msg)
         self.compare_panel.update_detected_lines(msg)
+    
+    def on_tracked_object(self, msg):
+        """Affiche la bounding box du tracker CSRT."""
+        self.cartesian_filtered_panel.update_tracked_object(msg)
+        self.compare_panel.update_tracked_object(msg)
 
     def on_pose(self, msg):
         self.status_header.update_pose(msg)
@@ -169,3 +185,7 @@ class MainWindow(QMainWindow):
         buttons = (self.graphs_btn, self.controls_btn)
         for i, btn in enumerate(buttons):
             btn.setChecked(i == index)
+    
+    def on_click_position(self, x_m, y_m):
+        """Gère un clic sur le sonar cartésien."""
+        self.ros_node.publish_click_position(x_m, y_m)

@@ -50,6 +50,9 @@ class CartesianFilteredSonarPanel(QWidget):
     
     def update_detected_lines(self, lines_msg):
         self.viewer.update_detected_lines(lines_msg)
+    
+    def update_tracked_object(self, tracked_msg):
+        self.viewer.update_tracked_object(tracked_msg)
 
 
 class CompareSonarPanel(QWidget):
@@ -74,3 +77,6 @@ class CompareSonarPanel(QWidget):
     
     def update_detected_lines(self, lines_msg):
         self.cartesian_viewer.update_detected_lines(lines_msg)
+    
+    def update_tracked_object(self, tracked_msg):
+        self.cartesian_viewer.update_tracked_object(tracked_msg)

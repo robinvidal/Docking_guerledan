@@ -2,7 +2,7 @@ import numpy as np
 import rclpy
 from rclpy.node import Node
 from rcl_interfaces.msg import ParameterType
-from docking_msgs.msg import Frame, FrameCartesian, Borders, DetectedLines, PoseRelative, State
+from docking_msgs.msg import Frame, FrameCartesian, Borders, DetectedLines, ClickPosition, PoseRelative, State, TrackedObject
 from std_msgs.msg import Bool
 
 
@@ -23,10 +23,12 @@ class SonarViewerNode(Node):
         self.cartesian_filtered_sub = self.create_subscription(FrameCartesian, '/docking/sonar/cartesian_filtered', self.cartesian_filtered_callback, 10)
         self.borders_sub = self.create_subscription(Borders, '/docking/tracking/borders', self.borders_callback, 10)
         self.detected_lines_sub = self.create_subscription(DetectedLines, '/docking/tracking/detected_lines', self.detected_lines_callback, 10)
+        self.tracked_object_sub = self.create_subscription(TrackedObject, '/docking/tracking/tracked_object', self.tracked_object_callback, 10)
         self.pose_sub = self.create_subscription(PoseRelative, '/docking/localisation/pose', self.pose_callback, 10)
         self.state_sub = self.create_subscription(State, '/docking/mission/state', self.state_callback, 10)
 
         self.abort_pub = self.create_publisher(Bool, '/docking/mission/abort', 10)
+        self.click_pub = self.create_publisher(ClickPosition, '/docking/sonar/click_position', 10)
 
         self.current_borders = None
         self.current_pose = None
@@ -266,6 +268,9 @@ class SonarViewerNode(Node):
     def detected_lines_callback(self, msg):
         self.signals.new_detected_lines.emit(msg)
 
+    def tracked_object_callback(self, msg):
+        self.signals.new_tracked_object.emit(msg)
+
     def pose_callback(self, msg):
         self.current_pose = msg
         self.signals.new_pose.emit(msg)
@@ -279,3 +284,17 @@ class SonarViewerNode(Node):
         msg.data = True
         self.abort_pub.publish(msg)
         self.get_logger().warn('Commande ABORT envoyée')
+    
+    def publish_click_position(self, x_m: float, y_m: float):
+        """Publie la position d'un clic souris sur le sonar."""
+        msg = ClickPosition()
+        msg.header.stamp = self.get_clock().now().to_msg()
+        msg.header.frame_id = 'sonar'
+        msg.x = float(x_m)
+        msg.y = float(y_m)
+        msg.pixel_x = 0  # Non utilisé pour l'instant
+        msg.pixel_y = 0
+        msg.is_valid = True
+        
+        self.click_pub.publish(msg)
+        self.get_logger().info(f'Clic publié: x={x_m:.2f}m, y={y_m:.2f}m')

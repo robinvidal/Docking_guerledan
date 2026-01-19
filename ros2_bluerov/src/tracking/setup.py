@@ -24,6 +24,7 @@ setup(
             'tracking_node = tracking.tracking_node:main',
             'blob_tracker_node = tracking.blob_tracker_node:main',
             'hough_lines_node = tracking.hough_lines_node:main',
+            'csrt_tracker_node = tracking.csrt_tracker_node:main',
         ],
     },
 )
