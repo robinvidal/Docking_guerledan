@@ -468,6 +468,10 @@ class CSRTTrackerNode(Node):
             out_msg.center_x = float(center_x_m)
             out_msg.center_y = float(center_y_m)
             
+            # Position polaire (range et bearing)
+            out_msg.range = float(np.sqrt(center_x_m**2 + center_y_m**2))
+            out_msg.bearing = float(np.arctan2(center_x_m, center_y_m))
+            
             # Dimensions en mètres
             out_msg.width = float(bbox_w * frame_msg.resolution)
             out_msg.height = float(bbox_h * frame_msg.resolution)
@@ -477,6 +481,8 @@ class CSRTTrackerNode(Node):
         else:
             out_msg.center_x = 0.0
             out_msg.center_y = 0.0
+            out_msg.range = 0.0
+            out_msg.bearing = 0.0
             out_msg.width = 0.0
             out_msg.height = 0.0
             out_msg.bbox_x = 0

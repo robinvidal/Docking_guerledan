@@ -11,6 +11,10 @@ bool is_initialized       # True si le tracker a été initialisé
 float32 center_x          # Position X du centre (m)
 float32 center_y          # Position Y du centre (m)
 
+# Position polaire par rapport au sonar
+float32 range             # Distance au centre (m)
+float32 bearing           # Angle par rapport à l'axe du sonar (radians)
+
 # Dimensions de la bounding box (en mètres)
 float32 width             # Largeur (m)
 float32 height            # Hauteur (m)
