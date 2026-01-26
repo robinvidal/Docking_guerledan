@@ -7,6 +7,10 @@ scipy>=1.8,<1.12
 # Image/vision utils
 opencv-python>=4.5,<4.10
 
+# GUI and visualization
+PyQt5>=5.15
+pyqtgraph>=0.12
+
 # Optional: plotting/monitoring helpers (safe to skip if not needed)
 plotjuggler_msgs>=3.7; platform_system=="Linux"
 

@@ -31,3 +31,31 @@ traitement_node:
     enable_adaptive_threshold: false
     adt_block_size: 51
     adt_c: 10
+
+traitement_cartesian_node:
+  ros__parameters:
+    # Conversion polaire → cartésien
+    cartesian_scale_factor: 2.0
+    subscribe_to_filtered: true
+    
+    # Filtre spatial gaussien (ÉTAPE 1)
+    # Atténue les intensités en dehors de la zone trackée
+    enable_spatial_filter: false        # Activer quand tracker est utilisé
+    spatial_filter_radius: 2.0          # Rayon d'effet en mètres
+    spatial_filter_sigma: 0.8           # Écart-type gaussien (m) - transition progressive
+    
+    # Opérations morphologiques (ÉTAPE 2)
+    # Nettoie l'image avant détection Hough
+    cart_enable_morphology: false
+    cart_morphology_kernel_size: 3      # Taille du kernel (impair)
+    cart_morphology_iterations: 2       # Nombre d'itérations closing
+    
+    # Détection de contours Canny
+    cart_enable_canny: false
+    cart_canny_threshold1: 50.0
+    cart_canny_threshold2: 150.0
+    cart_canny_aperture: 3
+    
+    # Binarisation par centiles
+    cart_enable_percentile_binarization: false
+    cart_percentile_threshold: 90.0

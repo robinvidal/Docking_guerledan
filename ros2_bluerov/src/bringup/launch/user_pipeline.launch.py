@@ -2,9 +2,10 @@
 Launch file pour démarrer automatiquement le pipeline utilisateur:
 - sonar_mock
 - sonar_viewer
-- traitement_node (avec params)
-- blob_tracker_node ou csrt_tracker_node (avec params)
-- bbox_selector_node (pour sélection manuelle CSRT)
+- traitement_polar_node (avec params) - filtrage polaire
+- traitement_cartesian_node (avec params) - filtrage cartésien + filtre spatial
+- csrt_tracker_node (avec params)
+- hough_lines_node (détection de lignes)
 - localisation
 """
 
@@ -50,10 +51,20 @@ def generate_launch_description():
         output='screen'
     )
 
-    traitement = Node(
+    # Traitement polaire (filtre les données brutes)
+    traitement_polar = Node(
         package='traitement',
-        executable='traitement_node',
-        name='traitement_node',
+        executable='traitement_polar_node',
+        name='traitement_polar_node',
+        parameters=[traitement_config],
+        output='screen'
+    )
+    
+    # Traitement cartésien (conversion + filtre spatial + morphologie)
+    traitement_cartesian = Node(
+        package='traitement',
+        executable='traitement_cartesian_node',
+        name='traitement_cartesian_node',
         parameters=[traitement_config],
         output='screen'
     )
@@ -84,6 +95,15 @@ def generate_launch_description():
         }],
         output='screen'
     )
+    
+    # Détection de lignes par transformée de Hough
+    hough_lines = Node(
+        package='tracking',
+        executable='hough_lines_node',
+        name='hough_lines_node',
+        parameters=[tracking_config],
+        output='screen'
+    )
 
     sonar_viewer = Node(
         package='affichage',
@@ -104,9 +124,11 @@ def generate_launch_description():
     # Sélection bbox: Ctrl+Clic dans Sonar Viewer (image cartésienne)
     return LaunchDescription([
         sonar_mock,
-        traitement,
+        traitement_polar,
+        traitement_cartesian,
         # blob_tracker,        # Ancien système (décommenter si besoin)
         csrt_tracker,          # Nouveau système CSRT
+        hough_lines,           # Détection de lignes Hough
         sonar_viewer,
         localisation,
     ])

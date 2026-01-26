@@ -6,7 +6,7 @@ Conversion polaire → cartésien identique à sonar_display.py.
 
 import rclpy
 from rclpy.node import Node
-from docking_msgs.msg import Frame, FrameCartesian
+from docking_msgs.msg import Frame, FrameCartesian, TrackedObject
 import numpy as np
 from scipy.ndimage import map_coordinates
 try:
@@ -35,6 +35,16 @@ class TraitementCartesianNode(Node):
         self.declare_parameter('cart_enable_percentile_binarization', False)
         self.declare_parameter('cart_percentile_threshold', 90.0)
         
+        # ========== FILTRE SPATIAL GAUSSIEN (ÉTAPE 1) ==========
+        self.declare_parameter('enable_spatial_filter', False)  # Désactivé par défaut
+        self.declare_parameter('spatial_filter_radius', 2.0)    # Rayon en mètres
+        self.declare_parameter('spatial_filter_sigma', 0.8)     # Écart-type gaussien (m)
+        
+        # ========== OPÉRATIONS MORPHOLOGIQUES (ÉTAPE 2) ==========
+        self.declare_parameter('cart_enable_morphology', False)
+        self.declare_parameter('cart_morphology_kernel_size', 3)
+        self.declare_parameter('cart_morphology_iterations', 2)
+        
         # Subscription - peut s'abonner aux données brutes ou filtrées polaires
         self.declare_parameter('subscribe_to_filtered', True)
         subscribe_filtered = self.get_parameter('subscribe_to_filtered').value
@@ -48,6 +58,18 @@ class TraitementCartesianNode(Node):
             10
         )
         
+        # Subscription au tracker pour le filtre spatial (ÉTAPE 1)
+        self.tracked_object_sub = self.create_subscription(
+            TrackedObject,
+            '/docking/tracking/tracked_object',
+            self.tracked_object_callback,
+            10
+        )
+        
+        # État du filtre spatial
+        self.last_tracked_position = None  # (center_x, center_y) en mètres
+        self.last_tracked_is_tracking = False
+        
         # Publisher - données cartésiennes filtrées
         self.publisher_ = self.create_publisher(FrameCartesian, '/docking/sonar/cartesian_filtered', 10)
         
@@ -59,7 +81,33 @@ class TraitementCartesianNode(Node):
             'out_shape': None,
         }
         
+        # Cache pour le filtre spatial gaussien (éviter recalcul si position similaire)
+        self._spatial_filter_cache = {
+            'center': None,
+            'shape': None,
+            'resolution': None,
+            'origin_x': None,
+            'mask': None,
+        }
+        
         self.get_logger().info(f'Traitement Cartesian node démarré (subscribe to: {topic})')
+    
+    # ========== CALLBACK TRACKER (ÉTAPE 1) ==========
+    
+    def tracked_object_callback(self, msg: TrackedObject):
+        """Mémorise la dernière position trackée pour le filtre spatial."""
+        self.last_tracked_is_tracking = msg.is_tracking
+        if msg.is_tracking:
+            self.last_tracked_position = (msg.center_x, msg.center_y)
+            # Log de debug (première fois seulement)
+            if not hasattr(self, '_tracker_logged'):
+                self._tracker_logged = True
+                self.get_logger().info(
+                    f'Filtre spatial: position trackée reçue ({msg.center_x:.2f}m, {msg.center_y:.2f}m)'
+                )
+        else:
+            # On garde la dernière position connue si le tracker perd la cible
+            pass
     
     # ========== CONVERSION POLAIRE → CARTÉSIEN ==========
     
@@ -161,6 +209,133 @@ class TraitementCartesianNode(Node):
         
         return binary
     
+    # ========== FILTRE SPATIAL GAUSSIEN (ÉTAPE 1) ==========
+    
+    def apply_spatial_gaussian_filter(self, img: np.ndarray, resolution: float, 
+                                       origin_x: int, max_range: float) -> np.ndarray:
+        """
+        Applique un filtre gaussien spatial centré sur la position trackée.
+        Atténue progressivement les intensités au-delà du rayon spécifié.
+        
+        Args:
+            img: Image cartésienne (height x width)
+            resolution: Résolution en m/pixel
+            origin_x: Position X de l'origine (centre) en pixels
+            max_range: Portée maximale du sonar en mètres
+            
+        Returns:
+            Image filtrée avec atténuation gaussienne
+        """
+        if not self.get_parameter('enable_spatial_filter').value:
+            return img
+        
+        if self.last_tracked_position is None:
+            return img  # Pas de position trackée, pas de filtrage
+        
+        if not self.last_tracked_is_tracking:
+            return img  # Tracker non actif, pas de filtrage
+        
+        center_x_m_tracker, center_y_m = self.last_tracked_position
+        sigma_m = float(self.get_parameter('spatial_filter_sigma').value)
+        
+        height, width = img.shape
+        
+        # CORRECTION: Le tracker publie center_x_m basé sur l'image flippée
+        # Donc center_x_m_tracker correspond en fait à -center_x_m_real
+        # On inverse la coordonnée X pour avoir la vraie position dans l'image cartésienne
+        center_x_m_real = -center_x_m_tracker
+        
+        # Vérifier si on peut utiliser le cache
+        cache = self._spatial_filter_cache
+        cache_valid = (
+            cache['center'] is not None and
+            cache['shape'] == (height, width) and
+            abs(cache['resolution'] - resolution) < 1e-6 and
+            cache['origin_x'] == origin_x and
+            abs(cache['center'][0] - center_x_m_real) < 0.05 and  # Tolérance 5cm
+            abs(cache['center'][1] - center_y_m) < 0.05
+        )
+        
+        if cache_valid:
+            mask = cache['mask']
+        else:
+            # Créer une grille de coordonnées en mètres
+            # L'axe X (horizontal) : x_m = (j - origin_x) * resolution
+            # L'axe Y (vertical) : y_m = (height - i) * resolution (Y croît vers le haut)
+            j_indices = np.arange(width)
+            i_indices = np.arange(height)
+            j_grid, i_grid = np.meshgrid(j_indices, i_indices)
+            
+            x_grid_m = (j_grid - origin_x) * resolution
+            y_grid_m = (height - i_grid) * resolution
+            
+            # Distance au centre tracké (avec coordonnée X corrigée)
+            dist_m = np.sqrt((x_grid_m - center_x_m_real)**2 + (y_grid_m - center_y_m)**2)
+            
+            # Masque gaussien (1.0 au centre, décroît progressivement)
+            # Plus sigma est petit, plus la transition est abrupte
+            mask = np.exp(-(dist_m**2) / (2 * sigma_m**2))
+            
+            # Mise en cache (avec la coordonnée corrigée)
+            cache['center'] = (center_x_m_real, center_y_m)
+            cache['shape'] = (height, width)
+            cache['resolution'] = resolution
+            cache['origin_x'] = origin_x
+            cache['mask'] = mask
+            
+            # Log de debug pour vérifier les coordonnées
+            if not hasattr(self, '_debug_logged'):
+                self._debug_logged = True
+                self.get_logger().info(
+                    f'Filtre spatial: tracker=({center_x_m_tracker:.2f}, {center_y_m:.2f}m) '
+                    f'→ corrigé=({center_x_m_real:.2f}, {center_y_m:.2f}m)'
+                )
+        
+        # Appliquer le masque (multiplication élément par élément)
+        filtered_img = (img.astype(np.float32) * mask).astype(np.uint8)
+        
+        return filtered_img
+    
+    # ========== OPÉRATIONS MORPHOLOGIQUES (ÉTAPE 2) ==========
+    
+    def apply_morphology_operations(self, img: np.ndarray) -> np.ndarray:
+        """
+        Applique des opérations morphologiques pour nettoyer l'image.
+        - Closing : ferme les petits trous dans les objets
+        - Opening : supprime les petits bruits isolés
+        
+        Args:
+            img: Image en niveaux de gris ou binaire
+            
+        Returns:
+            Image nettoyée par opérations morphologiques
+        """
+        if not self.get_parameter('cart_enable_morphology').value:
+            return img
+        
+        if cv2 is None:
+            self.get_logger().warn('OpenCV non disponible, morphologie ignorée', 
+                                   throttle_duration_sec=5.0)
+            return img
+        
+        kernel_size = int(self.get_parameter('cart_morphology_kernel_size').value)
+        iterations = int(self.get_parameter('cart_morphology_iterations').value)
+        
+        # Assurer kernel_size impair et >= 3
+        kernel_size = max(3, kernel_size)
+        if kernel_size % 2 == 0:
+            kernel_size += 1
+        
+        kernel = np.ones((kernel_size, kernel_size), np.uint8)
+        
+        # Closing : fermer les petits trous (dilatation puis érosion)
+        img = cv2.morphologyEx(img, cv2.MORPH_CLOSE, kernel, iterations=iterations)
+        
+        # Opening : supprimer les petits bruits (érosion puis dilatation)
+        img = cv2.morphologyEx(img, cv2.MORPH_OPEN, kernel, iterations=1)
+        
+        return img
+    
     def frame_callback(self, msg: Frame):
         """Traite une frame sonar polaire et publie en cartésien."""
         # Reconstruction image 2D polaire (bearing × range)
@@ -176,11 +351,19 @@ class TraitementCartesianNode(Node):
         # ========== APPLICATION DES FILTRES CARTÉSIENS ==========
         filtered_cart = cart_img.copy()
         
-        # Détection de contours Canny
+        # 1. Filtre spatial gaussien (ÉTAPE 1) - Appliqué en premier pour isoler la zone d'intérêt
+        filtered_cart = self.apply_spatial_gaussian_filter(
+            filtered_cart, resolution, origin_x, msg.max_range
+        )
+        
+        # 2. Opérations morphologiques (ÉTAPE 2) - Nettoie l'image
+        filtered_cart = self.apply_morphology_operations(filtered_cart)
+        
+        # 3. Détection de contours Canny
         if self.get_parameter('cart_enable_canny').value:
             filtered_cart = self.cart_canny_edge(filtered_cart)
         
-        # Binarisation par centiles
+        # 4. Binarisation par centiles
         if self.get_parameter('cart_enable_percentile_binarization').value:
             filtered_cart = self.cart_percentile_binarization(filtered_cart)
         

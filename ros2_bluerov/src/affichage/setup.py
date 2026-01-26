@@ -16,7 +16,7 @@ setup(
         ('share/' + package_name, ['package.xml']),
         (os.path.join('share', package_name, 'config'), glob('config/*.yaml')),
     ],
-    install_requires=['setuptools', 'numpy>=1.17.3,<1.25.0', 'PyQt5'],
+    install_requires=['setuptools', 'numpy>=1.17.3,<1.25.0', 'PyQt5', 'pyqtgraph'],
     zip_safe=True,
     maintainer='Docking Team',
     maintainer_email='todo@todo.com',
