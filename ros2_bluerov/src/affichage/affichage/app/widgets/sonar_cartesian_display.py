@@ -16,6 +16,9 @@ class SonarCartesianImageWidget(pg.PlotWidget):
     
     # Signal émis lors de la sélection d'une bbox (x, y, width, height en pixels)
     bbox_selected = pyqtSignal(int, int, int, int)
+    
+    # Signal émis lors de la sélection rotatif (4 coins en mètres: p1_x, p1_y, p2_x, p2_y, p3_x, p3_y, p4_x, p4_y)
+    rotated_bbox_selected = pyqtSignal(float, float, float, float, float, float, float, float)
 
     def __init__(self, title="Sonar Cartésien"):
         super().__init__()
@@ -57,6 +60,14 @@ class SonarCartesianImageWidget(pg.PlotWidget):
         self.tracker_bbox.setZValue(90)
         self.addItem(self.tracker_bbox)
         self.tracker_bbox.hide()
+        
+        # Côté d'entrée du tracker (en rouge/orange)
+        self.tracker_entry_side = pg.PlotCurveItem(
+            pen=pg.mkPen('orange', width=5, style=Qt.SolidLine)
+        )
+        self.tracker_entry_side.setZValue(95)  # Au dessus de la bbox
+        self.addItem(self.tracker_entry_side)
+        self.tracker_entry_side.hide()
         
         # Centre du tracker (croix)
         self.tracker_center = pg.ScatterPlotItem(
@@ -110,6 +121,24 @@ class SonarCartesianImageWidget(pg.PlotWidget):
         self.bbox_selection_rect.setZValue(101)
         self.addItem(self.bbox_selection_rect)
         self.bbox_selection_rect.hide()
+        
+        # Mode de sélection rotatif (3 points)
+        self.rotated_selection_mode = False
+        self.rotated_points = []  # Liste de 3 points (x_m, y_m)
+        self.rotated_markers = pg.ScatterPlotItem(
+            size=25, pen=pg.mkPen('b', width=3), brush=pg.mkBrush(0, 0, 255, 150)
+        )
+        self.rotated_markers.setZValue(102)
+        self.addItem(self.rotated_markers)
+        self.rotated_markers.hide()
+        
+        # Lignes entre les points (preview du rectangle)
+        self.rotated_preview = pg.PlotCurveItem(
+            pen=pg.mkPen('cyan', width=3, style=Qt.SolidLine)
+        )
+        self.rotated_preview.setZValue(101)
+        self.addItem(self.rotated_preview)
+        self.rotated_preview.hide()
         
         # Pause pour la sélection
         self.is_paused = False
@@ -264,6 +293,42 @@ class SonarCartesianImageWidget(pg.PlotWidget):
         x_m = mouse_point.x()
         y_m = mouse_point.y()
         
+        # Mode sélection rotatif (4 coins)
+        if self.rotated_selection_mode:
+            self.rotated_points.append((x_m, y_m))
+            
+            # Afficher les marqueurs des points cliqués
+            points_array = np.array(self.rotated_points)
+            self.rotated_markers.setData(pos=points_array)
+            self.rotated_markers.show()
+            
+            # Preview du rectangle
+            num_points = len(self.rotated_points)
+            if num_points == 2:
+                # Afficher la ligne entre P1 et P2
+                p1, p2 = self.rotated_points
+                self.rotated_preview.setData([p1[0], p2[0]], [p1[1], p2[1]])
+                self.rotated_preview.show()
+            elif num_points == 3:
+                # Afficher 2 côtés
+                p1, p2, p3 = self.rotated_points
+                x_coords = [p1[0], p2[0], p3[0]]
+                y_coords = [p1[1], p2[1], p3[1]]
+                self.rotated_preview.setData(x_coords, y_coords)
+                self.rotated_preview.show()
+            elif num_points == 4:
+                # Afficher le rectangle complet
+                p1, p2, p3, p4 = self.rotated_points
+                x_coords = [p1[0], p2[0], p3[0], p4[0], p1[0]]
+                y_coords = [p1[1], p2[1], p3[1], p4[1], p1[1]]
+                self.rotated_preview.setData(x_coords, y_coords)
+                self.rotated_preview.show()
+                
+                # Finaliser et émettre le signal
+                self._finalize_rotated_selection()
+            
+            return
+        
         # Mode sélection de bbox activé par le bouton
         if self.bbox_selection_mode:
             if self.bbox_start_point is None:
@@ -284,20 +349,6 @@ class SonarCartesianImageWidget(pg.PlotWidget):
         # Afficher le marker (point rouge)
         self.click_marker.setData(pos=[(x_m, y_m)])
         self.click_marker.show()
-        
-        # Afficher la bounding box rouge (taille cage estimée)
-        half_w = self.cage_width / 2.0
-        half_h = self.cage_height / 2.0
-        x_coords = [x_m - half_w, x_m + half_w, x_m + half_w, x_m - half_w, x_m - half_w]
-        y_coords = [y_m - half_h, y_m - half_h, y_m + half_h, y_m + half_h, y_m - half_h]
-        self.click_bbox.setData(x_coords, y_coords)
-        self.click_bbox.show()
-        
-        # Démarrer le timer pour masquer après 1 seconde
-        self.click_timer.start(1000)
-        
-        # Émettre le signal
-        self.click_position.emit(float(x_m), float(y_m))
         
         # Afficher la bounding box rouge (taille cage estimée)
         half_w = self.cage_width / 2.0
@@ -335,6 +386,9 @@ class SonarCartesianImageWidget(pg.PlotWidget):
         self.bbox_selection_mode = enabled
         
         if enabled:
+            # Désactiver le mode rotatif si activé
+            if self.rotated_selection_mode:
+                self.set_rotated_selection_mode(False)
             # Pause et préparer la sélection
             self.is_paused = True
             self.bbox_start_point = None
@@ -345,6 +399,44 @@ class SonarCartesianImageWidget(pg.PlotWidget):
             self.bbox_start_point = None
             self.bbox_current_point = None
             self.bbox_selection_rect.hide()
+    
+    def set_rotated_selection_mode(self, enabled):
+        """Active ou désactive le mode sélection rotatif (3 points)."""
+        self.rotated_selection_mode = enabled
+        
+        if enabled:
+            # Désactiver le mode bbox si activé
+            if self.bbox_selection_mode:
+                self.set_bbox_selection_mode(False)
+            # Pause et préparer la sélection
+            self.is_paused = True
+            self.rotated_points = []
+            self.rotated_markers.hide()
+            self.rotated_preview.hide()
+        else:
+            # Reprendre et nettoyer
+            self.is_paused = False
+            self.rotated_points = []
+            self.rotated_markers.hide()
+            self.rotated_preview.hide()
+    
+    def _finalize_rotated_selection(self):
+        """Finalise la sélection rotatif et émet le signal avec 4 coins en mètres."""
+        if len(self.rotated_points) != 4:
+            return
+        
+        p1, p2, p3, p4 = self.rotated_points
+        
+        # Émettre le signal avec les 4 coins en mètres
+        self.rotated_bbox_selected.emit(
+            float(p1[0]), float(p1[1]),
+            float(p2[0]), float(p2[1]),
+            float(p3[0]), float(p3[1]),
+            float(p4[0]), float(p4[1])
+        )
+        
+        # Désactiver le mode automatiquement
+        self.set_rotated_selection_mode(False)
     
     def _update_bbox_selection_display(self):
         """Met à jour l'affichage du rectangle de sélection."""
@@ -392,10 +484,11 @@ class SonarCartesianImageWidget(pg.PlotWidget):
         self.cage_height = height_m
 
     def update_tracked_object(self, tracked_msg):
-        """Met à jour l'affichage de la bounding box du tracker CSRT."""
+        """Met à jour l'affichage de la bounding box du tracker (orientée si angle présent)."""
         if not tracked_msg.is_tracking or not tracked_msg.is_initialized:
             # Masquer la bounding box si pas de tracking
             self.tracker_bbox.hide()
+            self.tracker_entry_side.hide()
             self.tracker_center.hide()
             self.tracker_text.hide()
             return
@@ -408,16 +501,66 @@ class SonarCartesianImageWidget(pg.PlotWidget):
         half_w = tracked_msg.width / 2.0
         half_h = tracked_msg.height / 2.0
         
-        # Dessiner le rectangle (coins)
-        x_coords = [cx - half_w, cx + half_w, cx + half_w, cx - half_w, cx - half_w]
-        y_coords = [cy - half_h, cy - half_h, cy + half_h, cy + half_h, cy - half_h]
+        # Angle de rotation (en radians)
+        angle = tracked_msg.angle
         
-        self.tracker_bbox.setData(x_coords, y_coords)
-        self.tracker_bbox.show()
+        if abs(angle) > 0.01:  # Si angle significatif, dessiner bbox orientée
+            # Calculer les 4 coins du rectangle orienté
+            # Coins dans le repère local (non tourné)
+            corners_local = np.array([
+                [-half_w, -half_h],  # Coin inférieur gauche
+                [+half_w, -half_h],  # Coin inférieur droit
+                [+half_w, +half_h],  # Coin supérieur droit
+                [-half_w, +half_h],  # Coin supérieur gauche
+            ])
+            
+            # Matrice de rotation
+            cos_a = np.cos(angle)
+            sin_a = np.sin(angle)
+            rot_matrix = np.array([
+                [cos_a, -sin_a],
+                [sin_a,  cos_a]
+            ])
+            
+            # Appliquer la rotation
+            corners_rotated = corners_local @ rot_matrix.T
+            
+            # Translater au centre
+            corners_world = corners_rotated + np.array([cx, cy])
+            
+            # Fermer le rectangle
+            x_coords = np.append(corners_world[:, 0], corners_world[0, 0])
+            y_coords = np.append(corners_world[:, 1], corners_world[0, 1])
+            
+            self.tracker_bbox.setData(x_coords, y_coords)
+            self.tracker_bbox.show()
+            
+            # Dessiner le côté d'entrée si les points sont fournis
+            if abs(tracked_msg.entry_p1_x) > 0.001 or abs(tracked_msg.entry_p1_y) > 0.001:
+                entry_x = [tracked_msg.entry_p1_x, tracked_msg.entry_p2_x]
+                entry_y = [tracked_msg.entry_p1_y, tracked_msg.entry_p2_y]
+                self.tracker_entry_side.setData(entry_x, entry_y)
+                self.tracker_entry_side.show()
+            else:
+                self.tracker_entry_side.hide()
+        else:
+            # Rectangle non orienté (angle ~ 0)
+            x_coords = [cx - half_w, cx + half_w, cx + half_w, cx - half_w, cx - half_w]
+            y_coords = [cy - half_h, cy - half_h, cy + half_h, cy + half_h, cy - half_h]
+            
+            self.tracker_bbox.setData(x_coords, y_coords)
+            self.tracker_bbox.show()
+            self.tracker_entry_side.hide()
         
         # Afficher le centre
         self.tracker_center.setData(pos=[(cx, cy)])
         self.tracker_center.show()
         
-        # Masquer le texte de confiance (non pertinent pour les trackers OpenCV)
-        self.tracker_text.hide()
+        # Afficher l'angle si non nul
+        if abs(angle) > 0.01:
+            angle_deg = np.degrees(angle)
+            self.tracker_text.setText(f'θ = {angle_deg:.1f}°')
+            self.tracker_text.setPos(cx, cy + half_h + 0.2)
+            self.tracker_text.show()
+        else:
+            self.tracker_text.hide()

@@ -2,7 +2,7 @@ import numpy as np
 import rclpy
 from rclpy.node import Node
 from rcl_interfaces.msg import ParameterType
-from docking_msgs.msg import Frame, FrameCartesian, Borders, DetectedLines, ClickPosition, BBoxSelection, PoseRelative, State, TrackedObject
+from docking_msgs.msg import Frame, FrameCartesian, Borders, DetectedLines, ClickPosition, BBoxSelection, PoseRelative, State, TrackedObject, RotatedBBoxInit
 from std_msgs.msg import Bool
 
 
@@ -30,6 +30,7 @@ class SonarViewerNode(Node):
         self.abort_pub = self.create_publisher(Bool, '/docking/mission/abort', 10)
         self.click_pub = self.create_publisher(ClickPosition, '/docking/sonar/click_position', 10)
         self.bbox_pub = self.create_publisher(BBoxSelection, '/docking/sonar/bbox_selection', 10)
+        self.rotated_bbox_pub = self.create_publisher(RotatedBBoxInit, '/docking/sonar/rotated_bbox_init', 10)
 
         self.current_borders = None
         self.current_pose = None
@@ -313,3 +314,26 @@ class SonarViewerNode(Node):
         
         self.bbox_pub.publish(msg)
         self.get_logger().info(f'BBox publiée: ({x}, {y}, {width}, {height})')
+    
+    def publish_rotated_bbox_init(self, p1_x: float, p1_y: float, p2_x: float, p2_y: float, 
+                                   p3_x: float, p3_y: float, p4_x: float, p4_y: float):
+        """Publie une initialisation de bbox rotatif (4 coins)."""
+        msg = RotatedBBoxInit()
+        msg.header.stamp = self.get_clock().now().to_msg()
+        msg.header.frame_id = 'sonar'
+        msg.p1_x = float(p1_x)
+        msg.p1_y = float(p1_y)
+        msg.p2_x = float(p2_x)
+        msg.p2_y = float(p2_y)
+        msg.p3_x = float(p3_x)
+        msg.p3_y = float(p3_y)
+        msg.p4_x = float(p4_x)
+        msg.p4_y = float(p4_y)
+        msg.is_valid = True
+        
+        self.rotated_bbox_pub.publish(msg)
+        self.get_logger().info(
+            f'Rotated BBox publiée: 4 coins - '
+            f'P1({p1_x:.2f}, {p1_y:.2f}), P2({p2_x:.2f}, {p2_y:.2f}), '
+            f'P3({p3_x:.2f}, {p3_y:.2f}), P4({p4_x:.2f}, {p4_y:.2f})'
+        )

@@ -27,6 +27,9 @@ class TrackerControlWidget(QWidget):
     
     # Signal émis pour activer/désactiver le mode sélection de bbox
     bbox_selection_requested = pyqtSignal(bool)  # True = activer, False = désactiver
+    
+    # Signal émis pour activer/désactiver le mode sélection rotatif (3 points)
+    rotated_selection_requested = pyqtSignal(bool)
 
     def __init__(self, ros_node):
         super().__init__()
@@ -67,11 +70,38 @@ class TrackerControlWidget(QWidget):
         self.select_bbox_btn.setCheckable(True)
         self.select_bbox_btn.clicked.connect(self.on_select_bbox_clicked)
         selection_layout.addWidget(self.select_bbox_btn)
+        
+        # Bouton de sélection rotatif (4 coins)
+        self.select_rotated_btn = QPushButton("🔄 Sélectionner Cage Orientée (4 coins)")
+        self.select_rotated_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #3498db;
+                color: white;
+                font-weight: bold;
+                padding: 10px;
+                border-radius: 5px;
+            }
+            QPushButton:hover {
+                background-color: #2980b9;
+            }
+            QPushButton:pressed {
+                background-color: #1f618d;
+            }
+            QPushButton:checked {
+                background-color: #e74c3c;
+            }
+        """)
+        self.select_rotated_btn.setCheckable(True)
+        self.select_rotated_btn.clicked.connect(self.on_select_rotated_clicked)
+        selection_layout.addWidget(self.select_rotated_btn)
+        
         scroll_layout.addLayout(selection_layout)
         
         help_label = QLabel(
             "<small><b>Mode sélection:</b> Cliquez sur le bouton, puis dessinez un rectangle "
-            "avec la souris sur l'image cartésienne. Le tracker démarre automatiquement.</small>"
+            "avec la souris sur l'image cartésienne. Le tracker démarre automatiquement.<br>"
+            "<b>Mode orienté:</b> Cliquez les 4 coins de la cage dans <b>n'importe quel ordre</b>. "
+            "Le tracker suivra la position et rotation.</small>"
         )
         help_label.setWordWrap(True)
         help_label.setStyleSheet("color: #95a5a6; padding: 5px;")
@@ -224,11 +254,25 @@ class TrackerControlWidget(QWidget):
         """Gère le clic sur le bouton de sélection de cage."""
         if checked:
             self.select_bbox_btn.setText("❌ Annuler Sélection")
+            # Désactiver l'autre bouton
+            self.select_rotated_btn.setChecked(False)
         else:
             self.select_bbox_btn.setText("📦 Sélectionner Cage (CSRT)")
         
         # Émettre le signal pour activer/désactiver le mode sélection
         self.bbox_selection_requested.emit(checked)
+    
+    def on_select_rotated_clicked(self, checked):
+        """Gère le clic sur le bouton de sélection orientée."""
+        if checked:
+            self.select_rotated_btn.setText("❌ Annuler Sélection")
+            # Désactiver l'autre bouton
+            self.select_bbox_btn.setChecked(False)
+        else:
+            self.select_rotated_btn.setText("🔄 Sélectionner Cage Orientée (4 coins)")
+        
+        # Émettre le signal pour activer/désactiver le mode sélection rotatif
+        self.rotated_selection_requested.emit(checked)
 
     def on_param_changed(self, name, value):
         success = self.ros_node.set_tracking_parameter(name, value)

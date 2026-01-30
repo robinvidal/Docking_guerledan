@@ -81,6 +81,10 @@ class MainWindow(QMainWindow):
         self.cartesian_filtered_panel.viewer.bbox_selected.connect(self.on_bbox_selected)
         self.compare_panel.cartesian_viewer.bbox_selected.connect(self.on_bbox_selected)
         
+        # Connecter les signaux de sélection rotatif (3 points)
+        self.cartesian_filtered_panel.viewer.rotated_bbox_selected.connect(self.on_rotated_bbox_selected)
+        self.compare_panel.cartesian_viewer.rotated_bbox_selected.connect(self.on_rotated_bbox_selected)
+        
         # Charger les dimensions de la cage depuis le YAML et les appliquer aux vues
         cage_width, cage_height = get_cage_dimensions()
         self.cartesian_filtered_panel.viewer.set_cage_dimensions(cage_width, cage_height)
@@ -114,6 +118,14 @@ class MainWindow(QMainWindow):
         )
         self.controls_panel.tracker_widget.bbox_selection_requested.connect(
             lambda enabled: self.compare_panel.cartesian_viewer.set_bbox_selection_mode(enabled)
+        )
+        
+        # Connecter le bouton de sélection rotatif (3 points)
+        self.controls_panel.tracker_widget.rotated_selection_requested.connect(
+            lambda enabled: self.cartesian_filtered_panel.viewer.set_rotated_selection_mode(enabled)
+        )
+        self.controls_panel.tracker_widget.rotated_selection_requested.connect(
+            lambda enabled: self.compare_panel.cartesian_viewer.set_rotated_selection_mode(enabled)
         )
 
         splitter.addWidget(right_container)
@@ -205,3 +217,7 @@ class MainWindow(QMainWindow):
     def on_bbox_selected(self, x, y, width, height):
         """Gère la sélection d'une bbox sur le sonar cartésien."""
         self.ros_node.publish_bbox_selection(x, y, width, height)
+    
+    def on_rotated_bbox_selected(self, p1_x, p1_y, p2_x, p2_y, p3_x, p3_y, p4_x, p4_y):
+        """Gère la sélection rotatif (4 coins) sur le sonar cartésien."""
+        self.ros_node.publish_rotated_bbox_init(p1_x, p1_y, p2_x, p2_y, p3_x, p3_y, p4_x, p4_y)

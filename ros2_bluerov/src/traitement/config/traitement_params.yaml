@@ -40,7 +40,7 @@ traitement_cartesian_node:
     
     # Filtre spatial gaussien (ÉTAPE 1)
     # Atténue les intensités en dehors de la zone trackée
-    enable_spatial_filter: false        # Activer quand tracker est utilisé
+    enable_spatial_filter: true        # Activer quand tracker est utilisé
     spatial_filter_radius: 2.0          # Rayon d'effet en mètres
     spatial_filter_sigma: 0.8           # Écart-type gaussien (m) - transition progressive
     
