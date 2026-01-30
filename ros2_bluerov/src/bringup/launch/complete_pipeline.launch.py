@@ -31,6 +31,12 @@ def generate_launch_description():
         'tracking_params.yaml'
     )
 
+    localisation_config = os.path.join(
+        get_package_share_directory('localisation'),
+        'config',
+        'localisation_params.yaml'
+    )
+
     # ==== Sonar pipeline nodes ====
     sonar_node = Node(
         package='sonar',
@@ -40,11 +46,30 @@ def generate_launch_description():
         output='screen'
     )
 
-    traitement = Node(
+    # Filtrage polaire
+    traitement_polar = Node(
         package='traitement',
-        executable='traitement_node',
-        name='traitement_node',
+        executable='traitement_polar_node',
+        name='traitement_polar_node',
         parameters=[traitement_config],
+        output='screen'
+    )
+
+    # Filtrage cartésien
+    traitement_cartesian = Node(
+        package='traitement',
+        executable='traitement_cartesian_node',
+        name='traitement_cartesian_node',
+        parameters=[traitement_config],
+        output='screen'
+    )
+
+    # Détection de lignes Hough
+    hough_lines = Node(
+        package='tracking',
+        executable='hough_lines_node',
+        name='hough_lines_node',
+        parameters=[tracking_config],
         output='screen'
     )
 
@@ -78,6 +103,14 @@ def generate_launch_description():
         package='affichage',
         executable='sonar_viewer',
         name='sonar_viewer',
+        output='screen'
+    )
+
+    localisation = Node(
+        package='localisation',
+        executable='localisation_node',
+        name='localisation_node',
+        parameters=[localisation_config],
         output='screen'
     )
 
@@ -147,9 +180,12 @@ def generate_launch_description():
     return LaunchDescription([
         # Sonar pipeline
         sonar_node,
-        traitement,
+        traitement_polar,
+        traitement_cartesian,
+        hough_lines,
         # blob_tracker,        # Ancien système (décommenter si besoin)
         csrt_tracker,          # Nouveau système CSRT (sélection: Ctrl+Clic dans Sonar Viewer)
+        # localisation,
         sonar_viewer,
 
         # PX4 / MAVROS + control stack

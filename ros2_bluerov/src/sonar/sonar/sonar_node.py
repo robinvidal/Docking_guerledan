@@ -25,7 +25,7 @@ class SonarNode(Node):
         # Paramètres utilisateur
         self.declare_parameter('ip_address', '192.168.1.10')
         self.declare_parameter('port', 52102)
-        self.declare_parameter('range', 3.0)  # m
+        self.declare_parameter('range', 2.0)  # m
         self.declare_parameter('gain_percent', 50)
         self.declare_parameter('master_mode', 1)  # 1: LF, 2: HF
         self.declare_parameter('ping_rate', 0)    # 0: auto
