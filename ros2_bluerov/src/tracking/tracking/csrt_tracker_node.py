@@ -732,7 +732,13 @@ class CSRTTrackerNode(Node):
         self._publish_tracked_object(msg)
     
     def _publish_tracked_object(self, frame_msg):
-        """Publie l'état actuel du tracking."""
+        """
+        Publie l'état actuel du tracking.
+        Informations publiées:
+        - Centre de la cage: range, bearing
+        - Extrémités de l'entrée: entry_p1_range/bearing, entry_p2_range/bearing
+        - Angle et dimensions de la cage
+        """
         out_msg = TrackedObject()
         out_msg.header = frame_msg.header
         out_msg.is_initialized = self.is_initialized
@@ -741,16 +747,6 @@ class CSRTTrackerNode(Node):
         if self.is_tracking and self.last_bbox is not None:
             bbox_x, bbox_y, bbox_w, bbox_h = self.last_bbox
             
-            # CORRECTION: Flipper la bbox en retour pour l'affichage
-            # La bbox est dans l'espace de l'image flippée, on doit la re-flipper
-            bbox_x_display = frame_msg.width - bbox_x - bbox_w
-            
-            # Bounding box en pixels (coordonnées pour l'affichage)
-            out_msg.bbox_x = int(bbox_x_display)
-            out_msg.bbox_y = int(bbox_y)
-            out_msg.bbox_width = int(bbox_w)
-            out_msg.bbox_height = int(bbox_h)
-            
             # Centre en pixels
             center_x_px = bbox_x + bbox_w // 2
             center_y_px = bbox_y + bbox_h // 2
@@ -758,87 +754,80 @@ class CSRTTrackerNode(Node):
             # Convertir en mètres
             center_x_m, center_y_m = self._pixels_to_meters(center_x_px, center_y_px, frame_msg)
             
-            out_msg.center_x = float(center_x_m)
-            out_msg.center_y = float(center_y_m)
-            
-            # Position polaire (range et bearing)
+            # === INFORMATIONS ESSENTIELLES ===
+            # Position polaire du centre (range et bearing)
             out_msg.range = float(np.sqrt(center_x_m**2 + center_y_m**2))
             out_msg.bearing = float(np.arctan2(center_x_m, center_y_m))
             
-            # Angle de rotation (en radians)
+            # Angle de rotation de la cage (en radians)
             out_msg.angle = float(self.bbox_angle)
             
-            # Dimensions en mètres
+            # Dimensions de la cage en mètres
             out_msg.width = float(bbox_w * frame_msg.resolution)
             out_msg.height = float(bbox_h * frame_msg.resolution)
             
-            # Points d'entrée (si tracking rotatif avec entry_angle_offset)
+            # Points d'entrée en polaire (si tracking rotatif)
             if self.tracking_mode == 'rotated' and self.initial_corners_m is not None:
-                # Utiliser les coordonnées métriques initiales qui ne sont JAMAIS modifiées
-                # Ces coordonnées préservent l'ordre exact des clics P1→P2→P3→P4
-                # Le côté d'entrée est TOUJOURS entre P1 (index 0) et P2 (index 1)
-                
-                # Calculer le centre actuel de la bbox en mètres (où elle est maintenant)
-                center_x_m = out_msg.center_x
-                center_y_m = out_msg.center_y
-                
-                # Calculer le centroid initial (où était la bbox au départ)
+                # Calculer le centroid initial
                 initial_center_x = np.mean(self.initial_corners_m[:, 0])
                 initial_center_y = np.mean(self.initial_corners_m[:, 1])
                 
                 # Rotation entre angle initial et actuel
                 rotation_delta = self.bbox_angle - self.initial_bbox_angle
-                
-                # Appliquer rotation et translation aux coins initiaux
                 cos_r = np.cos(rotation_delta)
                 sin_r = np.sin(rotation_delta)
                 rot_matrix = np.array([[cos_r, -sin_r], [sin_r, cos_r]])
                 
-                # Centrer les coins initiaux
+                # Appliquer rotation et translation aux coins initiaux
                 centered_corners = self.initial_corners_m - np.array([initial_center_x, initial_center_y])
-                
-                # Appliquer la rotation
                 rotated_corners = centered_corners @ rot_matrix.T
-                
-                # Translater au centre actuel
                 current_corners = rotated_corners + np.array([center_x_m, center_y_m])
                 
-                # Le côté d'entrée est entre le coin 0 (P1) et le coin 1 (P2)
+                # Le côté d'entrée est entre P1 (index 0) et P2 (index 1)
                 c1 = current_corners[0]
                 c2 = current_corners[1]
                 
-                # Coordonnées cartésiennes
-                out_msg.entry_p1_x = float(c1[0])
-                out_msg.entry_p1_y = float(c1[1])
-                out_msg.entry_p2_x = float(c2[0])
-                out_msg.entry_p2_y = float(c2[1])
-                
-                # Coordonnées polaires
+                # Coordonnées polaires des extrémités de l'entrée
                 out_msg.entry_p1_range = float(np.sqrt(c1[0]**2 + c1[1]**2))
                 out_msg.entry_p1_bearing = float(np.arctan2(c1[0], c1[1]))
                 out_msg.entry_p2_range = float(np.sqrt(c2[0]**2 + c2[1]**2))
                 out_msg.entry_p2_bearing = float(np.arctan2(c2[0], c2[1]))
             else:
                 # Pas de tracking rotatif ou pas d'entrée définie
-                out_msg.entry_p1_x = 0.0
-                out_msg.entry_p1_y = 0.0
                 out_msg.entry_p1_range = 0.0
                 out_msg.entry_p1_bearing = 0.0
-                out_msg.entry_p2_x = 0.0
-                out_msg.entry_p2_y = 0.0
                 out_msg.entry_p2_range = 0.0
                 out_msg.entry_p2_bearing = 0.0
             
-            # Confiance (les trackers OpenCV ne fournissent pas de score de confiance)
-            out_msg.confidence = 0.0
-        else:
-            out_msg.center_x = 0.0
+            # === CHAMPS NON UTILISÉS (laissés à 0) ===
+            out_msg.center_x = 0.0  # Redondant avec range/bearing
             out_msg.center_y = 0.0
+            out_msg.entry_p1_x = 0.0  # Redondant avec range/bearing
+            out_msg.entry_p1_y = 0.0
+            out_msg.entry_p2_x = 0.0
+            out_msg.entry_p2_y = 0.0
+            out_msg.bbox_x = 0  # Affichage non critique
+            out_msg.bbox_y = 0
+            out_msg.bbox_width = 0
+            out_msg.bbox_height = 0
+            out_msg.confidence = 0.0  # Non utilisé
+        else:
+            # Tracking perdu - tout à zéro
             out_msg.range = 0.0
             out_msg.bearing = 0.0
             out_msg.angle = 0.0
             out_msg.width = 0.0
             out_msg.height = 0.0
+            out_msg.entry_p1_range = 0.0
+            out_msg.entry_p1_bearing = 0.0
+            out_msg.entry_p2_range = 0.0
+            out_msg.entry_p2_bearing = 0.0
+            out_msg.center_x = 0.0
+            out_msg.center_y = 0.0
+            out_msg.entry_p1_x = 0.0
+            out_msg.entry_p1_y = 0.0
+            out_msg.entry_p2_x = 0.0
+            out_msg.entry_p2_y = 0.0
             out_msg.bbox_x = 0
             out_msg.bbox_y = 0
             out_msg.bbox_width = 0
