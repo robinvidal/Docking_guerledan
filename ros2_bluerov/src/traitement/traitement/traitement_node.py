@@ -1,6 +1,6 @@
 """
 Nœud de filtrage et prétraitement des données sonar.
-Implémente normalisation, TVG, égalisation d'histogramme et SO-CFAR.
+Applique des filtres sur données polaires et cartésiennes.
 """
 
 import rclpy
@@ -10,61 +10,52 @@ import numpy as np
 from scipy import ndimage
 try:
     import cv2
-except ImportError:  # Provide a minimal fallback to avoid import-time crash
+except ImportError:
     cv2 = None
 
 
 class TraitementNode(Node):
-    """Applique filtres avancés sur frames sonar brutes."""
+    """Applique filtres sur frames sonar (polaires et cartésiennes)."""
     
     def __init__(self):
         super().__init__('traitement_node')
         
-        # Paramètres de normalisation et TVG
-        self.declare_parameter('enable_histogram_eq', True)
-        self.declare_parameter('enable_tvg_correction', True)
-        self.declare_parameter('tvg_alpha', 0.0002)  # Coefficient d'atténuation
-        self.declare_parameter('tvg_spreading_loss', 20.0)  # Perte par étalement (dB)
+        # ========== FILTRES POLAIRES ==========
+        # Filtre Gaussien
+        self.declare_parameter('polar_enable_gaussian', True)
+        self.declare_parameter('polar_gaussian_sigma', 1.0)
         
-        # Paramètres de filtrage de base
-        self.declare_parameter('enable_median', True)
-        self.declare_parameter('median_kernel', 3)
-        self.declare_parameter('enable_gaussian', True)
-        self.declare_parameter('gaussian_sigma', 1.0)
-        self.declare_parameter('enable_simple_threshold', False)
-        self.declare_parameter('simple_threshold', 128)
-        # Filtre bilatéral (lissage tout en préservant bords)
-        self.declare_parameter('enable_bilateral', False)
-        self.declare_parameter('bilateral_d', 5)            # diamètre voisinage
-        self.declare_parameter('bilateral_sigma_color', 25.0)
-        self.declare_parameter('bilateral_sigma_space', 5.0)
-
-        # Morphologie: top-hat (extrait petits éléments brillants)
-        self.declare_parameter('enable_tophat', False)
-        self.declare_parameter('tophat_kernel', 5)
-
-        # Détection de blobs: LoG / DoG
-        self.declare_parameter('enable_log_enhance', False)
-        self.declare_parameter('log_sigma', 1.0)
-        self.declare_parameter('enable_dog_enhance', False)
-        self.declare_parameter('dog_sigma1', 1.0)
-        self.declare_parameter('dog_sigma2', 2.0)
-
-        # Filtre adapté (matched filter) avec PSF gaussien
-        self.declare_parameter('enable_matched_filter', False)
-        self.declare_parameter('mf_sigma', 1.2)
-        self.declare_parameter('mf_kernel_size', 9)
+        # Filtre Médian
+        self.declare_parameter('polar_enable_median', True)
+        self.declare_parameter('polar_median_kernel', 3)
         
-        # Paramètres SO-CFAR
-        self.declare_parameter('enable_so_cfar', True)
-        self.declare_parameter('cfar_guard_cells', 2)  # Cellules de garde
-        self.declare_parameter('cfar_window_size', 10)  # Taille fenêtre référence
-        self.declare_parameter('cfar_alpha', 3.0)  # Facteur seuil (taux fausse alarme)
+        # Filtre Loss (Lee speckle reduction)
+        self.declare_parameter('polar_enable_loss', False)
+        self.declare_parameter('polar_loss_window_size', 5)
         
-        # Paramètres seuillage adaptatif final
-        self.declare_parameter('enable_adaptive_threshold', True)
-        self.declare_parameter('adt_block_size', 15)  # Taille bloc (doit être impair)
-        self.declare_parameter('adt_c', 2)  # Constante soustraite à la moyenne
+        # Filtre Frost (adaptive speckle filter)
+        self.declare_parameter('polar_enable_frost', False)
+        self.declare_parameter('polar_frost_window_size', 5)
+        self.declare_parameter('polar_frost_damping', 1.0)
+        
+        # Log Compression
+        self.declare_parameter('polar_enable_log_compression', False)
+        self.declare_parameter('polar_log_scale', 30.0)  # Facteur d'échelle pour log
+        
+        # ========== FILTRES CARTÉSIENS ==========
+        # Canny Edge Detection
+        self.declare_parameter('cart_enable_canny', False)
+        self.declare_parameter('cart_canny_threshold1', 50.0)
+        self.declare_parameter('cart_canny_threshold2', 150.0)
+        self.declare_parameter('cart_canny_aperture', 3)
+        
+        # Binarisation par centiles
+        self.declare_parameter('cart_enable_percentile_binarization', False)
+        self.declare_parameter('cart_percentile_threshold', 90.0)  # Garder les 10% les plus lumineux
+        
+        # Conversion polaire vers cartésien
+        self.declare_parameter('enable_cartesian_conversion', True)
+        self.declare_parameter('cartesian_output_size', 512)  # Taille de l'image cartésienne (NxN)
         
         # Subscription
         self.subscription = self.create_subscription(
@@ -77,244 +68,266 @@ class TraitementNode(Node):
         # Publisher
         self.publisher_ = self.create_publisher(Frame, '/docking/sonar/filtered', 10)
         
-        self.get_logger().info('Traitement node démarré (TVG + SO-CFAR enabled)')
+        self.get_logger().info('Traitement node démarré avec filtres polaires et cartésiens')
     
-    def tvg_correction(self, img: np.ndarray, ranges: np.ndarray) -> np.ndarray:
-        """
-        Correction Time Varying Gain (TVG).
-        Compense l'atténuation due à l'étalement géométrique et l'absorption.
-        """
-        # Modèle de perte: spreading loss + absorption
-        spreading_loss_db = self.get_parameter('tvg_spreading_loss').value
-        alpha = self.get_parameter('tvg_alpha').value
-        
-        # Calcul du gain en dB pour chaque range bin
-        # Spreading loss: 20*log10(r) ou 10*log10(r) selon géométrie
-        # Absorption: alpha * r (Neper/m converti en dB)
-        gain_db = spreading_loss_db * np.log10(ranges + 1e-6) + (alpha * ranges * 8.686)
-        
-        # Conversion dB -> linéaire
-        gain_linear = 10 ** (gain_db / 20.0)
-        
-        # Application du gain (broadcast sur tous les bearings)
-        corrected = img.astype(np.float32) * gain_linear[np.newaxis, :]
-        
-        return np.clip(corrected, 0, 255).astype(np.uint8)
+    # ========== FILTRES POLAIRES ==========
     
-    def histogram_equalization(self, img: np.ndarray) -> np.ndarray:
-        """
-        Égalisation d'histogramme adaptative (CLAHE).
-        Améliore le contraste local tout en limitant l'amplification du bruit.
-        """
-        if cv2 is None:
-            # Fallback: simple histogram equalization with NumPy
-            hist, bins = np.histogram(img.flatten(), 256, [0,256])
-            cdf = hist.cumsum()
-            cdf_masked = np.ma.masked_equal(cdf, 0)
-            cdf_masked = (cdf_masked - cdf_masked.min())*255/(cdf_masked.max()-cdf_masked.min())
-            cdf = np.ma.filled(cdf_masked, 0).astype('uint8')
-            return cdf[img]
-        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
-        return clahe.apply(img)
-
-    def bilateral_filter(self, img: np.ndarray) -> np.ndarray:
-        """Filtre bilatéral via OpenCV (préserve les bords)."""
-        if cv2 is None:
-            return img  # no-op if OpenCV missing
-        d = int(self.get_parameter('bilateral_d').value)
-        sigma_color = float(self.get_parameter('bilateral_sigma_color').value)
-        sigma_space = float(self.get_parameter('bilateral_sigma_space').value)
-        return cv2.bilateralFilter(img, d, sigma_color, sigma_space)
-
-    def tophat_filter(self, img: np.ndarray) -> np.ndarray:
-        """White top-hat morphologique pour extraire petits éléments brillants."""
-        if cv2 is None:
-            return img
-        k = int(self.get_parameter('tophat_kernel').value)
-        if k < 1:
-            return img
-        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (k, k))
-        return cv2.morphologyEx(img, cv2.MORPH_TOPHAT, kernel)
-
-    def log_enhance(self, img: np.ndarray) -> np.ndarray:
-        """Laplacian of Gaussian (approx) pour renforcer blobs."""
-        if cv2 is None:
-            return ndimage.laplace(ndimage.gaussian_filter(img, sigma=float(self.get_parameter('log_sigma').value)))
-        sigma = float(self.get_parameter('log_sigma').value)
-        g = cv2.GaussianBlur(img, (0, 0), sigma)
-        lap = cv2.Laplacian(g, cv2.CV_16S, ksize=3)
-        lap_abs = cv2.convertScaleAbs(lap)
-        enhanced = cv2.addWeighted(img, 1.0, lap_abs, 1.0, 0)
-        return enhanced
-
-    def dog_enhance(self, img: np.ndarray) -> np.ndarray:
-        """Difference of Gaussian pour accentuer pics multi-échelle."""
-        if cv2 is None:
-            s1 = float(self.get_parameter('dog_sigma1').value)
-            s2 = float(self.get_parameter('dog_sigma2').value)
-            g1 = ndimage.gaussian_filter(img, s1)
-            g2 = ndimage.gaussian_filter(img, s2)
-            dog = g1 - g2
-            dog = (dog - dog.min()) / (dog.max() - dog.min() + 1e-6) * 255.0
-            return dog.astype(np.uint8)
-        s1 = float(self.get_parameter('dog_sigma1').value)
-        s2 = float(self.get_parameter('dog_sigma2').value)
-        g1 = cv2.GaussianBlur(img, (0, 0), s1)
-        g2 = cv2.GaussianBlur(img, (0, 0), s2)
-        dog = cv2.subtract(g1, g2)
-        dog = cv2.normalize(dog, None, 0, 255, cv2.NORM_MINMAX)
-        return dog.astype(np.uint8)
-
-    def matched_filter(self, img: np.ndarray) -> np.ndarray:
-        """Filtre adapté (corrélation) avec PSF gaussien 2D."""
-        # Works without cv2 by using ndimage.convolve
-        sigma = float(self.get_parameter('mf_sigma').value)
-        ksize = int(self.get_parameter('mf_kernel_size').value)
-        ksize = max(3, ksize | 1)  # impair
-        ax = np.arange(-(ksize//2), ksize//2 + 1)
-        xx, yy = np.meshgrid(ax, ax)
-        psf = np.exp(-(xx**2 + yy**2) / (2 * sigma**2))
-        psf /= psf.sum()
-        if cv2 is None:
-            out = ndimage.convolve(img.astype(np.float32), psf, mode='reflect')
-        else:
-            out = cv2.filter2D(img.astype(np.float32), -1, psf)
-        return np.clip(out, 0, 255).astype(np.uint8)
+    def polar_gaussian_filter(self, img: np.ndarray) -> np.ndarray:
+        """Filtre Gaussien sur données polaires."""
+        sigma = float(self.get_parameter('polar_gaussian_sigma').value)
+        return ndimage.gaussian_filter(img, sigma=sigma)
     
-    def so_cfar_detector(self, img: np.ndarray) -> np.ndarray:
+    def polar_median_filter(self, img: np.ndarray) -> np.ndarray:
+        """Filtre Médian sur données polaires."""
+        kernel = int(self.get_parameter('polar_median_kernel').value)
+        return ndimage.median_filter(img, size=kernel)
+    
+    def polar_loss_filter(self, img: np.ndarray) -> np.ndarray:
         """
-        SO-CFAR (Smallest Of - Constant False Alarm Rate).
-        Détection adaptative de cibles avec rejet du bruit de fond variable.
-        
-        Principe:
-        - Fenêtre glissante autour de chaque pixel (cellule sous test)
-        - Division en 2 sous-fenêtres (avant/arrière le long du range)
-        - Calcul de la moyenne dans chaque sous-fenêtre
-        - Sélection de la PLUS PETITE moyenne (robuste aux cibles voisines)
-        - Seuil local: T = alpha * mu_min
-        - Décision: pixel > T => cible potentielle
+        Filtre Loss (Lee) - Réduction du speckle.
+        Filtre adaptatif basé sur la variance locale.
         """
-        guard = self.get_parameter('cfar_guard_cells').value
-        window = self.get_parameter('cfar_window_size').value
-        alpha = self.get_parameter('cfar_alpha').value
-        
-        bearing_count, range_count = img.shape
-        output = np.zeros_like(img, dtype=np.uint8)
-        
-        # Conversion en float pour calculs
+        window_size = int(self.get_parameter('polar_loss_window_size').value)
         img_float = img.astype(np.float32)
         
-        # Parcours de l'image (éviter les bords)
-        margin = guard + window
+        # Moyenne et variance locales
+        mean = ndimage.uniform_filter(img_float, size=window_size)
+        sqr_mean = ndimage.uniform_filter(img_float**2, size=window_size)
+        variance = sqr_mean - mean**2
+        variance = np.maximum(variance, 0)  # Éviter variance négative par arrondi
         
-        for b in range(bearing_count):
-            for r in range(margin, range_count - margin):
-                # Cellule sous test
-                cut = img_float[b, r]
-                
-                # Fenêtre avant (leading)
-                leading_start = r - guard - window
-                leading_end = r - guard
-                leading_window = img_float[b, leading_start:leading_end]
-                
-                # Fenêtre arrière (trailing)
-                trailing_start = r + guard + 1
-                trailing_end = r + guard + window + 1
-                trailing_window = img_float[b, trailing_start:trailing_end]
-                
-                # Moyennes des deux fenêtres
-                mu_leading = np.mean(leading_window) if leading_window.size > 0 else 0
-                mu_trailing = np.mean(trailing_window) if trailing_window.size > 0 else 0
-                
-                # SO-CFAR: sélection de la plus petite moyenne
-                mu_min = min(mu_leading, mu_trailing)
-                
-                # Seuil adaptatif
-                threshold = alpha * mu_min
-                
-                # Décision
-                if cut > threshold:
-                    output[b, r] = 255  # Cible détectée
-                else:
-                    output[b, r] = 0
+        # Variance du bruit (estimée sur toute l'image)
+        noise_variance = np.var(img_float)
         
-        return output
-    
-    def adaptive_threshold(self, img: np.ndarray) -> np.ndarray:
-        """
-        Seuillage adaptatif local (ADT).
-        Binarisation finale pour ne garder que les structures pertinentes.
-        """
-        block_size = self.get_parameter('adt_block_size').value
-        c = self.get_parameter('adt_c').value
-        
-        # Assurer que block_size est impair
-        if block_size % 2 == 0:
-            block_size += 1
-        
-        return cv2.adaptiveThreshold(
-            img, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
-            cv2.THRESH_BINARY, block_size, c
+        # Coefficient de pondération adaptatif
+        # Si variance locale >> variance bruit => garder le signal
+        # Si variance locale ≈ variance bruit => lisser
+        weights = np.where(
+            variance > noise_variance,
+            (variance - noise_variance) / (variance + 1e-10),
+            0
         )
+        
+        # Filtrage adaptatif
+        filtered = mean + weights * (img_float - mean)
+        
+        return np.clip(filtered, 0, 255).astype(np.uint8)
+    
+    def polar_frost_filter(self, img: np.ndarray) -> np.ndarray:
+        """
+        Filtre Frost - Réduction adaptative du speckle.
+        Utilise un filtre exponentiel pondéré par la variance locale.
+        """
+        window_size = int(self.get_parameter('polar_frost_window_size').value)
+        damping = float(self.get_parameter('polar_frost_damping').value)
+        img_float = img.astype(np.float32)
+        
+        # Moyenne locale
+        mean = ndimage.uniform_filter(img_float, size=window_size)
+        
+        # Variance locale
+        sqr_mean = ndimage.uniform_filter(img_float**2, size=window_size)
+        variance = sqr_mean - mean**2
+        variance = np.maximum(variance, 0)
+        
+        # Coefficient de variation local
+        cv = np.sqrt(variance) / (mean + 1e-10)
+        
+        # Paramètre du filtre Frost
+        k = damping * cv
+        
+        # Poids exponentiels (simplifié)
+        weights = np.exp(-k)
+        
+        # Filtrage
+        filtered = weights * img_float + (1 - weights) * mean
+        
+        return np.clip(filtered, 0, 255).astype(np.uint8)
+    
+    def polar_log_compression(self, img: np.ndarray) -> np.ndarray:
+        """
+        Compression logarithmique des intensités.
+        Améliore la visualisation des faibles échos.
+        """
+        scale = float(self.get_parameter('polar_log_scale').value)
+        img_float = img.astype(np.float32)
+        
+        # Compression log: I_out = scale * log(1 + I_in)
+        compressed = scale * np.log1p(img_float)
+        
+        # Normalisation vers [0, 255]
+        compressed = (compressed / compressed.max()) * 255.0
+        
+        return compressed.astype(np.uint8)
+    
+    # ========== CONVERSION POLAIRE → CARTÉSIEN ==========
+    
+    def polar_to_cartesian(self, polar_img: np.ndarray, msg: Frame) -> np.ndarray:
+        """
+        Convertit une image polaire (bearing × range) en cartésienne (x × y).
+        """
+        output_size = int(self.get_parameter('cartesian_output_size').value)
+        bearing_count, range_count = polar_img.shape
+        
+        # Paramètres du sonar
+        min_range = msg.min_range
+        max_range = msg.max_range
+        bearing_step = msg.bearing_resolution  # en radians
+        
+        # Création de la grille cartésienne
+        cart_img = np.zeros((output_size, output_size), dtype=np.uint8)
+        
+        # Centre de l'image
+        center = output_size // 2
+        scale = (output_size / 2) / max_range  # pixels par mètre
+        
+        # Conversion
+        for b in range(bearing_count):
+            angle = b * bearing_step - np.pi / 2  # Angle en radians (0 = devant)
+            
+            for r in range(range_count):
+                # Distance réelle
+                distance = min_range + r * msg.range_resolution
+                
+                # Coordonnées cartésiennes
+                x = center + int(distance * np.cos(angle) * scale)
+                y = center + int(distance * np.sin(angle) * scale)
+                
+                # Vérifier les limites
+                if 0 <= x < output_size and 0 <= y < output_size:
+                    cart_img[y, x] = polar_img[b, r]
+        
+        # Interpolation pour combler les trous
+        if cv2 is not None:
+            # Dilatation légère pour combler les pixels vides
+            kernel = np.ones((3, 3), np.uint8)
+            cart_img = cv2.morphologyEx(cart_img, cv2.MORPH_CLOSE, kernel)
+        
+        return cart_img
+    
+    def cartesian_to_polar(self, cart_img: np.ndarray, msg: Frame) -> np.ndarray:
+        """
+        Convertit une image cartésienne (x × y) en polaire (bearing × range).
+        Reconversion après traitement cartésien pour publier au format polaire.
+        """
+        bearing_count = msg.bearing_count
+        range_count = msg.range_count
+        min_range = msg.min_range
+        max_range = msg.max_range
+        bearing_step = msg.bearing_resolution
+        range_step = msg.range_resolution
+        
+        output_size = cart_img.shape[0]
+        center = output_size // 2
+        scale = (output_size / 2) / max_range
+        
+        # Création de l'image polaire
+        polar_img = np.zeros((bearing_count, range_count), dtype=np.uint8)
+        
+        # Conversion inverse: pour chaque pixel polaire, trouver le pixel cartésien correspondant
+        for b in range(bearing_count):
+            angle = b * bearing_step - np.pi / 2
+            
+            for r in range(range_count):
+                distance = min_range + r * range_step
+                
+                # Coordonnées cartésiennes correspondantes
+                x = center + int(distance * np.cos(angle) * scale)
+                y = center + int(distance * np.sin(angle) * scale)
+                
+                # Lecture de la valeur dans l'image cartésienne
+                if 0 <= x < output_size and 0 <= y < output_size:
+                    polar_img[b, r] = cart_img[y, x]
+        
+        return polar_img
+    
+    # ========== FILTRES CARTÉSIENS ==========
+    
+    def cart_canny_edge(self, img: np.ndarray) -> np.ndarray:
+        """Détection de contours Canny sur image cartésienne."""
+        if cv2 is None:
+            self.get_logger().warn('OpenCV non disponible, Canny ignoré')
+            return img
+        
+        threshold1 = float(self.get_parameter('cart_canny_threshold1').value)
+        threshold2 = float(self.get_parameter('cart_canny_threshold2').value)
+        aperture = int(self.get_parameter('cart_canny_aperture').value)
+        
+        # Assurer que aperture est impair et dans [3, 7]
+        aperture = max(3, min(7, aperture))
+        if aperture % 2 == 0:
+            aperture += 1
+        
+        return cv2.Canny(img, threshold1, threshold2, apertureSize=aperture)
+    
+    def cart_percentile_binarization(self, img: np.ndarray) -> np.ndarray:
+        """
+        Binarisation par centile.
+        Garde les N% pixels les plus lumineux.
+        """
+        percentile = float(self.get_parameter('cart_percentile_threshold').value)
+        
+        # Calcul du seuil au centile donné
+        threshold = np.percentile(img, percentile)
+        
+        # Binarisation
+        binary = np.where(img >= threshold, 255, 0).astype(np.uint8)
+        
+        return binary
     
     def frame_callback(self, msg: Frame):
-        """Traite une frame sonar."""
-        # Reconstruction image 2D
-        img = np.array(msg.intensities, dtype=np.uint8).reshape(
+        """Traite une frame sonar avec filtres polaires et cartésiens."""
+        # Reconstruction image 2D polaire (bearing × range)
+        polar_img = np.array(msg.intensities, dtype=np.uint8).reshape(
             (msg.bearing_count, msg.range_count)
         )
         
-        filtered = img.copy()
+        # ========== APPLICATION DES FILTRES POLAIRES ==========
+        filtered_polar = polar_img.copy()
         
-        # 1. Correction TVG (Time Varying Gain)
-        if self.get_parameter('enable_tvg_correction').value:
-            ranges = np.linspace(msg.min_range, msg.max_range, msg.range_count)
-            filtered = self.tvg_correction(filtered, ranges)
+        # Filtre Gaussien
+        if self.get_parameter('polar_enable_gaussian').value:
+            filtered_polar = self.polar_gaussian_filter(filtered_polar)
         
-        # 2. Égalisation d'histogramme (CLAHE)
-        if self.get_parameter('enable_histogram_eq').value:
-            filtered = self.histogram_equalization(filtered)
+        # Filtre Médian
+        if self.get_parameter('polar_enable_median').value:
+            filtered_polar = self.polar_median_filter(filtered_polar)
         
-        # 3. Filtrage médian (réduction bruit impulsionnel)
-        if self.get_parameter('enable_median').value:
-            kernel = self.get_parameter('median_kernel').value
-            filtered = ndimage.median_filter(filtered, size=kernel)
+        # Filtre Loss
+        if self.get_parameter('polar_enable_loss').value:
+            filtered_polar = self.polar_loss_filter(filtered_polar)
         
-        # 4. Filtrage gaussien (lissage)
-        if self.get_parameter('enable_gaussian').value:
-            sigma = self.get_parameter('gaussian_sigma').value
-            filtered = ndimage.gaussian_filter(filtered, sigma=sigma)
-
-        # 4b. Seuillage binaire simple (optionnel)
-        if self.get_parameter('enable_simple_threshold').value:
-            thr = float(self.get_parameter('simple_threshold').value)
-            filtered = np.where(filtered >= thr, 255, 0).astype(np.uint8)
-
-        # 5. Filtre bilatéral
-        if self.get_parameter('enable_bilateral').value:
-            filtered = self.bilateral_filter(filtered)
-
-        # 6. Morphologie top-hat
-        if self.get_parameter('enable_tophat').value:
-            filtered = self.tophat_filter(filtered)
-
-        # 7. Enhancement LoG / DoG / Matched Filter
-        if self.get_parameter('enable_log_enhance').value:
-            filtered = self.log_enhance(filtered)
-        if self.get_parameter('enable_dog_enhance').value:
-            filtered = self.dog_enhance(filtered)
-        if self.get_parameter('enable_matched_filter').value:
-            filtered = self.matched_filter(filtered)
+        # Filtre Frost
+        if self.get_parameter('polar_enable_frost').value:
+            filtered_polar = self.polar_frost_filter(filtered_polar)
         
-        # 5. SO-CFAR (détection adaptative de cibles)
-        if self.get_parameter('enable_so_cfar').value:
-            filtered = self.so_cfar_detector(filtered)
+        # Compression logarithmique
+        if self.get_parameter('polar_enable_log_compression').value:
+            filtered_polar = self.polar_log_compression(filtered_polar)
         
-        # 6. Seuillage adaptatif final (ADT)
-        if self.get_parameter('enable_adaptive_threshold').value:
-            filtered = self.adaptive_threshold(filtered)
+        # ========== CONVERSION CARTÉSIENNE (si activée) ==========
+        if self.get_parameter('enable_cartesian_conversion').value:
+            # Conversion polaire → cartésien
+            cart_img = self.polar_to_cartesian(filtered_polar, msg)
+            
+            # ========== APPLICATION DES FILTRES CARTÉSIENS ==========
+            filtered_cart = cart_img.copy()
+            
+            # Détection de contours Canny
+            if self.get_parameter('cart_enable_canny').value:
+                filtered_cart = self.cart_canny_edge(filtered_cart)
+            
+            # Binarisation par centiles
+            if self.get_parameter('cart_enable_percentile_binarization').value:
+                filtered_cart = self.cart_percentile_binarization(filtered_cart)
+            
+            # Reconversion cartésien → polaire pour publier au format polaire
+            final_img = self.cartesian_to_polar(filtered_cart, msg)
+        else:
+            # Pas de conversion cartésienne, on garde le format polaire
+            final_img = filtered_polar
         
-        # Publication
+        # Publication (toujours au format polaire)
         out_msg = Frame()
         out_msg.header = msg.header
         out_msg.range_count = msg.range_count
@@ -323,7 +336,7 @@ class TraitementNode(Node):
         out_msg.bearing_resolution = msg.bearing_resolution
         out_msg.min_range = msg.min_range
         out_msg.max_range = msg.max_range
-        out_msg.intensities = filtered.flatten().tolist()
+        out_msg.intensities = final_img.flatten().tolist()
         out_msg.sound_speed = msg.sound_speed
         out_msg.gain = msg.gain
         

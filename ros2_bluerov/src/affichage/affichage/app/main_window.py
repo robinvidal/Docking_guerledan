@@ -128,6 +128,7 @@ class MainWindow(QMainWindow):
         self.ros_node.signals.new_detected_lines.connect(self.on_detected_lines)
         self.ros_node.signals.new_tracked_object.connect(self.on_tracked_object)
         self.ros_node.signals.new_icp_tracked_object.connect(self.on_icp_tracked_object)
+        self.ros_node.signals.new_pos_cage.connect(self.on_pos_cage)
         self.ros_node.signals.new_pose.connect(self.on_pose)
         self.ros_node.signals.new_state.connect(self.on_state)
 
@@ -162,6 +163,16 @@ class MainWindow(QMainWindow):
     def on_detected_lines(self, msg):
         self.cartesian_filtered_panel.update_detected_lines(msg)
         self.compare_panel.update_detected_lines(msg)
+
+    def on_pos_cage(self, msg):
+        """Affiche la position prédite de la cage dans les vues cartésiennes."""
+        try:
+            x = float(msg.x)
+            y = float(msg.y)
+        except Exception:
+            return
+        self.cartesian_filtered_panel.viewer.show_pos_cage(x, y)
+        self.compare_panel.cartesian_viewer.show_pos_cage(x, y)
     
     def on_tracked_object(self, msg):
         """Affiche la bounding box du tracker CSRT."""

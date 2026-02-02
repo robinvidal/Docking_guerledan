@@ -1,0 +1,13 @@
+traitement_polar_node:
+  ros__parameters:
+    polar_enable_gaussian: true
+    polar_gaussian_sigma: 1.0
+    polar_enable_median: true
+    polar_median_kernel: 3
+    polar_enable_loss: true
+    polar_loss_window_size: 6
+    polar_enable_frost: true
+    polar_frost_window_size: 7
+    polar_frost_damping: 3.4
+    polar_enable_log_compression: false
+    polar_log_scale: 2.0

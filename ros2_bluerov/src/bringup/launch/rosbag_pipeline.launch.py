@@ -44,7 +44,7 @@ def generate_launch_description():
 
     # ==== Rosbag play ====
     rosbag_play = ExecuteProcess(
-        cmd=['ros2', 'bag', 'play', LaunchConfiguration('bag_path'), '--loop','-r', '0.5'],
+        cmd=['ros2', 'bag', 'play', LaunchConfiguration('bag_path'), '--loop'],
         output='screen'
     )
 

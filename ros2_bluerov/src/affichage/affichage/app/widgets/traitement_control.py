@@ -36,75 +36,89 @@ class TraitementControlWidget(QWidget):
         scroll_content = QWidget()
         scroll_layout = QVBoxLayout(scroll_content)
 
-        tvg_group = self.create_group_box(
-            "🎚️ Correction TVG",
+        # ========== FILTRES POLAIRES ==========
+        polar_gaussian_group = self.create_group_box(
+            "🌀 Filtre Gaussien (Polaire)",
             [
-                ('enable_histogram_eq', 'Égalisation histogramme (CLAHE)', 'bool', True),
-                ('enable_tvg_correction', 'Activer correction TVG', 'bool', False),
-                ('tvg_alpha', 'Coefficient atténuation α (Np/m)', 'double', 0.0002, 0.0, 0.001, 0.00001),
-                ('tvg_spreading_loss', 'Perte étalement (dB)', 'double', 20.0, 10.0, 40.0, 1.0),
+                ('polar_enable_gaussian', 'Activer Gaussien', 'bool', True),
+                ('polar_gaussian_sigma', 'Sigma', 'double', 1.0, 0.1, 10.0, 0.1),
             ],
         )
-        scroll_layout.addWidget(tvg_group)
+        scroll_layout.addWidget(polar_gaussian_group)
 
-        filter_group = self.create_group_box(
-            "🔍 Filtrage de base",
+        polar_median_group = self.create_group_box(
+            "📊 Filtre Médian (Polaire)",
             [
-                ('enable_median', 'Filtre médian', 'bool', True),
-                ('median_kernel', 'Taille kernel médian', 'int', 3, 3, 11, 2),
-                ('enable_gaussian', 'Filtre gaussien', 'bool', True),
-                ('gaussian_sigma', 'Sigma gaussien', 'double', 1.0, 0.1, 5.0, 0.1),
-                ('enable_simple_threshold', 'Seuillage binaire', 'bool', False),
-                ('simple_threshold', 'Seuil (0-255)', 'int', 128, 0, 255, 1),
+                ('polar_enable_median', 'Activer Médian', 'bool', True),
+                ('polar_median_kernel', 'Taille kernel', 'int', 3, 3, 15, 2),
             ],
         )
-        scroll_layout.addWidget(filter_group)
+        scroll_layout.addWidget(polar_median_group)
 
-        advanced_group = self.create_group_box(
-            "🧪 Filtres avancés",
+        polar_loss_group = self.create_group_box(
+            "🔧 Filtre Loss - Lee (Polaire)",
             [
-                ('enable_bilateral', 'Filtre bilatéral', 'bool', False),
-                ('bilateral_d', 'Diamètre voisinage (d)', 'int', 5, 1, 25, 1),
-                ('bilateral_sigma_color', 'Sigma couleur', 'double', 25.0, 1.0, 150.0, 1.0),
-                ('bilateral_sigma_space', 'Sigma espace', 'double', 5.0, 1.0, 50.0, 1.0),
-                ('enable_tophat', 'Top-hat morphologique', 'bool', False),
-                ('tophat_kernel', 'Taille noyau top-hat', 'int', 5, 1, 31, 2),
-                ('enable_log_enhance', 'Renforcement LoG', 'bool', False),
-                ('log_sigma', 'Sigma LoG', 'double', 1.0, 0.2, 10.0, 0.2),
-                ('enable_dog_enhance', 'Renforcement DoG', 'bool', False),
-                ('dog_sigma1', 'Sigma1 DoG', 'double', 1.0, 0.2, 10.0, 0.2),
-                ('dog_sigma2', 'Sigma2 DoG', 'double', 2.0, 0.2, 10.0, 0.2),
-                ('enable_matched_filter', 'Filtre adapté (PSF gaussien)', 'bool', False),
-                ('mf_sigma', 'Sigma PSF', 'double', 1.2, 0.2, 10.0, 0.2),
-                ('mf_kernel_size', 'Taille noyau PSF', 'int', 9, 3, 51, 2),
+                ('polar_enable_loss', 'Activer Loss', 'bool', False),
+                ('polar_loss_window_size', 'Taille fenêtre', 'int', 5, 3, 15, 2),
             ],
         )
-        scroll_layout.addWidget(advanced_group)
+        scroll_layout.addWidget(polar_loss_group)
 
-        cfar_group = self.create_group_box(
-            "🎯 SO-CFAR",
+        polar_frost_group = self.create_group_box(
+            "❄️ Filtre Frost (Polaire)",
             [
-                ('enable_so_cfar', 'Activer SO-CFAR', 'bool', True),
-                ('cfar_guard_cells', 'Cellules de garde', 'int', 5, 1, 20, 1),
-                ('cfar_window_size', 'Taille fenêtre référence', 'int', 10, 5, 30, 1),
-                ('cfar_alpha', 'Facteur seuil α', 'double', 10.0, 1.0, 20.0, 0.5),
+                ('polar_enable_frost', 'Activer Frost', 'bool', False),
+                ('polar_frost_window_size', 'Taille fenêtre', 'int', 5, 3, 15, 2),
+                ('polar_frost_damping', 'Damping factor', 'double', 1.0, 0.1, 5.0, 0.1),
             ],
         )
-        scroll_layout.addWidget(cfar_group)
+        scroll_layout.addWidget(polar_frost_group)
 
-        adt_group = self.create_group_box(
-            "✂️ Seuillage ADT",
+        polar_log_group = self.create_group_box(
+            "📈 Compression Log (Polaire)",
             [
-                ('enable_adaptive_threshold', 'Activer ADT', 'bool', False),
-                ('adt_block_size', 'Taille bloc', 'int', 15, 5, 51, 2),
-                ('adt_c', 'Constante C', 'int', 2, 0, 10, 1),
+                ('polar_enable_log_compression', 'Activer compression log', 'bool', False),
+                ('polar_log_scale', 'Facteur échelle', 'double', 30.0, 1.0, 100.0, 1.0),
             ],
         )
-        scroll_layout.addWidget(adt_group)
+        scroll_layout.addWidget(polar_log_group)
+
+        # ========== CONVERSION CARTÉSIENNE ==========
+        conversion_group = self.create_group_box(
+            "🔄 Conversion Polaire → Cartésien",
+            [
+                ('enable_cartesian_conversion', 'Activer conversion', 'bool', True),
+                ('cartesian_output_size', 'Taille image (NxN)', 'int', 512, 128, 2048, 64),
+            ],
+        )
+        scroll_layout.addWidget(conversion_group)
+
+        # ========== FILTRES CARTÉSIENS ==========
+        cart_canny_group = self.create_group_box(
+            "🎯 Détection Canny (Cartésien)",
+            [
+                ('cart_enable_canny', 'Activer Canny', 'bool', False),
+                ('cart_canny_threshold1', 'Seuil bas', 'double', 50.0, 0.0, 300.0, 10.0),
+                ('cart_canny_threshold2', 'Seuil haut', 'double', 150.0, 0.0, 300.0, 10.0),
+                ('cart_canny_aperture', 'Aperture (3/5/7)', 'int', 3, 3, 7, 2),
+            ],
+        )
+        scroll_layout.addWidget(cart_canny_group)
+
+        cart_percentile_group = self.create_group_box(
+            "✂️ Binarisation Centiles (Cartésien)",
+            [
+                ('cart_enable_percentile_binarization', 'Activer binarisation', 'bool', False),
+                ('cart_percentile_threshold', 'Centile (ex: 90 = top 10%)', 'double', 90.0, 50.0, 99.9, 1.0),
+            ],
+        )
+        scroll_layout.addWidget(cart_percentile_group)
 
         info_label = QLabel(
             "ℹ️ Les modifications sont appliquées en temps réel au nœud traitement_node.\n"
-            "Utilisez 'Sauvegarder dans YAML' pour rendre les changements permanents."
+            "Utilisez 'Sauvegarder dans YAML' pour rendre les changements permanents.\n\n"
+            "🔵 Filtres polaires: appliqués sur données brutes (bearing × range)\n"
+            "🟢 Filtres cartésiens: appliqués après conversion en grille (x × y)"
         )
         info_label.setWordWrap(True)
         scroll_layout.addWidget(info_label)
@@ -280,37 +294,28 @@ class TraitementControlWidget(QWidget):
 
         if reply == QMessageBox.Yes:
             defaults = {
-                'enable_histogram_eq': True,
-                'enable_tvg_correction': False,
-                'tvg_alpha': 0.0002,
-                'tvg_spreading_loss': 20.0,
-                'enable_median': True,
-                'median_kernel': 3,
-                'enable_gaussian': True,
-                'gaussian_sigma': 1.0,
-                'enable_simple_threshold': False,
-                'simple_threshold': 128,
-                'enable_bilateral': False,
-                'bilateral_d': 5,
-                'bilateral_sigma_color': 25.0,
-                'bilateral_sigma_space': 5.0,
-                'enable_tophat': False,
-                'tophat_kernel': 5,
-                'enable_log_enhance': False,
-                'log_sigma': 1.0,
-                'enable_dog_enhance': False,
-                'dog_sigma1': 1.0,
-                'dog_sigma2': 2.0,
-                'enable_matched_filter': False,
-                'mf_sigma': 1.2,
-                'mf_kernel_size': 9,
-                'enable_so_cfar': True,
-                'cfar_guard_cells': 5,
-                'cfar_window_size': 10,
-                'cfar_alpha': 10.0,
-                'enable_adaptive_threshold': False,
-                'adt_block_size': 15,
-                'adt_c': 2,
+                # Filtres polaires
+                'polar_enable_gaussian': True,
+                'polar_gaussian_sigma': 1.0,
+                'polar_enable_median': True,
+                'polar_median_kernel': 3,
+                'polar_enable_loss': False,
+                'polar_loss_window_size': 5,
+                'polar_enable_frost': False,
+                'polar_frost_window_size': 5,
+                'polar_frost_damping': 1.0,
+                'polar_enable_log_compression': False,
+                'polar_log_scale': 30.0,
+                # Conversion cartésienne
+                'enable_cartesian_conversion': True,
+                'cartesian_output_size': 512,
+                # Filtres cartésiens
+                'cart_enable_canny': False,
+                'cart_canny_threshold1': 50.0,
+                'cart_canny_threshold2': 150.0,
+                'cart_canny_aperture': 3,
+                'cart_enable_percentile_binarization': False,
+                'cart_percentile_threshold': 90.0,
             }
 
             for name, value in defaults.items():
