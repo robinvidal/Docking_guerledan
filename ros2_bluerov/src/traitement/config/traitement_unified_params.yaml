@@ -1,0 +1,21 @@
+traitement_unified_node:
+  ros__parameters:
+    # ========== FILTRES POLAIRES ==========
+    polar_enable_median: true
+    polar_median_kernel: 3
+    
+    polar_enable_frost: true
+    polar_frost_window_size: 7
+    polar_frost_damping: 3.4
+    
+    # ========== PARAMÈTRES CARTÉSIENS ==========
+    cartesian_scale_factor: 2.0
+    
+    # Filtre spatial gaussien (actif quand tracker disponible)
+    enable_spatial_filter: true
+    spatial_filter_radius: 2.0
+    spatial_filter_sigma: 0.8
+    
+    # Binarisation par centile
+    cart_enable_percentile_binarization: true
+    cart_percentile_threshold: 95.0

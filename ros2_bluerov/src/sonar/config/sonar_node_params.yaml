@@ -2,7 +2,7 @@
   ros__parameters:
     ip_address: 192.168.1.10
     port: 52102
-    range: 2.0
+    range: 3.0
     gain_percent: 50
     master_mode: 1
     ping_rate: 0

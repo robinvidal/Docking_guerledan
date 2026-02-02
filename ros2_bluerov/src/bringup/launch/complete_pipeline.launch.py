@@ -45,40 +45,11 @@ def generate_launch_description():
         parameters=[sonar_node_config],
         output='screen'
     )
-
-    # Filtrage polaire
-    traitement_polar = Node(
+    traitement = Node(
         package='traitement',
-        executable='traitement_polar_node',
-        name='traitement_polar_node',
+        executable='traitement_unified_node',
+        name='traitement_unified_node',
         parameters=[traitement_config],
-        output='screen'
-    )
-
-    # Filtrage cartésien
-    traitement_cartesian = Node(
-        package='traitement',
-        executable='traitement_cartesian_node',
-        name='traitement_cartesian_node',
-        parameters=[traitement_config],
-        output='screen'
-    )
-
-    # Détection de lignes Hough
-    hough_lines = Node(
-        package='tracking',
-        executable='hough_lines_node',
-        name='hough_lines_node',
-        parameters=[tracking_config],
-        output='screen'
-    )
-
-    # Option 1: Blob tracker (ancien système)
-    blob_tracker = Node(
-        package='tracking',
-        executable='blob_tracker_node',
-        name='blob_tracker_node',
-        parameters=[tracking_config],
         output='screen'
     )
 
@@ -180,12 +151,8 @@ def generate_launch_description():
     return LaunchDescription([
         # Sonar pipeline
         sonar_node,
-        traitement_polar,
-        traitement_cartesian,
-        hough_lines,
-        # blob_tracker,        # Ancien système (décommenter si besoin)
+        traitement,
         csrt_tracker,          # Nouveau système CSRT (sélection: Ctrl+Clic dans Sonar Viewer)
-        # localisation,
         sonar_viewer,
 
         # PX4 / MAVROS + control stack

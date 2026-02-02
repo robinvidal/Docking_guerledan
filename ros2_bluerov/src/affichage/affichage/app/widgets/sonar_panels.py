@@ -15,24 +15,6 @@ class RawSonarPanel(QWidget):
     def update_frame(self, frame_msg):
         self.viewer.update_image(frame_msg)
 
-    def update_borders(self, borders_msg):
-        self.viewer.update_borders(borders_msg)
-
-
-class PolarFilteredSonarPanel(QWidget):
-    """Vue sonar polaire filtré."""
-    def __init__(self):
-        super().__init__()
-        layout = QVBoxLayout(self)
-        self.viewer = SonarCartesianWidget("Sonar Polaire Filtré")
-        layout.addWidget(self.viewer)
-
-    def update_frame(self, frame_msg):
-        self.viewer.update_image(frame_msg)
-
-    def update_borders(self, borders_msg):
-        self.viewer.update_borders(borders_msg)
-
 
 class CartesianFilteredSonarPanel(QWidget):
     """Vue sonar cartésien filtré."""
@@ -44,9 +26,6 @@ class CartesianFilteredSonarPanel(QWidget):
 
     def update_frame(self, frame_msg):
         self.viewer.update_cartesian_frame(frame_msg)
-
-    def update_borders(self, borders_msg):
-        self.viewer.update_borders(borders_msg)
     
     def update_detected_lines(self, lines_msg):
         self.viewer.update_detected_lines(lines_msg)
@@ -70,10 +49,6 @@ class CompareSonarPanel(QWidget):
 
     def update_cartesian(self, frame_msg):
         self.cartesian_viewer.update_cartesian_frame(frame_msg)
-
-    def update_borders(self, borders_msg):
-        self.raw_viewer.update_borders(borders_msg)
-        self.cartesian_viewer.update_borders(borders_msg)
     
     def update_detected_lines(self, lines_msg):
         self.cartesian_viewer.update_detected_lines(lines_msg)

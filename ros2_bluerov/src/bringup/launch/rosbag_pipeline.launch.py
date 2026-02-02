@@ -20,7 +20,7 @@ def generate_launch_description():
     # Depuis le package bringup installé, on remonte vers la racine du workspace
     bringup_share = get_package_share_directory('bringup')
     workspace_root = os.path.join(bringup_share, '..', '..', '..', '..')
-    default_bag_path = os.path.abspath(os.path.join(workspace_root, 'rosbag', 'cage_complete2'))
+    default_bag_path = os.path.abspath(os.path.join(workspace_root, 'rosbag', 'guerledan_02-02-lent'))
     
     # Argument pour le chemin du rosbag
     bag_path_arg = DeclareLaunchArgument(
@@ -56,45 +56,11 @@ def generate_launch_description():
 
     # ==== Pipeline nodes ====
     # Filtrage polaire
-    traitement_polar = Node(
+    traitement_unified_node = Node(
         package='traitement',
-        executable='traitement_polar_node',
-        name='traitement_polar_node',
+        executable='traitement_unified_node',
+        name='traitement_unified_node',
         parameters=[traitement_config],
-        output='screen'
-    )
-
-    # Filtrage cartésien
-    traitement_cartesian = Node(
-        package='traitement',
-        executable='traitement_cartesian_node',
-        name='traitement_cartesian_node',
-        parameters=[traitement_config],
-        output='screen'
-    )
-
-    blob_tracker = Node(
-        package='tracking',
-        executable='blob_tracker_node',
-        name='blob_tracker_node',
-        parameters=[tracking_config],
-        output='screen'
-    )
-
-    hough_lines = Node(
-        package='tracking',
-        executable='hough_lines_node',
-        name='hough_lines_node',
-        parameters=[tracking_config],
-        output='screen'
-    )
-
-    # Option 1: Blob tracker (ancien système)
-    blob_tracker = Node(
-        package='tracking',
-        executable='blob_tracker_node',
-        name='blob_tracker_node',
-        parameters=[tracking_config],
         output='screen'
     )
 
@@ -123,6 +89,8 @@ def generate_launch_description():
         output='screen'
     )
 
+
+
     sonar_viewer = Node(
         package='affichage',
         executable='sonar_viewer',
@@ -134,11 +102,7 @@ def generate_launch_description():
     return LaunchDescription([
         bag_path_arg,
         rosbag_play,
-        traitement_polar,
-        traitement_cartesian,
-        hough_lines,
-        # blob_tracker,       # Décommenter pour utiliser l'ancien tracker
-        csrt_tracker,         # Nouveau tracker CSRT
-        # localisation,
+        traitement_unified_node,
+        #csrt_tracker,         # Nouveau tracker CSRT
         sonar_viewer,
     ])
