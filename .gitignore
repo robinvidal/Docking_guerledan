@@ -8,7 +8,7 @@
 *.tmp
 *.bak
 *~
-
+*.db3
 # === Fichiers Python ===
 __pycache__/
 *.py[cod]
