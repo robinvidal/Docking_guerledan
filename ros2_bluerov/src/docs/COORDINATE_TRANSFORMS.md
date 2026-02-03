@@ -203,7 +203,7 @@ la traçabilité et la cohérence des conventions de signes.
 | T1 | sonar_node.py | 194 | `.T.ravel()` | Transpose + Flatten | Format message bearing-major | N/A |
 | T2 | traitement_unified_node.py | 167 | `arctan2(-xv, yv)` | Inversion X | Convention bearing sonar | Implicite |
 | T3 | traitement_unified_node.py | 295-310 | `cv2.flip()` | Flip H/V configurable | Correction si nécessaire | Oui |
-| T4 | csrt_tracker_node.py | 107 | `cv2.flip(img, 0)` | Flip Vertical | Convention Y OpenCV | Oui |
+| T4 | csrt_tracker_node.py | 107 + 155 | `cv2.flip(img, 0)` + `center_x_m = -center_x_m` | Flip Vertical + Correction X | Convention Y OpenCV + Compensation T2 | Oui |
 | T5 | sonar_cartesian_display.py | 199 | `np.rot90(k=1)` | Rotation 90° | Convention PyQtGraph | Oui |
 
 ---
@@ -284,15 +284,17 @@ Notre image cartésienne est:
 
 D'où le `rot90(k=1)` pour aligner les axes.
 
-### 3. Le `-center_x_m_tracker` dans le Filtre Spatial
+### 3. La Correction X dans le Tracker (T4)
 
 ```python
-# traitement_unified_node.py:212
-center_x_m_real = -center_x_m_tracker  # Correction flip
+# csrt_tracker_node.py:155
+center_x_m = -center_x_m
 ```
 
-Cette correction existe car le tracker publie des coordonnées X inversées
-par rapport à la convention utilisée dans le traitement.
+Cette correction compense l'inversion de l'axe X introduite par la transformation T2 (arctan2(-xv, yv)).
+Le tracker inverse le signe de center_x pour publier des coordonnées conformes à la convention sonar:
+- X positif = droite du ROV
+- X négatif = gauche du ROV
 
 ---
 
@@ -361,6 +363,7 @@ Pour valider que toutes les transformations sont cohérentes:
 | Date | Auteur | Description |
 |------|--------|-------------|
 | 2026-02-03 | Initial | Documentation initiale des transformations |
+| 2026-02-03 | Mise à jour | Ajout de la correction X dans le tracker (T4) |
 
 ---
 

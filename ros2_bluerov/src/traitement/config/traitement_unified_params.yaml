@@ -71,4 +71,21 @@ traitement_unified_node:
     # keep_percent: 0.1 à 100 - Pourcentage des pixels les plus intenses à conserver
     # Ex: 1.0 = garde seulement le 1% des pixels les plus intenses
     # ros2 param set /traitement_unified_node cart_percentile_keep_percent 1.0
-    cart_percentile_keep_percent: 1.0
+    cart_percentile_keep_percent: 7.0
+    
+    # 7. Filtre Ouverture-Fermeture (Opening-Closing) - Nettoyage morphologique
+    # Opening = supprime les petits objets/bruit, Closing = comble les trous
+    # ros2 param set /traitement_unified_node cart_enable_opening_closing true
+    cart_enable_opening_closing: true
+    # Taille du kernel pour l'ouverture (suppression bruit) - 3, 5, 7
+    # ros2 param set /traitement_unified_node cart_opening_kernel_size 3
+    cart_opening_kernel_size: 3
+    # Taille du kernel pour la fermeture (solidification) - 3, 5, 7
+    # ros2 param set /traitement_unified_node cart_closing_kernel_size 3
+    cart_closing_kernel_size: 7
+    # Nombre d'itérations de l'ouverture (0 = désactivé)
+    # ros2 param set /traitement_unified_node cart_opening_iterations 1
+    cart_opening_iterations: 1
+    # Nombre d'itérations de la fermeture (0 = désactivé)
+    # ros2 param set /traitement_unified_node cart_closing_iterations 1
+    cart_closing_iterations: 5
