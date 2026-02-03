@@ -194,8 +194,22 @@ class SonarCartesianImageWidget(pg.PlotWidget):
         rgb = np.stack((r_chan, g_chan, b_chan), axis=-1)
         rgb_uint8 = (rgb * 255).astype(np.uint8)
         
-        # Rotation de 90° pour correspondre à l'orientation correcte
-        # (même transformation que dans sonar_display.py)
+        # TRANSFORMATION T5 - Rotation 90° pour PyQtGraph
+        # ================================================
+        # Voir COORDINATE_TRANSFORMS.md pour les détails complets.
+        #
+        # Notre image cartésienne (après traitement):
+        #   - Axe 0 (lignes) = Y: de ROV(0) à avant(max)
+        #   - Axe 1 (colonnes) = X: de gauche(-) à droite(+)
+        #   - Shape: (height, width) = (n_y, n_x)
+        #
+        # Convention PyQtGraph ImageItem:
+        #   - Axe 0 de l'array numpy → direction X (horizontal)
+        #   - Axe 1 de l'array numpy → direction Y (vertical)
+        #
+        # np.rot90(k=1) effectue une rotation antihoraire de 90°:
+        #   - Ancien axe 0 (Y) devient axe 1 (vertical dans pyqtgraph = Y) ✓
+        #   - Ancien axe 1 (X) devient axe 0 (horizontal dans pyqtgraph = X) ✓
         rgb_uint8 = np.rot90(rgb_uint8, k=1)
         
         # Mémoriser la résolution pour la conversion pixel/mètre
@@ -459,13 +473,28 @@ class SonarCartesianImageWidget(pg.PlotWidget):
         x1_m, y1_m = self.bbox_start_point
         x2_m, y2_m = self.bbox_current_point
         
-        # Convertir en pixels
-        x1_px = int((x1_m / self.current_resolution) + self.origin_x)
-        y1_px = int(self.image_height - (y1_m / self.current_resolution))
-        x2_px = int((x2_m / self.current_resolution) + self.origin_x)
-        y2_px = int(self.image_height - (y2_m / self.current_resolution))
+        # Conversion mètres → pixels
+        # ==========================
+        # Le rectangle pointillé est dessiné dans le repère PyQtGraph (mètres) :
+        #   - X: de -max_range à +max_range (gauche à droite)
+        #   - Y: de 0 à max_range (bas=ROV vers haut=avant)
+        #
+        # L'image envoyée au tracker est AVANT rot90, shape (height, width) :
+        #   - Ligne 0 = Y proche du ROV (Y=0 en mètres)
+        #   - Ligne max = Y loin du ROV (Y=max_range en mètres)
+        #   - Colonne 0 = X gauche (X=-max_range en mètres)
+        #   - origin_x = colonne centrale (X=0 en mètres)
+        #
+        # Formules de conversion (repère PyQtGraph → pixels image AVANT rot90) :
+        #   x_px = origin_x - (x_m / resolution)  ← X INVERSÉ
+        #   y_px = y_m / resolution
         
-        # Normaliser (x, y = coin supérieur gauche)
+        x1_px = int(self.origin_x - (x1_m / self.current_resolution))
+        y1_px = int(y1_m / self.current_resolution)
+        x2_px = int(self.origin_x - (x2_m / self.current_resolution))
+        y2_px = int(y2_m / self.current_resolution)
+        
+        # Normaliser (x, y = coin supérieur gauche dans le repère image)
         bbox_x = min(x1_px, x2_px)
         bbox_y = min(y1_px, y2_px)
         bbox_w = abs(x2_px - x1_px)

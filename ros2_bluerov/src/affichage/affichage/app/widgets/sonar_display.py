@@ -66,12 +66,21 @@ class SonarCartesianWidget(pg.PlotWidget):
         self.image_rotation = 1
 
     def update_image(self, frame_msg):
+        """Met à jour l'affichage sonar polaire avec conversion vers cartésien."""
+        # Reconstruction de l'image polaire depuis le format flat bearing-major
         img = np.array(frame_msg.intensities, dtype=np.uint8).reshape(
             (frame_msg.bearing_count, frame_msg.range_count)
         )
         ranges = np.linspace(frame_msg.min_range, frame_msg.max_range, frame_msg.range_count)
         total_angle = frame_msg.bearing_resolution * frame_msg.bearing_count
-        # Invert bearing sign to correct horizontal mirroring (left/right)
+        
+        # INVERSION DES BEARINGS pour l'affichage
+        # ========================================
+        # Les bearings dans l'image polaire sont ordonnés de l'indice 0 à N.
+        # Par convention du message Frame, bearing[0] = -FOV/2 (gauche).
+        # Pour que l'affichage montre la gauche à gauche et la droite à droite,
+        # on inverse le signe des bearings calculés ici.
+        # Ceci est cohérent avec arctan2(-xv, yv) utilisé dans la conversion.
         bearings = -np.linspace(-total_angle / 2, total_angle / 2, frame_msg.bearing_count)
 
         # Update field-of-view boundary lines using current angle and max range

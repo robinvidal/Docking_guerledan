@@ -16,7 +16,6 @@ from .widgets.sonar_panels import (
     CompareSonarPanel
 )
 from .widgets.tracker_control import TrackerControlWidget
-from .widgets.status_header import StatusHeader
 from .core.config_loader import get_cage_dimensions
 
 
@@ -35,10 +34,6 @@ class MainWindow(QMainWindow):
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
         main_layout = QVBoxLayout(central_widget)
-
-        self.status_header = StatusHeader()
-        self.status_header.abort_clicked.connect(self.ros_node.send_abort)
-        main_layout.addWidget(self.status_header)
 
         splitter = QSplitter(Qt.Horizontal)
 
@@ -124,8 +119,6 @@ class MainWindow(QMainWindow):
         self.ros_node.signals.new_cartesian_filtered_frame.connect(self.on_cartesian_filtered_frame)
         self.ros_node.signals.new_detected_lines.connect(self.on_detected_lines)
         self.ros_node.signals.new_tracked_object.connect(self.on_tracked_object)
-        self.ros_node.signals.new_pose.connect(self.on_pose)
-        self.ros_node.signals.new_state.connect(self.on_state)
 
     def on_raw_frame(self, msg):
         self.last_raw_frame = msg
@@ -145,12 +138,6 @@ class MainWindow(QMainWindow):
         """Affiche la bounding box du tracker CSRT."""
         self.cartesian_filtered_panel.update_tracked_object(msg)
         self.compare_panel.update_tracked_object(msg)
-
-    def on_pose(self, msg):
-        self.status_header.update_pose(msg)
-
-    def on_state(self, msg):
-        self.status_header.update_state(msg)
 
     def set_left_view(self, index):
         self.left_stack.setCurrentIndex(index)

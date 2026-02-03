@@ -9,6 +9,7 @@ from docking_msgs.msg import Frame, FrameCartesian, TrackedObject
 import numpy as np
 from scipy import ndimage
 from scipy.ndimage import map_coordinates
+import cv2
 
 
 class TraitementUnifiedNode(Node):
@@ -27,7 +28,7 @@ class TraitementUnifiedNode(Node):
         super().__init__('traitement_unified_node')
         
         # ========== PARAMÈTRES POLAIRES ==========
-        # Filtre Médian
+        # Filtre Médian (Denoising)
         self.declare_parameter('polar_enable_median', True)
         self.declare_parameter('polar_median_kernel', 3)
         
@@ -39,14 +40,34 @@ class TraitementUnifiedNode(Node):
         # ========== PARAMÈTRES CARTÉSIENS ==========
         self.declare_parameter('cartesian_scale_factor', 2.0)
         
-        # Filtre spatial gaussien
-        self.declare_parameter('enable_spatial_filter', True)
+        # Filtre spatial gaussien (actif quand tracker disponible)
+        self.declare_parameter('enable_spatial_filter', False)
         self.declare_parameter('spatial_filter_radius', 2.0)
         self.declare_parameter('spatial_filter_sigma', 0.8)
         
-        # Binarisation par centile
-        self.declare_parameter('cart_enable_percentile_binarization', True)
-        self.declare_parameter('cart_percentile_threshold', 95.0)
+        # ========== NOUVEAUX FILTRES CARTÉSIENS ==========
+        
+        # Filtre Médian Cartésien (Denoising supplémentaire)
+        self.declare_parameter('cart_enable_median', True)
+        self.declare_parameter('cart_median_kernel_size', 3)
+        
+        # Filtre CLAHE (Amélioration de contraste)
+        self.declare_parameter('cart_enable_clahe', True)
+        self.declare_parameter('cart_clahe_clip_limit', 2.0)
+        self.declare_parameter('cart_clahe_tile_grid_size', 8)
+        
+        # Filtre Seuil Bas (Threshold to Zero) - SEUL FILTRE QUI BINARISE
+        self.declare_parameter('cart_enable_threshold', True)
+        self.declare_parameter('cart_min_intensity_threshold', 40)
+        
+        # Filtre Morphologique (Closing)
+        self.declare_parameter('cart_enable_morphology', True)
+        self.declare_parameter('cart_morph_kernel_size', 3)
+        self.declare_parameter('cart_morph_iterations', 1)
+        
+        # Filtre Géométrique (Flip)
+        self.declare_parameter('cart_flip_horizontal', False)
+        self.declare_parameter('cart_flip_vertical', False)
         
         # ========== SUBSCRIPTIONS ==========
         self.sonar_sub = self.create_subscription(
@@ -124,29 +145,55 @@ class TraitementUnifiedNode(Node):
     # ========== CONVERSION POLAIRE → CARTÉSIEN ==========
     
     def polar_to_cartesian(self, polar_img: np.ndarray, frame_msg: Frame) -> tuple:
-        """Convertit image polaire en cartésienne avec interpolation."""
+        """Convertit image polaire en cartésienne avec interpolation bilinéaire.
+        
+        TRANSFORMATION T2 - Voir COORDINATE_TRANSFORMS.md
+        
+        Convention d'entrée (image polaire):
+            - Axe 0 (lignes) = bearing, de -FOV/2 (gauche) à +FOV/2 (droite)
+            - Axe 1 (colonnes) = range, de min_range à max_range
+        
+        Convention de sortie (image cartésienne):
+            - Axe 0 (lignes) = Y, de 0 (ROV) à max_range (avant)
+            - Axe 1 (colonnes) = X, de -max_range (gauche) à +max_range (droite)
+            - origin_x = centre horizontal (colonne du ROV)
+            - origin_y = 0 (ligne du ROV)
+        
+        NOTE IMPORTANTE sur arctan2(-xv, yv):
+            On utilise -xv car les bearings dans l'image polaire sont ordonnés
+            de gauche à droite (bearing croissant), ce qui correspond à X 
+            décroissant dans notre convention cartésienne. L'inversion de X
+            dans arctan2 compense cet ordre.
+        
+        Returns:
+            tuple: (cart_img, resolution_m_per_px, origin_x, origin_y, total_angle_rad)
+        """
         bc = frame_msg.bearing_count
         rc = frame_msg.range_count
         max_r = frame_msg.max_range
         min_r = frame_msg.min_range
-        total_angle = frame_msg.bearing_resolution * bc
+        total_angle = frame_msg.bearing_resolution * bc  # Angle total du FOV en radians
         
         scale_factor = float(self.get_parameter('cartesian_scale_factor').value)
         cache = self._mapping_cache
         
         if cache['bearing_count'] != bc or cache['range_count'] != rc:
-            out_h = rc
-            out_w = int(scale_factor * rc)
+            out_h = rc  # Hauteur = nombre de bins de range
+            out_w = int(scale_factor * rc)  # Largeur = scale * range (image plus large)
             
-            xs = np.linspace(-max_r, max_r, out_w)
-            ys = np.linspace(0, max_r, out_h)
+            # Grille cartésienne de destination
+            xs = np.linspace(-max_r, max_r, out_w)  # X: gauche(-) → droite(+)
+            ys = np.linspace(0, max_r, out_h)       # Y: ROV(0) → avant(max)
             xv, yv = np.meshgrid(xs, ys)
             
-            rr = np.sqrt(xv**2 + yv**2)
-            th = np.arctan2(-xv, yv)
+            # Calcul des coordonnées polaires correspondantes
+            rr = np.sqrt(xv**2 + yv**2)  # Range = distance au ROV
+            # ATTENTION: -xv pour corriger l'ordre des bearings (voir docstring)
+            th = np.arctan2(-xv, yv)     # Bearing = arctan2(x, y) en convention sonar
             
-            i_float = (th + total_angle / 2.0) / total_angle * (bc - 1)
-            j_float = (rr - min_r) / (max_r - min_r) * (rc - 1)
+            # Mapping vers les indices de l'image polaire source
+            i_float = (th + total_angle / 2.0) / total_angle * (bc - 1)  # Index bearing
+            j_float = (rr - min_r) / (max_r - min_r) * (rc - 1)          # Index range
             
             coords = np.vstack((i_float.ravel(), j_float.ravel()))
             
@@ -188,7 +235,7 @@ class TraitementUnifiedNode(Node):
         sigma_m = float(self.get_parameter('spatial_filter_sigma').value)
         
         height, width = img.shape
-        center_x_m_real = -center_x_m_tracker  # Correction flip
+        center_x_m_real = center_x_m_tracker  # Correction flip
         
         cache = self._spatial_cache
         cache_valid = (
@@ -221,11 +268,87 @@ class TraitementUnifiedNode(Node):
         
         return (img.astype(np.float32) * mask).astype(np.uint8)
     
-    def apply_percentile_binarization(self, img: np.ndarray) -> np.ndarray:
-        """Binarisation par centile - garde les N% pixels les plus lumineux."""
-        percentile = float(self.get_parameter('cart_percentile_threshold').value)
-        threshold = np.percentile(img, percentile)
-        return np.where(img >= threshold, 255, 0).astype(np.uint8)
+    def apply_cart_median_filter(self, img: np.ndarray) -> np.ndarray:
+        """Filtre Médian cartésien - Supprime le bruit poivre et sel."""
+        if not self.get_parameter('cart_enable_median').value:
+            return img
+        
+        kernel_size = int(self.get_parameter('cart_median_kernel_size').value)
+        # Assure que kernel_size est impair
+        if kernel_size % 2 == 0:
+            kernel_size += 1
+        return cv2.medianBlur(img, kernel_size)
+    
+    def apply_clahe_filter(self, img: np.ndarray) -> np.ndarray:
+        """Filtre CLAHE - Amélioration adaptative du contraste local."""
+        if not self.get_parameter('cart_enable_clahe').value:
+            return img
+        
+        clip_limit = float(self.get_parameter('cart_clahe_clip_limit').value)
+        tile_size = int(self.get_parameter('cart_clahe_tile_grid_size').value)
+        
+        clahe = cv2.createCLAHE(
+            clipLimit=clip_limit,
+            tileGridSize=(tile_size, tile_size)
+        )
+        return clahe.apply(img)
+    
+    def apply_threshold_filter(self, img: np.ndarray) -> np.ndarray:
+        """Filtre Seuil - Met à zéro les pixels sous le seuil (SEUL FILTRE BINARISANT)."""
+        if not self.get_parameter('cart_enable_threshold').value:
+            return img
+        
+        min_threshold = int(self.get_parameter('cart_min_intensity_threshold').value)
+        # Threshold to zero: pixels < threshold deviennent 0, les autres gardent leur valeur
+        _, thresholded = cv2.threshold(img, min_threshold, 255, cv2.THRESH_TOZERO)
+        return thresholded
+    
+    def apply_morphology_filter(self, img: np.ndarray) -> np.ndarray:
+        """Filtre Morphologique (Closing) - Comble les discontinuités des barres."""
+        if not self.get_parameter('cart_enable_morphology').value:
+            return img
+        
+        kernel_size = int(self.get_parameter('cart_morph_kernel_size').value)
+        iterations = int(self.get_parameter('cart_morph_iterations').value)
+        
+        kernel = cv2.getStructuringElement(
+            cv2.MORPH_RECT,
+            (kernel_size, kernel_size)
+        )
+        # Closing = Dilatation + Érosion (solidifie les objets)
+        return cv2.morphologyEx(img, cv2.MORPH_CLOSE, kernel, iterations=iterations)
+    
+    def apply_flip_filter(self, img: np.ndarray) -> np.ndarray:
+        """Filtre Géométrique - Retourne l'image horizontalement et/ou verticalement.
+        
+        ATTENTION: Ces flips sont optionnels et désactivés par défaut.
+        Voir COORDINATE_TRANSFORMS.md pour la documentation complète.
+        
+        Convention de l'image cartésienne SANS flip:
+            - Ligne 0 = Y proche du ROV (y ≈ 0)
+            - Ligne max = Y loin du ROV (y = max_range)  
+            - Colonne 0 = X gauche (x = -max_range)
+            - Colonne max = X droite (x = +max_range)
+        
+        cv2.flip codes:
+            0 = flip vertical (miroir horizontal, échange haut/bas)
+            1 = flip horizontal (miroir vertical, échange gauche/droite)
+           -1 = flip les deux (rotation 180°)
+        """
+        flip_h = self.get_parameter('cart_flip_horizontal').value
+        flip_v = self.get_parameter('cart_flip_vertical').value
+        
+        if not flip_h and not flip_v:
+            return img
+        
+        if flip_h and flip_v:
+            return cv2.flip(img, -1)  # Flip horizontal + vertical (rotation 180°)
+        elif flip_h:
+            return cv2.flip(img, 1)   # Flip horizontal: gauche ↔ droite
+        elif flip_v:
+            return cv2.flip(img, 0)   # Flip vertical: haut ↔ bas
+        
+        return img
     
     # ========== CALLBACK PRINCIPAL ==========
     
@@ -266,11 +389,24 @@ class TraitementUnifiedNode(Node):
         
         filtered_cart = cart_img.copy()
         
+        # 1. Flip géométrique (correction d'orientation)
+        filtered_cart = self.apply_flip_filter(filtered_cart)
+        
+        # 2. Filtre Médian (denoising)
+        filtered_cart = self.apply_cart_median_filter(filtered_cart)
+        
+        # 3. CLAHE (amélioration contraste)
+        filtered_cart = self.apply_clahe_filter(filtered_cart)
+        
+        # 4. Filtre spatial gaussien (focus sur zone trackée)
         if self.get_parameter('enable_spatial_filter').value:
             filtered_cart = self.apply_spatial_filter(filtered_cart, resolution, origin_x)
         
-        if self.get_parameter('cart_enable_percentile_binarization').value:
-            filtered_cart = self.apply_percentile_binarization(filtered_cart)
+        # 5. Seuil bas (SEUL FILTRE BINARISANT - nettoie les faibles intensités)
+        filtered_cart = self.apply_threshold_filter(filtered_cart)
+        
+        # 6. Morphologie (closing - solidifie les structures)
+        filtered_cart = self.apply_morphology_filter(filtered_cart)
         
         # Publication cartésienne filtrée
         cart_msg = FrameCartesian()

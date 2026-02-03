@@ -27,7 +27,9 @@ class BlueROV:
         self.heading = heading  # radians, 0 = nord, pi/2 = est
         
         # Paramètres de contrôle
-        self.max_speed = 0.5  # m/s
+        self.max_speed_x = 0.25  # m/s
+        self.max_speed_y = 0.5  # m/s
+
         self.max_angular_speed = 0.5  # rad/s
         
         # Historique pour le tracé
@@ -87,8 +89,8 @@ class BlueROV:
             dt: pas de temps (s)
         """
         # Limiter les vitesses
-        forward_speed = np.clip(forward_speed, -self.max_speed, self.max_speed)
-        lateral_speed = np.clip(lateral_speed, -self.max_speed, self.max_speed)
+        forward_speed = np.clip(forward_speed, -self.max_speed_x, self.max_speed_x)
+        lateral_speed = np.clip(lateral_speed, -self.max_speed_y, self.max_speed_y)
         angular_speed = np.clip(angular_speed, -self.max_angular_speed, self.max_angular_speed)
         
         # Conversion des vitesses du repère robot vers le repère monde
@@ -124,7 +126,7 @@ class Controller:
         
         # Gains pour les 2 contrôleurs indépendants
         self.kp_heading = 1.2     # Contrôleur cap : centrer les bouées
-        self.kp_forward = 1     # Contrôleur déplacement : avant/arrière
+        self.kp_forward = 0.5      # Contrôleur déplacement : avant/arrière
         self.kp_lateral = 1    # Contrôleur déplacement : latéral
         
         # Paramètres de recherche

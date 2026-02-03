@@ -1,9 +1,11 @@
 traitement_unified_node:
   ros__parameters:
     # ========== FILTRES POLAIRES ==========
+    # Filtre Médian Polaire (réduction speckle)
     polar_enable_median: true
     polar_median_kernel: 3
     
+    # Filtre Frost (réduction adaptative du speckle)
     polar_enable_frost: true
     polar_frost_window_size: 7
     polar_frost_damping: 3.4
@@ -12,10 +14,52 @@ traitement_unified_node:
     cartesian_scale_factor: 2.0
     
     # Filtre spatial gaussien (actif quand tracker disponible)
-    enable_spatial_filter: true
+    enable_spatial_filter: false
     spatial_filter_radius: 2.0
     spatial_filter_sigma: 0.8
     
-    # Binarisation par centile
-    cart_enable_percentile_binarization: true
-    cart_percentile_threshold: 95.0
+    # ========== NOUVEAUX FILTRES CARTÉSIENS ==========
+    
+    # 1. Filtre Médian Cartésien (Denoising - supprime bruit poivre/sel)
+    # ros2 param set /traitement_unified_node cart_enable_median true
+    cart_enable_median: true
+    # kernel_size: 3, 5, 7 - Plus grand = moins de bruit mais perte de détails fins
+    # ros2 param set /traitement_unified_node cart_median_kernel_size 5
+    cart_median_kernel_size: 3
+    
+    # 2. Filtre CLAHE (Amélioration de Contraste Adaptative Locale)
+    # Fait ressortir la structure métallique de la cage
+    # ros2 param set /traitement_unified_node cart_enable_clahe true
+    cart_enable_clahe: true
+    # clip_limit: 2.0 à 4.0 - Limite l'amplification du bruit
+    # ros2 param set /traitement_unified_node cart_clahe_clip_limit 3.0
+    cart_clahe_clip_limit: 2.0
+    # tile_grid_size: Taille des blocs pour analyse locale
+    # ros2 param set /traitement_unified_node cart_clahe_tile_grid_size 8
+    cart_clahe_tile_grid_size: 8
+    
+    # 3. Filtre Seuil Bas (Threshold to Zero) - SEUL FILTRE BINARISANT
+    # Met à zéro tout ce qui est en dessous du seuil (nettoie les faibles échos)
+    # ros2 param set /traitement_unified_node cart_enable_threshold true
+    cart_enable_threshold: true
+    # min_intensity_threshold: 0-255 - Valeur sous laquelle tout devient noir
+    # ros2 param set /traitement_unified_node cart_min_intensity_threshold 50
+    cart_min_intensity_threshold: 40
+    
+    # 4. Filtre Morphologique (Closing = Dilatation + Érosion)
+    # Solidifie les barres de la cage, comble les discontinuités
+    # ros2 param set /traitement_unified_node cart_enable_morphology true
+    cart_enable_morphology: true
+    # morph_kernel_size: 3 ou 5 - Taille de l'élément structurant
+    # ros2 param set /traitement_unified_node cart_morph_kernel_size 3
+    cart_morph_kernel_size: 3
+    # morph_iterations: 1 ou 2 - Nombre d'applications du filtre
+    # ros2 param set /traitement_unified_node cart_morph_iterations 1
+    cart_morph_iterations: 1
+    
+    # 5. Filtre Géométrique (Flip/Miroir)
+    # Corrige l'orientation de l'image sonar
+    # ros2 param set /traitement_unified_node cart_flip_horizontal true
+    cart_flip_horizontal: false
+    # ros2 param set /traitement_unified_node cart_flip_vertical false
+    cart_flip_vertical: false

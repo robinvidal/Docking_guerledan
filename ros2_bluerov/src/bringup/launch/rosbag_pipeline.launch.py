@@ -20,7 +20,7 @@ def generate_launch_description():
     # Depuis le package bringup installé, on remonte vers la racine du workspace
     bringup_share = get_package_share_directory('bringup')
     workspace_root = os.path.join(bringup_share, '..', '..', '..', '..')
-    default_bag_path = os.path.abspath(os.path.join(workspace_root, 'rosbag', 'guerledan_02-02-lent'))
+    default_bag_path = os.path.abspath(os.path.join(workspace_root, 'rosbag', 'guerledan_02-02-sans-pvc'))
     
     # Argument pour le chemin du rosbag
     bag_path_arg = DeclareLaunchArgument(
@@ -103,6 +103,6 @@ def generate_launch_description():
         bag_path_arg,
         rosbag_play,
         traitement_unified_node,
-        #csrt_tracker,         # Nouveau tracker CSRT
+        csrt_tracker,         # Nouveau tracker CSRT
         sonar_viewer,
     ])

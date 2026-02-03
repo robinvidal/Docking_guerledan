@@ -161,9 +161,19 @@ class SonarNode(Node):
         msg.min_range = 0.0
         msg.max_range = float(range_m)
 
-        # Intensités: format attendu = tableau 2D aplati: intensité[bearing][range]
-        # Notre array est (range, bearing). On applique un masquage éventuel des bords puis
-        # on transpose et on aplatit par ordre bearing-major.
+        # TRANSFORMATION T1 - Transpose et aplatissement
+        # ================================================
+        # Voir COORDINATE_TRANSFORMS.md pour les détails complets.
+        #
+        # Données SDK Oculus: work[range_idx][bearing_idx] - shape (n_range, n_bearing)
+        # Format message Frame: intensities[bearing_idx][range_idx] - bearing-major flat
+        #
+        # La transpose (.T) convertit (n_range, n_bearing) → (n_bearing, n_range)
+        # puis .ravel() aplatit en ordre row-major (C-order) pour obtenir:
+        #   intensities[i * n_range + j] = pixel(bearing_i, range_j)
+        #
+        # Ce format permet aux noeuds de traitement de reconstruire l'image avec:
+        #   img = intensities.reshape((bearing_count, range_count))
         try:
             import numpy as np
             work = np.array(data, copy=True)
@@ -191,6 +201,7 @@ class SonarNode(Node):
                 mr = min(mr, work.shape[1])
                 work[:, -mr:] = 0.0
 
+            # T1: Transpose + flatten pour format bearing-major
             intensities = np.clip(work, 0, 255).astype(np.uint8).T.ravel()
             msg.intensities = intensities.tolist()
         except Exception:
