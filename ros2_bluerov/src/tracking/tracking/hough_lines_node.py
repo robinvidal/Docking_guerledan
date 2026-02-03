@@ -4,14 +4,23 @@ Cherche spécifiquement une forme de U (Cage ouverte).
 """
 
 import numpy as np
+import math
 import rclpy
 from rclpy.node import Node
 from docking_msgs.msg import FrameCartesian, DetectedLines, ClickPosition
-
+from geometry_msgs.msg import PoseStamped
 try:
     import cv2
 except ImportError:
     cv2 = None
+
+def get_quaternion_from_euler(roll, pitch, yaw):
+    """Convertit un angle Euler (Yaw) en Quaternion pour ROS."""
+    qx = np.sin(roll/2) * np.cos(pitch/2) * np.cos(yaw/2) - np.cos(roll/2) * np.sin(pitch/2) * np.sin(yaw/2)
+    qy = np.cos(roll/2) * np.sin(pitch/2) * np.cos(yaw/2) + np.sin(roll/2) * np.cos(pitch/2) * np.sin(yaw/2)
+    qz = np.cos(roll/2) * np.cos(pitch/2) * np.sin(yaw/2) - np.sin(roll/2) * np.sin(pitch/2) * np.cos(yaw/2)
+    qw = np.cos(roll/2) * np.cos(pitch/2) * np.cos(yaw/2) + np.sin(roll/2) * np.sin(pitch/2) * np.sin(yaw/2)
+    return [qx, qy, qz, qw]
 
 
 class HoughLinesNode(Node):
@@ -63,8 +72,8 @@ class HoughLinesNode(Node):
         )
 
         # Publisher pour la position prédite de la cage (barycentre)
-        self.pos_cage_pub = self.create_publisher(
-            ClickPosition, '/docking/tracking/pos_cage', 10
+        self.cage_pose_pub = self.create_publisher(
+            PoseStamped, '/docking/tracking/cage_pose', 10
         )
 
         # Mémo de la dernière position détectée (None si aucune)
@@ -214,11 +223,26 @@ class HoughLinesNode(Node):
                 l = lines[idx]
                 mid = (np.array(l['p1']) + np.array(l['p2'])) / 2.0
                 pts.append(mid)
+                
             bary = np.mean(np.vstack(pts), axis=0)
             self.last_u_bary = bary
-            # Optionnel : Ne retourner QUE le U ? 
-            # Pour l'instant on retourne tout mais le tracker saura qui est qui grâce au flag.
+
+            # 3. Calcul de l'Orientation (Direction de sortie)
+            # Dans tes boucles, i est toujours la base, j et k sont les bras.
+            # Donc best_triplet[0] est l'indice de la ligne du fond.
+            idx_base = best_triplet[0] 
+            base_line = lines[idx_base]
             
+            # On calcule le centre du fond de la cage
+            base_center = (np.array(base_line['p1']) + np.array(base_line['p2'])) / 2.0
+            
+            # Le vecteur qui va du "Fond" vers le "Centre global" pointe vers la sortie
+            vector_x = bary[0] - base_center[0]
+            vector_y = bary[1] - base_center[1]
+            
+            # Calcul de l'angle (Yaw)
+            self.last_u_angle = math.atan2(vector_y, vector_x)
+
         # Si aucun U détecté, réinitialiser la dernière bary
         if not best_triplet:
             self.last_u_bary = None
@@ -315,21 +339,33 @@ class HoughLinesNode(Node):
         self.publisher_.publish(out_msg)
 
         # Publier la position prédite de la cage si disponible
-        if getattr(self, 'last_u_bary', None) is not None:
+        # PUBLICATION DE LA POSE (Position + Direction)
+        if self.last_u_bary is not None and self.last_u_angle is not None:
             try:
-                bx, by = float(self.last_u_bary[0]), float(self.last_u_bary[1])
-                msg = ClickPosition()
-                msg.header.stamp = self.get_clock().now().to_msg()
-                msg.header.frame_id = 'sonar'
-                msg.x = bx
-                msg.y = by
-                msg.pixel_x = 0
-                msg.pixel_y = 0
-                msg.is_valid = True
-                self.pos_cage_pub.publish(msg)
-                self.get_logger().info(f"pos_cage publié: x={bx:.3f}, y={by:.3f}")
+                pose_msg = PoseStamped()
+                pose_msg.header = msg.header # Même timestamp et frame que le sonar
+                
+                # Position (Barycentre)
+                pose_msg.pose.position.x = float(self.last_u_bary[0])
+                pose_msg.pose.position.y = float(self.last_u_bary[1])
+                pose_msg.pose.position.z = 0.0
+                
+                # Orientation (Angle de sortie converti en Quaternion)
+                # Roll=0, Pitch=0, Yaw=last_u_angle
+                q = get_quaternion_from_euler(0, 0, self.last_u_angle)
+                pose_msg.pose.orientation.x = q[0]
+                pose_msg.pose.orientation.y = q[1]
+                pose_msg.pose.orientation.z = q[2]
+                pose_msg.pose.orientation.w = q[3]
+                
+                self.cage_pose_pub.publish(pose_msg)
+                
+                # Log direction en degrés pour vérifier
+                deg = math.degrees(self.last_u_angle)
+                self.get_logger().info(f"Pose publiée: x={self.last_u_bary[0]:.2f}, y={self.last_u_bary[1]:.2f}, angle={deg:.1f}°")
+                
             except Exception as e:
-                self.get_logger().warn(f"Erreur publication pos_cage: {e}")
+                self.get_logger().warn(f"Erreur publication Pose: {e}")
 
 def main(args=None):
     rclpy.init(args=args)
