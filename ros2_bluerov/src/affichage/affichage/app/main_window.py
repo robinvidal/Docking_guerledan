@@ -119,6 +119,7 @@ class MainWindow(QMainWindow):
         self.ros_node.signals.new_cartesian_filtered_frame.connect(self.on_cartesian_filtered_frame)
         self.ros_node.signals.new_detected_lines.connect(self.on_detected_lines)
         self.ros_node.signals.new_tracked_object.connect(self.on_tracked_object)
+        self.ros_node.signals.new_cage_pose.connect(self.on_cage_pose)
 
     def on_raw_frame(self, msg):
         self.last_raw_frame = msg
@@ -138,6 +139,11 @@ class MainWindow(QMainWindow):
         """Affiche la bounding box du tracker CSRT."""
         self.cartesian_filtered_panel.update_tracked_object(msg)
         self.compare_panel.update_tracked_object(msg)
+
+    def on_cage_pose(self, msg):
+        """Affiche le centre et l'orientation du U détecté."""
+        self.cartesian_filtered_panel.update_cage_pose(msg)
+        self.compare_panel.update_cage_pose(msg)
 
     def set_left_view(self, index):
         self.left_stack.setCurrentIndex(index)

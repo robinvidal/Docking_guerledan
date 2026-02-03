@@ -81,6 +81,19 @@ def generate_launch_description():
         output='screen'
     )
 
+    hough_lines = Node(
+        package='tracking',
+        executable='hough_lines_node',  # Nom déclaré dans setup.py
+        name='hough_lines_node',
+        parameters=[{
+            'enable_detection': True,
+            'threshold': 40,
+            'cage_width': 0.82,     # Largeur de la cage en mètres
+            'filter_min_length_m': 0.2
+        }],
+        output='screen'
+    )
+
     localisation = Node(
         package='localisation',
         executable='localisation_node',
@@ -103,6 +116,7 @@ def generate_launch_description():
         bag_path_arg,
         rosbag_play,
         traitement_unified_node,
-        csrt_tracker,         # Nouveau tracker CSRT
+        csrt_tracker,
+        hough_lines,
         sonar_viewer,
     ])
