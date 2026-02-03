@@ -63,3 +63,12 @@ traitement_unified_node:
     cart_flip_horizontal: false
     # ros2 param set /traitement_unified_node cart_flip_vertical false
     cart_flip_vertical: false
+    
+    # 6. Filtre Binarisation Percentile (garde les X% pixels les plus intenses)
+    # Ce filtre binarise l'image en gardant seulement les pixels les plus brillants
+    # ros2 param set /traitement_unified_node cart_enable_percentile_binarize true
+    cart_enable_percentile_binarize: true
+    # keep_percent: 0.1 à 100 - Pourcentage des pixels les plus intenses à conserver
+    # Ex: 1.0 = garde seulement le 1% des pixels les plus intenses
+    # ros2 param set /traitement_unified_node cart_percentile_keep_percent 1.0
+    cart_percentile_keep_percent: 1.0

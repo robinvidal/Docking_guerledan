@@ -69,6 +69,10 @@ class TraitementUnifiedNode(Node):
         self.declare_parameter('cart_flip_horizontal', False)
         self.declare_parameter('cart_flip_vertical', False)
         
+        # Filtre Binarisation Percentile (garde les X% pixels les plus intenses)
+        self.declare_parameter('cart_enable_percentile_binarize', False)
+        self.declare_parameter('cart_percentile_keep_percent', 1.0)
+        
         # ========== SUBSCRIPTIONS ==========
         self.sonar_sub = self.create_subscription(
             Frame,
@@ -350,6 +354,42 @@ class TraitementUnifiedNode(Node):
         
         return img
     
+    def apply_percentile_binarize_filter(self, img: np.ndarray) -> np.ndarray:
+        """Filtre Binarisation Percentile - Garde uniquement les X% pixels les plus intenses.
+        
+        Ce filtre calcule le seuil correspondant au percentile (100 - keep_percent)
+        et met à 255 tous les pixels au-dessus de ce seuil, 0 sinon.
+        
+        Args:
+            img: Image en niveaux de gris (uint8)
+            
+        Returns:
+            Image binarisée avec seulement les pixels les plus intenses à 255
+        """
+        if not self.get_parameter('cart_enable_percentile_binarize').value:
+            return img
+        
+        keep_percent = float(self.get_parameter('cart_percentile_keep_percent').value)
+        
+        # Clamp entre 0.1% et 100%
+        keep_percent = max(0.1, min(100.0, keep_percent))
+        
+        # Calcul du percentile (ex: garder 1% = percentile 99)
+        percentile_value = 100.0 - keep_percent
+        
+        # Ne considérer que les pixels non-nuls pour le calcul du seuil
+        non_zero_pixels = img[img > 0]
+        
+        if len(non_zero_pixels) == 0:
+            return np.zeros_like(img)
+        
+        threshold = np.percentile(non_zero_pixels, percentile_value)
+        
+        # Binarisation: pixels >= seuil deviennent 255, sinon 0
+        result = np.where(img >= threshold, 255, 0).astype(np.uint8)
+        
+        return result
+    
     # ========== CALLBACK PRINCIPAL ==========
     
     def frame_callback(self, msg: Frame):
@@ -407,6 +447,9 @@ class TraitementUnifiedNode(Node):
         
         # 6. Morphologie (closing - solidifie les structures)
         filtered_cart = self.apply_morphology_filter(filtered_cart)
+        
+        # 7. Binarisation percentile (garde les X% pixels les plus intenses)
+        filtered_cart = self.apply_percentile_binarize_filter(filtered_cart)
         
         # Publication cartésienne filtrée
         cart_msg = FrameCartesian()
