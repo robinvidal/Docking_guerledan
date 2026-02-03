@@ -33,8 +33,10 @@ from mavros_msgs.srv import CommandBool
 from sensor_msgs.msg import Imu
 from sensor_msgs.msg import Joy
 from std_msgs.msg import Float64, Bool, Float32MultiArray
+from docking_msgs.msg import TrackedObject
 
-
+# Import du contrôleur de mission (version simple: un seul point)
+from .control import SinglePointController
 
 import importlib
 
@@ -144,6 +146,17 @@ class ROV(Node):
         self.depth_hold = False
         # Rosbag recording flag
         self.recording = False
+
+        # Point follow mission: A => enable; LH+A => disable
+        self.point_follow_mission = False
+        
+        # Données du tracker - Point cible unique
+        self.target_range = 0.0    # Distance à la cible (m)
+        self.target_bearing = 0.0  # Bearing de la cible (rad)
+        self.target_visible = False
+        
+        # Instanciation du contrôleur simple (un seul point)
+        self.point_controller = SinglePointController(stop_distance=0.5)
 
                 # Desired depth to maintain when depth_hold is True.
         # Initialized to current depth; will be updated after manual joystick moves.
@@ -277,6 +290,15 @@ class ROV(Node):
         self.distance_ping = data.data[0]
         self.confidence_ping = data.data[1]
         self.ping = data.data[2]
+
+    def callback_tracker(self, msg):
+        """Callback for tracker data - single point (center of tracked object)."""
+        # Récupérer les coordonnées polaires du centre de l'objet tracké
+        self.target_range = msg.range
+        self.target_bearing = msg.bearing
+        
+        # Détecter si la cible est visible (tracker publie 0,0 quand pas de tracking)
+        self.target_visible = not (msg.range == 0.0 and msg.bearing == 0.0)
                      
            
     def listener(self):
@@ -317,6 +339,13 @@ class ROV(Node):
             Float32MultiArray,
             self.ns+'/msg_ping1d',
             self.callback_ping1d,
+            self.queue_listener)
+        self.subscription  # prevent unused variable warning
+
+        self.subscription = self.create_subscription(
+            TrackedObject,
+            '/docking/tracking/tracked_object',
+            self.callback_tracker,
             self.queue_listener)
         self.subscription  # prevent unused variable warning
 
@@ -381,28 +410,76 @@ class ROV(Node):
                         self.depth_hold = True
                         self.get_logger().info("Depth hold activated (B)")
 
+            # Bouton A : Activer/ désactiver mission de suivi de point
+            # A alone -> activate point follow; LH + A -> deactivate point follow
+            if self.button("A") != 0:
+                if self.button("LH") != 0:
+                    # LH + A : deactivate (only if currently active)
+                    if self.point_follow_mission:
+                        self.point_follow_mission = False
+                        self.get_logger().info("Point follow mission deactivated (LH + A)")
+                else:
+                    # A alone : activate (only if currently inactive)
+                    if not self.point_follow_mission:
+                        self.point_follow_mission = True
+                        self.get_logger().info("Point follow mission activated (A)")
+            
             ##### Lecture des input de la manette
 
-            # Example : move forward/backward
-            if self.axes[1] != 0:  # joy right up/down
-                self.commands[4] = int(200 * self.axes[1] + 1500)
-                self.commands_front = self.commands[4]
+            # ========== MISSION DE SUIVI DE POINT (Bouton A) ==========
+            # Cette mission contrôle automatiquement le yaw (commands[3]), l'avance (commands[4])
+            # et le déplacement latéral (commands[5])
+            # Elle ne touche PAS à la profondeur (commands[2]) qui est gérée par le bouton B
+            if self.point_follow_mission:
+                # Appel au contrôleur simple
+                forward_speed, lateral_speed, angular_speed = self.point_controller.control_step(
+                    self.target_bearing, self.target_range, self.target_visible
+                )
+                
+                # Conversion des vitesses (m/s et rad/s) vers commandes RC (PWM 1000-2000)
+                # Angular: rad/s -> PWM (300 PWM par rad/s environ)
+                self.commands[3] = int(1500 + angular_speed * 300) 
+                self.commands[3] = clip(self.commands[3], 1100, 1900) #capé par max_angular_speed = 0.7
+                
+                # Forward: m/s -> PWM (400 PWM par m/s environ)
+                self.commands[4] = int(1500 + forward_speed * 400)
+                self.commands[4] = clip(self.commands[4], 1100, 1900) # capé par max_forward_speed = 0.7
+                
+                # Lateral: m/s -> PWM (400 PWM par m/s environ) # capé par max_lateral_speed = 0.4
+                self.commands[5] = int(1500 + lateral_speed * 400)
+                self.commands[5] = clip(self.commands[5], 1100, 1900)
+                
+                # Affichage de l'état
+                state_name = self.point_controller.state.upper()
+                if self.target_visible:
+                    print(f"[{state_name}] Target @ {self.target_range:.2f}m, {np.degrees(self.target_bearing):+.0f}° | "
+                          f"Robot state: Depth :({self.depth:.2f}m, Heading: {self.heading:.1f}°) | "
+                          f"Cmds: Yaw={self.commands[3]} Fwd={self.commands[4]} Lat={self.commands[5]}")
+                else:
+                    print(f"[{state_name}] Target not visible - waiting...")
+            
+            # Manual controls (only active if mission is not active)
+            if not self.point_follow_mission:
+                # Example : move forward/backward
+                if self.axes[1] != 0:  
+                    self.commands[4] = int(200 * self.axes[1] + 1500)
+                    self.commands_front = self.commands[4]
 
-            else:
-                self.commands[4] = 1500
-                self.commands_front = self.commands[4]
+                else:
+                    self.commands[4] = 1500
+                    self.commands_front = self.commands[4]
 
-            # Example : move left/right translation
-            if self.axes[0] != 0:  # joy right up/down
-                self.commands[5] = int(200 * -self.axes[0] + 1500)
-                self.commands_front = self.commands[5]
+                # Example : move left/right translation
+                if self.axes[0] != 0:  
+                    self.commands[5] = int(200 * -self.axes[0] + 1500)
+                    self.commands_front = self.commands[5]
 
-            else:
-                self.commands[5] = 1500
-                self.commands_front = self.commands[5]
+                else:
+                    self.commands[5] = 1500
+                    self.commands_front = self.commands[5]
 
-            # Example : move yaw
-            # Heading hold control using X / LH+X
+                # Example : move yaw
+                # Heading hold control using X / LH+X
             if self.button("X") != 0:
                 if self.button("LH") != 0:
                     # LH + X -> deactivate heading hold
@@ -419,54 +496,54 @@ class ROV(Node):
                         self._heading_error_prev = 0.0
                         self.get_logger().info(f"Heading hold activated (X) -> target {self.desired_heading}°")
 
-            # Manual yaw input takes precedence
-            if self.axes[3] != 0:  # joy right left/right
-                self.commands[3] = int(100 * -self.axes[3] + 1500)
-                self.commands[3] = clip(self.commands[3], 1300, 1700)
-                self.commands_front = self.commands[3]
-                # mark manual move active so that on release we can capture new desired heading
-                if self.heading_hold:
-                    self._heading_move_active = True
-            else:
-                if self.heading_hold:
-                    # if operator just released the yaw stick after moving it, capture current heading
-                    if self._heading_move_active:
-                        current_heading_deg = self.heading 
-                        self.desired_heading = 200.0 #mettre current_heading_deg pour garder le cap actuel
-                        self.desired_heading = current_heading_deg
-                        self._heading_integral = 0.0
-                        self._heading_error_prev = 0.0
-                        self._heading_move_active = False
-                    # PID de maintien de cap basé sur la boussole MAVROS
-                    if not self._have_compass:
-                        print("[HEADING] ⚠ Waiting for compass data...")
-                        # pas encore de donnée -> neutre
-                        self.commands[3] = 1500
-                    else:
-                        # PID to maintain desired_heading
-                        current_heading_deg = self.heading
-                        err_deg = angle_diff_deg(self.desired_heading, current_heading_deg)
-                        dt = self.dt if self.dt > 0 else 0.1
-                        # integral with anti-windup
-                        # tau = self.integrator_tau_heading  # constante de temps, par ex. 10.0 secondes
-                        # alpha = math.exp(-dt / tau)  # leaky integrator pour suppimer les anciennes erreures
-                        # self._heading_integral = self._heading_integral * alpha + err_deg * dt
-                        self._heading_integral +=  err_deg * dt
-
-                        self._heading_integral = max(self._heading_integral_min, min(self._heading_integral, self._heading_integral_max))
-                        # derivative
-                        derivative = (err_deg - self._heading_error_prev) / dt if dt > 0 else 0.0
-                        self._heading_error_prev = err_deg
-                        # PID output (deg -> RC mapping)
-                        pid_out = (self.Kp_heading * err_deg) + (self.Ki_heading * self._heading_integral) + (self.Kd_heading * derivative)
-                        print(f"[HEADING HOLD] Target: {self.desired_heading:.1f}° | Current: {current_heading_deg:.1f}° | Err: {err_deg:.1f}° | PID: {pid_out:.1f}")
-                        self.commands[3] = int(1500 + pid_out)
-                        self.commands[3] = clip(self.commands[3], 1300, 1700)
-                        self.commands_front = self.commands[3]
-                else:
-                    print("[HEADING] Manual mode (free)")
-                    self.commands[3] = 1500
+                # Manual yaw input takes precedence
+                if self.axes[3] != 0:  # joy right left/right
+                    self.commands[3] = int(100 * -self.axes[3] + 1500)
+                    self.commands[3] = clip(self.commands[3], 1300, 1700)
                     self.commands_front = self.commands[3]
+                    # mark manual move active so that on release we can capture new desired heading
+                    if self.heading_hold:
+                        self._heading_move_active = True
+                else:
+                    if self.heading_hold:
+                        # if operator just released the yaw stick after moving it, capture current heading
+                        if self._heading_move_active:
+                            current_heading_deg = self.heading 
+                            self.desired_heading = 200.0 #mettre current_heading_deg pour garder le cap actuel
+                            self.desired_heading = current_heading_deg
+                            self._heading_integral = 0.0
+                            self._heading_error_prev = 0.0
+                            self._heading_move_active = False
+                        # PID de maintien de cap basé sur la boussole MAVROS
+                        if not self._have_compass:
+                            print("[HEADING] ⚠ Waiting for compass data...")
+                            # pas encore de donnée -> neutre
+                            self.commands[3] = 1500
+                        else:
+                            # PID to maintain desired_heading
+                            current_heading_deg = self.heading
+                            err_deg = angle_diff_deg(self.desired_heading, current_heading_deg)
+                            dt = self.dt if self.dt > 0 else 0.1
+                            # integral with anti-windup
+                            # tau = self.integrator_tau_heading  # constante de temps, par ex. 10.0 secondes
+                            # alpha = math.exp(-dt / tau)  # leaky integrator pour suppimer les anciennes erreures
+                            # self._heading_integral = self._heading_integral * alpha + err_deg * dt
+                            self._heading_integral +=  err_deg * dt
+
+                            self._heading_integral = max(self._heading_integral_min, min(self._heading_integral, self._heading_integral_max))
+                            # derivative
+                            derivative = (err_deg - self._heading_error_prev) / dt if dt > 0 else 0.0
+                            self._heading_error_prev = err_deg
+                            # PID output (deg -> RC mapping)
+                            pid_out = (self.Kp_heading * err_deg) + (self.Ki_heading * self._heading_integral) + (self.Kd_heading * derivative)
+                            print(f"[HEADING HOLD] Target: {self.desired_heading:.1f}° | Current: {current_heading_deg:.1f}° | Err: {err_deg:.1f}° | PID: {pid_out:.1f}")
+                            self.commands[3] = int(1500 + pid_out)
+                            self.commands[3] = clip(self.commands[3], 1300, 1700)
+                            self.commands_front = self.commands[3]
+                    else:
+                        print("[HEADING] Manual mode (free)")
+                        self.commands[3] = 1500
+                        self.commands_front = self.commands[3]
 
 
             # Example : move elevation
