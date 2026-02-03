@@ -22,7 +22,7 @@ class SinglePointController:
     - range: distance en mètres
     """
     
-    def __init__(self, stop_distance=0.5):
+    def __init__(self, stop_distance=1.0):
         """
         Args:
             stop_distance: Distance d'arrêt à la cible (m)
