@@ -1,0 +1,17 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>bluerov_sim</name>
+  <version>0.1.0</version>
+  <description>Simple BlueROV simulator + controller for testing range/bearing tracking</description>
+  <maintainer email="you@example.com">You</maintainer>
+  <license>BSD-3-Clause</license>
+
+  <buildtool_depend>ament_python</buildtool_depend>
+
+  <depend>rclpy</depend>
+  <depend>std_msgs</depend>
+  <depend>docking_msgs</depend>
+  <depend>sensor_msgs</depend>
+
+  <exec_depend>python3</exec_depend>
+</package>
