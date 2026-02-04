@@ -23,6 +23,7 @@ def generate_launch_description():
     default_bag_path = os.path.abspath(os.path.join(workspace_root, 'rosbag', 'guerledan_02-02-sans-pvc'))
     
     # Argument pour le chemin du rosbag
+    # ros2 launch bringup rosbag_pipeline.launch.py bag_path:=/chemin/vers/rosbag_file.db3
     bag_path_arg = DeclareLaunchArgument(
         'bag_path',
         default_value=default_bag_path,
@@ -50,7 +51,7 @@ def generate_launch_description():
 
     # ==== Rosbag play ====
     rosbag_play = ExecuteProcess(
-        cmd=['ros2', 'bag', 'play', LaunchConfiguration('bag_path'), '--loop'],
+        cmd=['ros2', 'bag', 'play', LaunchConfiguration('bag_path'), '--loop', '--topics', '/docking/sonar/raw'],
         output='screen'
     )
 
@@ -113,6 +114,5 @@ def generate_launch_description():
         traitement_unified_node,
         csrt_tracker,
         hough_lines,
-        localisation,
         sonar_viewer,
     ])

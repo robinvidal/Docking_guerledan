@@ -7,7 +7,7 @@ traitement_unified_node:
     
     # Filtre Frost (réduction adaptative du speckle)
     polar_enable_frost: true
-    polar_frost_window_size: 7
+    polar_frost_window_size: 3
     polar_frost_damping: 3.4
     
     # ========== PARAMÈTRES CARTÉSIENS ==========
@@ -67,7 +67,7 @@ traitement_unified_node:
     # 6. Filtre Binarisation Percentile (garde les X% pixels les plus intenses)
     # Ce filtre binarise l'image en gardant seulement les pixels les plus brillants
     # ros2 param set /traitement_unified_node cart_enable_percentile_binarize true
-    cart_enable_percentile_binarize: true
+    cart_enable_percentile_binarize: false
     # keep_percent: 0.1 à 100 - Pourcentage des pixels les plus intenses à conserver
     # Ex: 1.0 = garde seulement le 1% des pixels les plus intenses
     # ros2 param set /traitement_unified_node cart_percentile_keep_percent 1.0
@@ -76,7 +76,7 @@ traitement_unified_node:
     # 7. Filtre Ouverture-Fermeture (Opening-Closing) - Nettoyage morphologique
     # Opening = supprime les petits objets/bruit, Closing = comble les trous
     # ros2 param set /traitement_unified_node cart_enable_opening_closing true
-    cart_enable_opening_closing: true
+    cart_enable_opening_closing: false
     # Taille du kernel pour l'ouverture (suppression bruit) - 3, 5, 7
     # ros2 param set /traitement_unified_node cart_opening_kernel_size 3
     cart_opening_kernel_size: 3

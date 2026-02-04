@@ -33,7 +33,7 @@ class SinglePointController:
         self.state = "idle"  # "idle", "tracking", "arrived"
         
         # Gains des contrôleurs (à ajuster selon tests réels)
-        self.kp_heading = 1.5     # Gain pour le cap (rad/s par rad d'erreur)
+        self.kp_heading = 0.5    # Gain pour le cap (rad/s par rad d'erreur)
         self.kp_forward = 0.8     # Gain pour l'avance (m/s par m d'erreur)
         self.kp_lateral = 0.5     # Gain pour le latéral (m/s par m d'erreur)
         
