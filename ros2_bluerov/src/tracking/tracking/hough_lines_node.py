@@ -1,9 +1,11 @@
 import numpy as np
+from std_msgs.msg import Float32
 import math
 import rclpy
 from rclpy.node import Node
 from docking_msgs.msg import FrameCartesian, DetectedLines
 from geometry_msgs.msg import PoseStamped
+from collections import deque  # Pour gérer la fenêtre glissante efficacement
 
 try:
     import cv2
@@ -22,10 +24,10 @@ class HoughLinesNode(Node):
     def __init__(self):
         super().__init__('hough_lines_node')
         
-        # --- PARAMÈTRES ---
+        # --- PARAMÈTRES DE DÉTECTION ---
         self.declare_parameter('enable_detection', True)
         self.declare_parameter('rho_resolution', 1.0)
-        self.declare_parameter('theta_resolution', 1.0) # Degrés
+        self.declare_parameter('theta_resolution', 1.0)
         self.declare_parameter('threshold', 40)
         self.declare_parameter('min_line_length', 15)
         self.declare_parameter('max_line_gap', 10)
@@ -42,13 +44,29 @@ class HoughLinesNode(Node):
         self.declare_parameter('perp_tol', 0.25)
         self.declare_parameter('conn_tol', 0.40)
 
+        # --- PARAMÈTRES DE FILTRAGE (Moyenneur Simple) ---
+        # 0 = Brut, 1 = Moyenneur, 2 = Mixte (Moyenne entre Brut et Moyenneur)
+        self.declare_parameter('filter_mode', 1) 
+        # Nombre de valeurs pour la moyenne (par défaut 3 comme demandé)
+        self.declare_parameter('window_size', 3) 
+
+        # Initialisation du buffer (deque) qui stockera les tuples (x, y, yaw)
+        # maxlen assure qu'on ne garde que les 3 dernières valeurs automatiquement
+        window_size = self.get_parameter('window_size').value
+        self.history = deque(maxlen=window_size)
+
         # Pub/Sub
         self.subscription = self.create_subscription(
             FrameCartesian, '/docking/sonar/cartesian_filtered', self.frame_callback, 10)
         self.line_pub = self.create_publisher(DetectedLines, '/docking/tracking/detected_lines', 10)
         self.cage_pose_pub = self.create_publisher(PoseStamped, '/docking/tracking/cage_pose', 10)
 
-        self.get_logger().info('Hough Lines Node (U-Shape) initialisé.')
+        # --- PUBLISHERS DE DEBUG ---
+        # On crée 3 topics dédiés pour comparer les courbes
+        self.pub_dbg_raw = self.create_publisher(Float32, '/debug/yaw_raw', 10)
+        self.pub_dbg_avg = self.create_publisher(Float32, '/debug/yaw_avg', 10)
+        self.pub_dbg_mix = self.create_publisher(Float32, '/debug/yaw_mix', 10)    
+        self.get_logger().info('Hough Lines Node (Mode BRUT - Sans Kalman) initialisé.')
 
     def merge_similar_lines(self, candidates):
         if not candidates: return []
@@ -73,7 +91,6 @@ class HoughLinesNode(Node):
                     remaining.append(other)
             candidates = remaining
             
-            # Moyenne simple des points pour la ligne fusionnée
             p1 = np.mean([c['p1'] for c in cluster], axis=0)
             p2 = np.mean([c['p2'] for c in cluster], axis=0)
             length = np.linalg.norm(p2 - p1)
@@ -85,7 +102,7 @@ class HoughLinesNode(Node):
         return merged
 
     def detect_u_shape(self, lines):
-        self.get_logger().info(f"Analyse de {len(lines)} lignes candidates...", throttle_duration_sec=2.0)
+        # self.get_logger().info(f"Analyse de {len(lines)} lignes...", throttle_duration_sec=2.0)
         if len(lines) < 3: return None, None, lines
         
         width_target = self.get_parameter('cage_width').value
@@ -102,19 +119,16 @@ class HoughLinesNode(Node):
                 for k, arm2 in enumerate(lines):
                     if k == i or k == j: continue
                     
-                    # 1. Vérifier perpendicularité (Base vs Bras)
                     def check_perp(l1, l2):
                         diff = abs(l1['theta'] - l2['theta'])
                         return abs(diff - np.pi/2) < perp_tol or abs(diff - 3*np.pi/2) < perp_tol
 
                     if not check_perp(base, arm1) or not check_perp(base, arm2): continue
 
-                    # 2. Distance entre bras (Largeur)
                     m1, m2 = (arm1['p1']+arm1['p2'])/2, (arm2['p1']+arm2['p2'])/2
                     dist = np.linalg.norm(m1 - m2)
                     if abs(dist - width_target) > dist_tol: continue
 
-                    # 3. Proximité (Connexion bras-base)
                     def get_min_dist(l1, l2):
                         pts = [l1['p1'], l1['p2'], l2['p1'], l2['p2']]
                         return min(np.linalg.norm(pts[0]-pts[2]), np.linalg.norm(pts[0]-pts[3]),
@@ -127,10 +141,8 @@ class HoughLinesNode(Node):
                         best_score = score
                         bary = (base['p1'] + base['p2'] + arm1['p1'] + arm1['p2'] + arm2['p1'] + arm2['p2']) / 6
                         base_mid = (base['p1'] + base['p2']) / 2
-                        # Direction : du fond du U vers l'ouverture
                         angle = math.atan2(bary[1] - base_mid[1], bary[0] - base_mid[0])
                         best_data = (bary, angle)
-                        # Marquer les lignes
                         for idx in [i, j, k]: lines[idx]['is_u'] = 1.0
 
         if best_data[0] is not None:
@@ -138,6 +150,28 @@ class HoughLinesNode(Node):
             self.get_logger().info(f"✅ CAGE DÉTECTÉE | Pose: x={best_data[0][0]:.2f}m, y={best_data[0][1]:.2f}m | Yaw: {deg:.1f}°")
 
         return best_data[0], best_data[1], lines
+
+    def compute_average_pose(self, history_buffer):
+            """
+            Calcule la moyenne de X, Y et l'angle moyen correct.
+            """
+            if not history_buffer:
+                return None, None, None
+            
+            # 1. Moyenne arithmétique simple pour X et Y
+            xs = [h[0] for h in history_buffer]
+            ys = [h[1] for h in history_buffer]
+            avg_x = np.mean(xs)
+            avg_y = np.mean(ys)
+
+            # 2. Moyenne vectorielle pour l'angle (Yaw)
+            # Évite le problème du saut -180/180
+            angles = [h[2] for h in history_buffer]
+            sin_sum = np.sum(np.sin(angles))
+            cos_sum = np.sum(np.cos(angles))
+            avg_yaw = np.arctan2(sin_sum, cos_sum)
+
+            return avg_x, avg_y, avg_yaw
 
     def frame_callback(self, msg: FrameCartesian):
         if not self.get_parameter('enable_detection').value or cv2 is None: return
@@ -157,7 +191,6 @@ class HoughLinesNode(Node):
         if cv_lines is not None:
             for l in cv_lines:
                 x1_px, y1_px, x2_px, y2_px = l[0]
-                # Pixels -> Mètres
                 p1 = np.array([-(x1_px - msg.origin_x) * msg.resolution, (y1_px - msg.origin_y) * msg.resolution + msg.min_range])
                 p2 = np.array([-(x2_px - msg.origin_x) * msg.resolution, (y2_px - msg.origin_y) * msg.resolution + msg.min_range])
                 
@@ -170,29 +203,119 @@ class HoughLinesNode(Node):
 
         merged = self.merge_similar_lines(candidates)
         bary, yaw, final_lines = self.detect_u_shape(merged)
+        """
+        # --- LOGIQUE DE FILTRAGE ---
+        filter_mode = self.get_parameter('filter_mode').value
+        output_x, output_y, output_yaw = None, None, None
+        should_publish = False
 
-        # Publication des lignes
-        out_msg = DetectedLines()
-        out_msg.header = msg.header
-        for l in final_lines:
-            out_msg.rhos.append(float(l['rho']))
-            out_msg.thetas.append(float(l['theta']))
-            out_msg.x1_points.append(float(l['p1'][0]))
-            out_msg.y1_points.append(float(l['p1'][1]))
-            out_msg.x2_points.append(float(l['p2'][0]))
-            out_msg.y2_points.append(float(l['p2'][1]))
-            out_msg.confidences.append(l['is_u'] if l['is_u'] > 0 else 0.4)
-        self.line_pub.publish(out_msg)
-
-        # Publication de la Pose de la cage
         if bary is not None:
+            # On ajoute la nouvelle détection à l'historique
+            current_x, current_y, current_yaw = float(bary[0]), float(bary[1]), float(yaw)
+            self.history.append((current_x, current_y, current_yaw))
+
+            if filter_mode == 0:
+                # === MODE BRUT (Raw) ===
+                output_x, output_y, output_yaw = current_x, current_y, current_yaw
+                should_publish = True
+                
+            elif filter_mode == 1:
+                # === MODE MOYENNEUR (Average) ===
+                # On fait la moyenne de l'historique (1, 2 ou 3 valeurs selon dispo)
+                output_x, output_y, output_yaw = self.compute_average_pose(self.history)
+                should_publish = True
+
+            elif filter_mode == 2:
+                # === MODE MIXTE (Average + Raw) ===
+                # Moyenne entre la détection instantanée et la moyenne glissante
+                avg_x, avg_y, avg_yaw = self.compute_average_pose(self.history)
+                
+                output_x = (current_x + avg_x) / 2.0
+                output_y = (current_y + avg_y) / 2.0
+                
+                # Moyenne vectorielle entre l'angle brut et l'angle moyen
+                output_yaw = np.arctan2(
+                    np.sin(current_yaw) + np.sin(avg_yaw),
+                    np.cos(current_yaw) + np.cos(avg_yaw)
+                )
+                should_publish = True
+        
+        else:
+            # Si pas de détection, on vide l'historique pour ne pas utiliser de vieilles valeurs
+            # quand la cage réapparaîtra (pour éviter un "saut" depuis l'ancienne position)
+            # Optionnel : vous pouvez commenter cette ligne si vous voulez de la persistance
+            self.history.clear()
+            should_publish = False
+
+        # --- PUBLICATION ---
+        if should_publish:
             p_msg = PoseStamped()
             p_msg.header = msg.header
-            p_msg.pose.position.x, p_msg.pose.position.y = float(bary[0]), float(bary[1])
-            q = get_quaternion_from_euler(0, 0, yaw)
-            p_msg.pose.orientation.x, p_msg.pose.orientation.y, p_msg.pose.orientation.z, p_msg.pose.orientation.w = q
+            p_msg.pose.position.x = output_x
+            p_msg.pose.position.y = output_y
+            
+            q = get_quaternion_from_euler(0, 0, output_yaw)
+            p_msg.pose.orientation.x = q[0]
+            p_msg.pose.orientation.y = q[1]
+            p_msg.pose.orientation.z = q[2]
+            p_msg.pose.orientation.w = q[3]
+            
             self.cage_pose_pub.publish(p_msg)
+        """
 
+        # --- CALCUL COMPARATIF DES 3 MODES ---
+        if bary is not None:
+            # 1. Donnée Brute
+            raw_yaw = float(yaw)
+            
+            # 2. Mise à jour historique
+            self.history.append((bary[0], bary[1], raw_yaw))
+            
+            # 3. Calcul Moyenne (Avg)
+            _, _, avg_yaw = self.compute_average_pose(self.history)
+            
+            # 4. Calcul Mixte (Avg + Raw)
+            # Moyenne vectorielle entre le brut et la moyenne
+            mix_yaw = np.arctan2(
+                np.sin(raw_yaw) + np.sin(avg_yaw),
+                np.cos(raw_yaw) + np.cos(avg_yaw)
+            )
+
+            # --- PUBLICATION DE DEBUG (En Degrés pour lecture facile) ---
+            # On publie TOUT LE TEMPS pour pouvoir tracer les courbes
+            self.pub_dbg_raw.publish(Float32(data=math.degrees(raw_yaw)))
+            self.pub_dbg_avg.publish(Float32(data=math.degrees(avg_yaw)))
+            self.pub_dbg_mix.publish(Float32(data=math.degrees(mix_yaw)))
+
+            # --- PUBLICATION OFFICIELLE (Celle utilisée par le robot) ---
+            filter_mode = self.get_parameter('filter_mode').value
+            
+            final_x, final_y, final_yaw = None, None, None
+            
+            if filter_mode == 0:
+                final_x, final_y, final_yaw = bary[0], bary[1], raw_yaw
+            elif filter_mode == 1:
+                # On reprend la moyenne calculée plus haut
+                h_avg_x, h_avg_y, _ = self.compute_average_pose(self.history)
+                final_x, final_y, final_yaw = h_avg_x, h_avg_y, avg_yaw
+            elif filter_mode == 2:
+                h_avg_x, h_avg_y, _ = self.compute_average_pose(self.history)
+                final_x = (bary[0] + h_avg_x) / 2.0
+                final_y = (bary[1] + h_avg_y) / 2.0
+                final_yaw = mix_yaw
+
+            # Publication PoseStamped (Code habituel)
+            p_msg = PoseStamped()
+            p_msg.header = msg.header
+            p_msg.pose.position.x = float(final_x)
+            p_msg.pose.position.y = float(final_y)
+            q = get_quaternion_from_euler(0, 0, final_yaw)
+            p_msg.pose.orientation.x, p_msg.pose.orientation.y = q[0], q[1]
+            p_msg.pose.orientation.z, p_msg.pose.orientation.w = q[2], q[3]
+            self.cage_pose_pub.publish(p_msg)
+        
+        #else:
+            #self.history.clear()  permet de vider l'historique si cage perdu (permet de retrouver la cage plus vite mais fait bcp perdre en fluidité)
 
 def main(args=None):
     rclpy.init(args=args)

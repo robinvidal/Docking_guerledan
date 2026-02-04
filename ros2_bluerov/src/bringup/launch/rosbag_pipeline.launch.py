@@ -85,12 +85,7 @@ def generate_launch_description():
         package='tracking',
         executable='hough_lines_node',  # Nom déclaré dans setup.py
         name='hough_lines_node',
-        parameters=[{
-            'enable_detection': True,
-            'threshold': 40,
-            'cage_width': 0.82,     # Largeur de la cage en mètres
-            'filter_min_length_m': 0.2
-        }],
+        parameters=[tracking_config],
         output='screen'
     )
 
@@ -118,5 +113,6 @@ def generate_launch_description():
         traitement_unified_node,
         csrt_tracker,
         hough_lines,
+        localisation,
         sonar_viewer,
     ])
