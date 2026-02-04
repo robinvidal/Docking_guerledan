@@ -3,25 +3,39 @@
 
 Cette partie a pour objectif d'établir le cadre formel du projet. Elle détaille les outils mathématiques utilisés pour modéliser le comportement du robot, les algorithmes de perception développés pour interpréter les données sonar, ainsi que les lois de commande garantissant le docking.
 
-\section{Hypothèses de Travail et Domaine d'Emploi}
+\section{Hypothèses de Travail et Domaine de Validité}
 
-Avant de définir les modèles, il est nécessaire de circonscrire le domaine de validité de nos travaux. Ces hypothèses simplificatrices permettent de rendre le problème traitable tout en restant représentatives des conditions réelles d'opération.
+Avant de définir les modèles, il est nécessaire d'expliciter le domaine de validité de nos travaux. Ces hypothèses simplificatrices permettent de rendre le problème soluble tout en restant représentatives des conditions réelles d'opération.
 
 \begin{itemize}
-    \item \textbf{Le Véhicule :} Ce système de navigation est spécifiquement dimensionné pour des véhicules sous-marins de type ROV (ici un BlueROV Heavy) disposant d'une configuration de propulsion autorisant une manœuvrabilité holonome dans le plan horizontal. Nous postulons un découplage des dynamiques verticales, supposant une stabilisation de la profondeur et de l'assiette (tangage et roulis) assurée passivement par les propriétés hydrostatiques du véhicule, ainsi que par une boucle de régulation distincte.. Le problème de contrôle est ainsi réduit à trois degrés de liberté ($x$, $y$, $\psi$). Le modèle dynamique associé est issu de la formulation classique de Fossen pour les véhicules marins \mbox{($3$~DOF~planaires)}.
+    \item \textbf{Le Véhicule :} Ce système de navigation est spécifiquement dimensionné pour des véhicules sous-marins de type ROV (ici un BlueROV Heavy) disposant d'une configuration de propulsion autorisant une manœuvrabilité holonome dans le plan horizontal. Nous postulons un découplage des dynamiques verticales, supposant une flottabilité neutre et une stabilisation de la profondeur assurée par une boucle d'asservissement. De même, une stabilité en tangage et roulis est assurée passivement par les propriétés hydrostatiques du véhicule. Le problème de contrôle est ainsi réduit à trois degrés de liberté ($x$, $y$, $\psi$). Le modèle dynamique associé est issu de la formulation classique de Fossen pour les véhicules marins \mbox{($3$~DOF~planaires)}.
 
-    \item \textbf{Le Capteur Sonar :} Le système de perception est considéré comme la seule source de vérité pour la navigation relative (pas de positionnement absolu global). Le sonar Oculus~M750d est modélisé comme un capteur fournissant une image polaire 2D de l'environnement dans le plan local du robot, à ouverture angulaire d'environ $130^{\circ}$ et fréquence de rafraîchissement comprise entre $10$ et $20$~Hz. Les mesures d’azimut et de distance peuvent être corrompues par un bruit injecté dans la simulation pour tester la robustesse de la chaîne perception–commande.
+    \item \textbf{Le Capteur Sonar :} Le système de perception est considéré comme la seule source de vérité pour la navigation relative (pas de positionnement absolu global). Le sonar est modélisé comme un capteur fournissant une image polaire 2D de l'environnement dans le plan local du robot, à ouverture angulaire d'environ $130^{\circ}$ et renvoyant des information en continues et temps réel. Les mesures d’azimut et de distance peuvent être corrompues par un bruit injecté dans la simulation pour tester la robustesse de la chaîne perception–commande.
 
     \item \textbf{L'Environnement :} L'évolution du robot est restreinte à un plan horizontal à profondeur constante. La cage cible est supposée statique ou quasi-statique. Les perturbations environnementales, telles que les courants marins ou la tension du câble ombilical, sont modélisées par une force équivalente constante ou lentement variable dans le plan $(x,y)$. Aucun obstacle autre que la cage n’est pris en compte dans le modèle de base, ce qui permet de concentrer l’analyse sur la phase d’alignement et d’insertion.
 \end{itemize}
+
+
+% ============================================================================
+% TODO : Formules et Équations Principales à intégrer
+% ============================================================================
+% Cette section devra contenir les formules clés à mettre en évidence dans le
+% document final. Elle inclura notamment :
+% - Les équations du contrôleur PID (Proportionnel-Intégral-Dérivé)
+% - Les valeurs de consigne et paramètres de réglage
+% - Les formules mathématiques associées au système de docking
+%
+% Format recommandé : Utiliser l'environnement \boxed{} ou un environnement
+% personnalisé (tcolorbox, mdframed) pour encadrer les formules importantes.
+% ============================================================================
 
 \section{Modélisation et Loi de Commande}
 
 Pour asservir la position du robot par rapport à la cage, nous avons synthétisé un contrôleur adapté aux contraintes de la perception locale.
 
-La stratégie de contrôle repose sur une architecture réactive à deux états qui privilégie exclusivement la perception locale du robot, sans recours au GPS. Initialement, si le champ de vision ne capture pas les deux bouées, le robot active un mode de recherche en pivotant sur lui-même jusqu'à l'acquisition des cibles. Une fois le contact visuel établi, l'algorithme reconstruit géométriquement la ``porte'' formée par les bouées directement dans le référentiel du robot (où ce dernier est toujours à l'origine $[0,0]$) pour calculer un point de consigne virtuel situé un mètre devant cette porte.
+La stratégie de contrôle repose sur une architecture réactive à deux états qui privilégie exclusivement la perception locale du robot, sans recours au GPS. Initialement, si le champ de vision ne capture pas la cage le robot active un mode de recherche en pivotant sur lui-même jusqu'à l'acquisition de la cible. Une fois le contact visuel établi, l'algorithme reconstruit géométriquement la cage dans le référentiel cartésien du robot pour calculer un point de consigne virtuel situé un mètre devant cette porte.
 
-Le pilotage est alors découplé en trois axes indépendants (avance, dérive latérale et cap) régulés par des boucles PID complètes. Dans cette configuration, l'action \textbf{Proportionnelle} transforme directement les coordonnées locales de la cible ($x$ et $y$) en commandes de vitesse pour assurer une réactivité immédiate, tandis que le terme \textbf{Intégral} s'avère indispensable pour compenser les perturbations constantes, telles que les courants marins ou la traînée du câble, qui créeraient sinon une erreur stationnaire. Enfin, la composante \textbf{Dérivée} amortit la réponse du système pour stabiliser le robot face à la forte inertie et aux effets hydrodynamiques. Cette méthode permet au robot de ``glisser'' vers sa destination en corrigeant les erreurs de position relative en temps réel, garantissant une approche fluide et précise même si le robot est initialement décentré.
+Le pilotage est alors découplé en trois axes indépendants (avance, dérive latérale et cap) régulés par des boucles PID complètes. Dans cette configuration, l'action proportionnelle transforme directement les coordonnées locales de la cible ($x$,$y$) en commandes de vitesse pour assurer une réactivité immédiate, tandis que le terme intégral s'avère indispensable pour compenser les perturbations constantes, telles que les courants marins ou la traînée du câble, qui créeraient sinon une erreur stationnaire. Enfin, la composante dérivée amortit la réponse du système pour stabiliser le robot face à la forte inertie et aux effets hydrodynamiques. Cette méthode permet au robot de ``glisser'' vers sa destination en corrigeant les erreurs de position relative en temps réel, garantissant une approche fluide et précise même si le robot est initialement décentré.
 
 \subsection{Contrôle en profondeur}
 
