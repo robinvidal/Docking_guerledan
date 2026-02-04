@@ -360,255 +360,297 @@ class ROV(Node):
         self.client_arm.call_async(req)
 
 
-###############################
-    def run(self):
+    # =====================================================================
+    # FONCTIONS AUXILIAIRES POUR LA BOUCLE RUN
+    # =====================================================================
 
-        print("[ROV] --- Control loop running ---")
+    def _reset_commands(self):
+        """Remet les 8 premières commandes à neutre (1500)."""
+        for i in range(8):
+            self.commands[i] = 1500
 
-
-        if (self.frame_id_last != self.frame_id):  # Check if new commands are given with joystick  : + on regarde si on obéit ou non à la télécommande
-            self.frame_id_last = self.frame_id
-
-
-            for i in range(8):
-                self.commands[i] = 1500 # on remets les commandes a zero
-
-            if (self.button("Start") == 1)|(self.button("Back") != 0):  # Arm and disarm
-                
-                if (self.button("Start") == 1):
-                    self.armed = True
-                    print("[ARMING] ROV Armed ✓")
-                if self.button("Back") != 0:
-                    self.armed = False # not self.armed
-                    print("[DISARMING] ROV Disarmed ✓")
-                response = self.send_request_arm(self.armed) # armement/desarmement
-
-                self.commands = [1500] * self.nb_channels
-                if self.nb_channels > 8:
-                    self.commands[8] = 1000
-
-            # camera inclination 
-            if (self.axes[7] != 0):  # fleche haut/bas
-                self.commands[7] = int(100 * self.axes[7] + 1500)
-            else:
-                self.commands[7] = 1500
-
-            # light control 
-            if self.button("?") != 0:  # button Back : control light intensity
-                light_modif_value = 100
-                light_control(self,light_modif_value)
-
-            # Bouton B : Activer/ désactiver maintien de profondeur
-            # B alone -> activate depth hold; LH + B -> deactivate depth hold
-            if self.button("B") != 0:
-                if self.button("LH") != 0:
-                    # LH + B : deactivate (only if currently active)
-                    if self.depth_hold:
-                        self.depth_hold = False
-                        print("[DEPTH HOLD] Deactivated (LH + B) → Manual depth mode")
-                else:
-                    # B alone : activate (only if currently inactive)
-                    if not self.depth_hold:
-                        self.depth_hold = True
-                        self.desired_depth = self.depth
-                        print(f"[DEPTH HOLD] Activated (B) → Target depth: {self.desired_depth:.2f}m")
-
-            # Bouton A : Activer/ désactiver mission de suivi de point
-            # A alone -> activate point follow; LH + A -> deactivate point follow
-            if self.button("A") != 0:
-                if self.button("LH") != 0:
-                    # LH + A : deactivate (only if currently active)
-                    if self.point_follow_mission:
-                        self.point_follow_mission = False
-                        print("[MISSION] Point follow deactivated (LH + A) → Manual mode")
-                else:
-                    # A alone : activate (only if currently inactive)
-                    if not self.point_follow_mission:
-                        self.point_follow_mission = True
-                        print("[MISSION] Point follow ACTIVATED (A) → Auto-tracking enabled")
+    def _handle_arm_disarm(self):
+        """Gère l'armement/désarmement via les boutons Start/Back."""
+        if (self.button("Start") == 1) | (self.button("Back") != 0):
             
-            ##### Lecture des input de la manette
+            if (self.button("Start") == 1):
+                self.armed = True
+                print("[ARMING] ROV Armed ✓")
+            if self.button("Back") != 0:
+                self.armed = False
+                print("[DISARMING] ROV Disarmed ✓")
+            response = self.send_request_arm(self.armed)
 
-            # ========== MISSION DE SUIVI DE POINT (Bouton A) ==========
-            # Cette mission contrôle automatiquement le yaw (commands[3]), l'avance (commands[4])
-            # et le déplacement latéral (commands[5])
-            # Elle ne touche PAS à la profondeur (commands[2]) qui est gérée par le bouton B
-            if self.point_follow_mission:
-                # Appel au contrôleur simple
-                forward_speed, lateral_speed, angular_speed = self.point_controller.control_step(
-                    self.target_bearing, self.target_range, self.target_visible
-                )
-                
-                # Conversion des vitesses (m/s et rad/s) vers commandes RC (PWM 1000-2000)
-                # Angular: rad/s -> PWM (300 PWM par rad/s environ)
-                self.commands[3] = int(1500 + angular_speed * 300) 
-                self.commands[3] = clip(self.commands[3], 1100, 1900) #capé par max_angular_speed = 0.7
-                
-                # Forward: m/s -> PWM (400 PWM par m/s environ)
-                self.commands[4] = int(1500 + forward_speed * 400)
-                self.commands[4] = clip(self.commands[4], 1100, 1900) # capé par max_forward_speed = 0.7
-                
-                # Lateral: m/s -> PWM (400 PWM par m/s environ) # capé par max_lateral_speed = 0.4
-                self.commands[5] = int(1500 + lateral_speed * 400)
-                self.commands[5] = clip(self.commands[5], 1100, 1900)
-                
-                # Affichage de l'état
-                state_name = self.point_controller.state.upper()
-                if self.target_visible:
-                    print(f"[{state_name}] Target @ {self.target_range:.2f}m, {np.degrees(self.target_bearing):+.0f}° | "
-                          f"Robot state: Depth :({self.depth:.2f}m, Heading: {self.heading:.1f}°) | "
-                          f"Cmds: Yaw={self.commands[3]} Fwd={self.commands[4]} Lat={self.commands[5]}")
-                else:
-                    print(f"[{state_name}] Target not visible - waiting...")
-            
-            # Manual controls (only active if mission is not active)
-            if not self.point_follow_mission:
-                # Example : move forward/backward
-                if self.axes[1] != 0:  
-                    self.commands[4] = int(200 * self.axes[1] + 1500)
+            self.commands = [1500] * self.nb_channels
+            if self.nb_channels > 8:
+                self.commands[8] = 1000
 
-                else:
-                    self.commands[4] = 1500
+    def _handle_camera_and_light(self):
+        """Gère l'inclinaison caméra et le contrôle lumière."""
+        # Camera inclination
+        if (self.axes[7] != 0):  # fleche haut/bas
+            self.commands[7] = int(100 * self.axes[7] + 1500)
+        else:
+            self.commands[7] = 1500
 
-                # Example : move left/right translation
-                if self.axes[0] != 0:  
-                    self.commands[5] = int(200 * -self.axes[0] + 1500)
+        # Light control
+        if self.button("?") != 0:  # button Logitech : control light intensity
+            light_modif_value = 100
+            light_control(self, light_modif_value)
 
-                else:
-                    self.commands[5] = 1500
-
-                # Example : move yaw
-                # Heading hold toggle using X / LH+X (toggle only)
-                if self.button("X") != 0:
-                    if self.button("LH") != 0:
-                        # LH + X -> deactivate heading hold
-                        if self.heading_hold:
-                            self.heading_hold = False
-                            print("[HEADING HOLD] Deactivated (LH + X) → Free manual yaw mode")
-                    else:
-                        # X alone -> activate heading hold and capture current heading
-                        if not self.heading_hold:
-                            self.heading_hold = True
-                            self.desired_heading = self.heading
-                            self._heading_integral = 0.0
-                            self._heading_error_prev = 0.0
-                            print(f"[HEADING HOLD] Activated (X) → Target: {self.desired_heading:.1f}°")
-
-            # Manual yaw input takes precedence and is always processed
-            if self.axes[3] != 0:  # joy right left/right
-                self.commands[3] = int(200 * -self.axes[3] + 1500)
-                self.commands[3] = clip(self.commands[3], 1300, 1700)
-                # mark manual move active so that on release we can capture new desired heading
-                if self.heading_hold:
-                    self._heading_move_active = True
-                print(f"[YAW] Manual control - Cmd: {self.commands[3]} PWM")
+    def _handle_depth_hold_toggle(self):
+        """Active/désactive le maintien de profondeur (Bouton B)."""
+        if self.button("B") != 0:
+            if self.button("LH") != 0:
+                # LH + B : deactivate (only if currently active)
+                if self.depth_hold:
+                    self.depth_hold = False
+                    print("[DEPTH HOLD] Deactivated (LH + B) → Manual depth mode")
             else:
+                # B alone : activate (only if currently inactive)
+                if not self.depth_hold:
+                    self.depth_hold = True
+                    self.desired_depth = self.depth
+                    print(f"[DEPTH HOLD] Activated (B) → Target depth: {self.desired_depth:.2f}m")
+
+    def _handle_point_follow_toggle(self):
+        """Active/désactive la mission de suivi de point (Bouton A)."""
+        if self.button("A") != 0:
+            if self.button("LH") != 0:
+                # LH + A : deactivate (only if currently active)
+                if self.point_follow_mission:
+                    self.point_follow_mission = False
+                    print("[MISSION] Point follow deactivated (LH + A) → Manual mode")
+            else:
+                # A alone : activate (only if currently inactive)
+                if not self.point_follow_mission:
+                    self.point_follow_mission = True
+                    print("[MISSION] Point follow ACTIVATED (A) → Auto-tracking enabled")
+
+    def _handle_heading_hold_toggle(self):
+        """Active/désactive le maintien de cap (Bouton X)."""
+        if self.button("X") != 0:
+            if self.button("LH") != 0:
+                # LH + X -> deactivate heading hold
                 if self.heading_hold:
-                    # if operator just released the yaw stick after moving it, capture current heading
-                    if self._heading_move_active:
-                        current_heading_deg = self.heading
-                        self.desired_heading = current_heading_deg
-                        self._heading_integral = 0.0
-                        self._heading_error_prev = 0.0
-                        self._heading_move_active = False
-                        print(f"[HEADING HOLD] New target captured: {self.desired_heading:.1f}°")
-                    # PID de maintien de cap basé sur la boussole MAVROS
-                    if not self._have_compass:
-                        print("[HEADING HOLD] ⚠ Waiting for compass data...")
-                        # pas encore de donnée -> neutre
-                        self.commands[3] = 1500
-                    else:
-                        # PID to maintain desired_heading
-                        current_heading_deg = self.heading
-                        err_deg = angle_diff_deg(self.desired_heading, current_heading_deg)
-                        dt = self.dt if self.dt > 0 else 0.1
-                        # integral with anti-windup
-                        self._heading_integral += err_deg * dt
-                        self._heading_integral = max(self._heading_integral_min, min(self._heading_integral, self._heading_integral_max))
-                        # derivative
-                        derivative = (err_deg - self._heading_error_prev) / dt if dt > 0 else 0.0
-                        self._heading_error_prev = err_deg
-                        # PID output (deg -> RC mapping)
-                        pid_out = (self.Kp_heading * err_deg) + (self.Ki_heading * self._heading_integral) + (self.Kd_heading * derivative)
-                        print(f"[HEADING HOLD] Target: {self.desired_heading:.1f}° | Current: {current_heading_deg:.1f}° | Err: {err_deg:+.1f}° | PID: {pid_out:.1f} | Cmd: {int(1500 + pid_out)} PWM")
-                        self.commands[3] = int(1500 + pid_out)
-                        self.commands[3] = clip(self.commands[3], 1300, 1700)
-                else:
-                    print("[YAW] Free manual mode (no heading hold)")
+                    self.heading_hold = False
+                    print("[HEADING HOLD] Deactivated (LH + X) → Free manual yaw mode")
+            else:
+                # X alone -> activate heading hold and capture current heading
+                if not self.heading_hold:
+                    self.heading_hold = True
+                    self.desired_heading = self.heading
+                    self._heading_integral = 0.0
+                    self._heading_error_prev = 0.0
+                    print(f"[HEADING HOLD] Activated (X) → Target: {self.desired_heading:.1f}°")
+
+    def _handle_point_follow_mission(self):
+        """Exécute la mission de suivi de point (contrôle auto yaw, avance, latéral)."""
+        # Appel au contrôleur simple
+        forward_speed, lateral_speed, angular_speed = self.point_controller.control_step(
+            self.target_bearing, self.target_range, self.target_visible
+        )
+        
+        # Conversion des vitesses (m/s et rad/s) vers commandes RC (PWM 1000-2000)
+        self.commands[3] = int(1500 + angular_speed * 170) 
+        
+        self.commands[4] = int(1500 + forward_speed * 200)
+        
+        self.commands[5] = int(1500 + lateral_speed * 200)
+        
+        # Affichage de l'état
+        state_name = self.point_controller.state.upper()
+        if self.target_visible:
+            print(f"[{state_name}] Target @ {self.target_range:.2f}m, {np.degrees(self.target_bearing):+.0f}° | "
+                  f"Robot state: Depth :({self.depth:.2f}m, Heading: {self.heading:.1f}°) | "
+                  f"Cmds: Yaw={self.commands[3]} Fwd={self.commands[4]} Lat={self.commands[5]}")
+        else:
+            print(f"[{state_name}] Target not visible - waiting...")
+
+    def _handle_manual_movement(self):
+        """Gère les contrôles manuels (avance, latéral) quand la mission n'est pas active.
+        
+        Note: Le yaw est géré séparément par _handle_yaw_control() pour permettre
+        le heading hold même en mode manuel.
+        """
+        # Move forward/backward
+        if self.axes[1] != 0:  
+            self.commands[4] = int(200 * self.axes[1] + 1500)
+        else:
+            self.commands[4] = 1500
+
+        # Move left/right translation
+        if self.axes[0] != 0:  
+            self.commands[5] = int(200 * -self.axes[0] + 1500)
+        else:
+            self.commands[5] = 1500
+
+    def _handle_yaw_control(self):
+        """Gère le contrôle du yaw (manuel ou maintien de cap via PID)."""
+        if self.axes[3] != 0:  # joy right left/right
+            self.commands[3] = int(200 * -self.axes[3] + 1500)
+            # mark manual move active so that on release we can capture new desired heading
+            if self.heading_hold:
+                self._heading_move_active = True
+            print(f"[YAW] Manual control - Cmd: {self.commands[3]} PWM")
+        else:
+            if self.heading_hold:
+                # if operator just released the yaw stick after moving it, capture current heading
+                if self._heading_move_active:
+                    current_heading_deg = self.heading
+                    self.desired_heading = current_heading_deg
+                    self._heading_integral = 0.0
+                    self._heading_error_prev = 0.0
+                    self._heading_move_active = False
+                    print(f"[HEADING HOLD] New target captured: {self.desired_heading:.1f}°")
+                # PID de maintien de cap basé sur la boussole MAVROS
+                if not self._have_compass:
+                    print("[HEADING HOLD] ⚠ Waiting for compass data...")
                     self.commands[3] = 1500
-
-
-            # Example : move elevation
-            # Use LT (axis 2) to go down and RT (axis 5) to go up
-            # LT and RT: 1 when neutral, -1 when fully pressed
-            # depth_input: positive to go up (RT), negative to go down (LT)
-            depth_input = (self.axes[2] - self.axes[5]) / 2.0
-            
-            if abs(depth_input) > 0.05:  # deadzone to avoid drift when triggers are neutral
-                # Direct manual control while trigger is pressed
-                self.commands[2] = int(200 * depth_input + 1500)
-                # Bound manual command to safe range
-                self.commands[2] = clip(self.commands[2], 1300, 1700)
-                print(f"[DEPTH] Manual control - Current: {self.depth:.2f}m | Cmd: {self.commands[2]} PWM")
-                # If depth hold is active, mark that operator is changing depth
-                if self.depth_hold:
-                    self._depth_move_active = True
-
-            else:
-                if self.depth_hold:
-                    # If operator just released the stick after moving it, capture the current depth
-                    if self._depth_move_active:
-                        self.desired_depth = self.depth
-                        # reset integral and previous error to avoid jump
-                        self._depth_integral = -9 #  seems to be approximally the value reached when depth is stable so it avoid jump
-                        self._depth_error_prev = 0.0
-                        self._depth_move_active = False
-                        print(f"[DEPTH HOLD] New target captured: {self.desired_depth:.2f}m")
-
-                    # maintain desired depth using PID
-                    # error = desired - current (positive => need to go deeper)
-                    error = self.desired_depth - self.depth
-                    dt = self.dt if self.dt > 0 else 0.1
-
-                    # Integrate with anti-windup
-                    self._depth_integral += error * dt
-                    self._depth_integral = max(self._depth_integral_min, min(self._depth_integral, self._depth_integral_max))
-                    # Derivative
-                    derivative = (error - self._depth_error_prev) / dt if dt > 0 else 0.0
-                    self._depth_error_prev = error
-
-                    # PID output (maps to same sign as previous P-only behavior)
-                    pid_out = (self.Kp_depth * error) + (self.Ki_depth * self._depth_integral) + (self.Kd_depth * derivative)
-
-                    print(f"[DEPTH HOLD] Target: {self.desired_depth:.2f}m | Current: {self.depth:.2f}m | Err: {error:+.3f}m | PID: {pid_out:.1f} | Cmd: {int(1500 - pid_out)} PWM")
-
-                    # Convert PID output to RC command and bound
-                    self.commands[2] = int(1500 - pid_out)
-                    self.commands[2] = clip(self.commands[2], 1300, 1700)
                 else:
-                    print("[DEPTH] Free manual mode (no depth hold)")
-                    self.commands[2] = 1500
-                    
+                    self._compute_heading_pid()
+            else:
+                print("[YAW] Free manual mode (no heading hold)")
+                self.commands[3] = 1500
 
+    def _compute_heading_pid(self):
+        """Calcule la commande PID pour le maintien de cap."""
+        current_heading_deg = self.heading
+        err_deg = angle_diff_deg(self.desired_heading, current_heading_deg)
+        dt = self.dt if self.dt > 0 else 0.1
+        
+        # integral with anti-windup
+        self._heading_integral += err_deg * dt
+        self._heading_integral = max(self._heading_integral_min, min(self._heading_integral, self._heading_integral_max))
+        
+        # derivative
+        derivative = (err_deg - self._heading_error_prev) / dt if dt > 0 else 0.0
+        self._heading_error_prev = err_deg
+        
+        # PID output (deg -> RC mapping)
+        pid_out = (self.Kp_heading * err_deg) + (self.Ki_heading * self._heading_integral) + (self.Kd_heading * derivative)
+        print(f"[HEADING HOLD] Target: {self.desired_heading:.1f}° | Current: {current_heading_deg:.1f}° | Err: {err_deg:+.1f}° | PID: {pid_out:.1f} | Cmd: {int(1500 + pid_out)} PWM")
+        
+        self.commands[3] = int(1500 + pid_out)
+        self.commands[3] = clip(self.commands[3], 1300, 1700)
 
+    def _handle_depth_control(self):
+        """Gère le contrôle de profondeur (manuel ou maintien via PID)."""
+        # Use LT (axis 2) to go down and RT (axis 5) to go up
+        # LT and RT: 1 when neutral, -1 when fully pressed
+        # depth_input: positive to go up (RT), negative to go down (LT)
+        depth_input = (self.axes[2] - self.axes[5]) / 2.0
+        
+        if abs(depth_input) > 0.05:  # deadzone to avoid drift when triggers are neutral
+            # Direct manual control while trigger is pressed
+            self.commands[2] = int(200 * depth_input + 1500)
+            print(f"[DEPTH] Manual control - Current: {self.depth:.2f}m | Cmd: {self.commands[2]} PWM")
+            # If depth hold is active, mark that operator is changing depth
+            if self.depth_hold:
+                self._depth_move_active = True
+        else:
+            if self.depth_hold:
+                # If operator just released the stick after moving it, capture the current depth
+                if self._depth_move_active:
+                    self.desired_depth = self.depth
+                    self._depth_integral = -9  # seems to be approximately the value reached when depth is stable
+                    self._depth_error_prev = 0.0
+                    self._depth_move_active = False
+                    print(f"[DEPTH HOLD] New target captured: {self.desired_depth:.2f}m")
 
+                self._compute_depth_pid()
+            else:
+                print("[DEPTH] Free manual mode (no depth hold)")
+                self.commands[2] = 1500
 
+    def _compute_depth_pid(self):
+        """Calcule la commande PID pour le maintien de profondeur."""
+        error = self.desired_depth - self.depth
+        dt = self.dt if self.dt > 0 else 0.1
 
+        # Integrate with anti-windup
+        self._depth_integral += error * dt
+        self._depth_integral = max(self._depth_integral_min, min(self._depth_integral, self._depth_integral_max))
+        
+        # Derivative
+        derivative = (error - self._depth_error_prev) / dt if dt > 0 else 0.0
+        self._depth_error_prev = error
 
+        # PID output
+        pid_out = (self.Kp_depth * error) + (self.Ki_depth * self._depth_integral) + (self.Kd_depth * derivative)
 
-        # ============ STATE SUMMARY ============
+        print(f"[DEPTH HOLD] Target: {self.desired_depth:.2f}m | Current: {self.depth:.2f}m | Err: {error:+.3f}m | PID: {pid_out:.1f} | Cmd: {int(1500 - pid_out)} PWM")
+
+        # Convert PID output to RC command and bound
+        self.commands[2] = int(1500 - pid_out)
+        self.commands[2] = clip(self.commands[2], 1300, 1700)
+
+    def _print_state_summary(self):
+        """Affiche le résumé de l'état actuel du ROV."""
         print(f"[STATE] Armed: {self.armed} | Depth: {self.depth:.2f}m | Heading: {self.heading:.1f}°")
         print(f"[MODES] DepthHold: {self.depth_hold} | HeadingHold: {self.heading_hold} | PointMission: {self.point_follow_mission}")
         print(f"[COMMANDS] Elev: {self.commands[2]} | Yaw: {self.commands[3]} | Forward: {self.commands[4]} | Lateral: {self.commands[5]} | Light: {self.commands[8]}")
         if self.target_visible:
             print(f"[TARGET] Range: {self.target_range:.2f}m | Bearing: {np.degrees(self.target_bearing):+.0f}°")
-        print("="*80 + "\n")
+        print("=" * 80 + "\n")
 
+    # =====================================================================
+    # BOUCLE PRINCIPALE
+    # =====================================================================
+
+    def run(self):
+        """
+        Boucle principale de contrôle du ROV.
+        
+        Structure:
+        1. Traitement des nouvelles commandes joystick
+           - Armement/Désarmement
+           - Caméra et lumière
+           - Toggles des modes (depth hold, heading hold, mission)
+           - Mission automatique ou contrôles manuels
+           - Contrôle yaw et profondeur
+        2. Affichage du résumé d'état
+        3. Envoi des commandes
+        """
+        print("[ROV] --- Control loop running ---")
+
+        # Traitement uniquement si nouvelle trame joystick reçue
+        if self.frame_id_last != self.frame_id:
+            self.frame_id_last = self.frame_id
+
+            # Reset des commandes à neutre
+            self._reset_commands()
+
+            # Gestion armement/désarmement (Start/Back)
+            self._handle_arm_disarm()
+
+            # Gestion caméra et lumière
+            self._handle_camera_and_light()
+
+            # Toggles des modes
+            self._handle_depth_hold_toggle()       # Bouton B
+            self._handle_point_follow_toggle()     # Bouton A
+            self._handle_heading_hold_toggle()     # Bouton X
+
+            # Contrôle du mouvement (mission auto ou manuel)
+            if self.point_follow_mission:
+                # La mission gère yaw, avance et latéral automatiquement
+                self._handle_point_follow_mission()
+            else:
+                # Mode manuel: translation (avance/latéral)
+                self._handle_manual_movement()
+                # Mode manuel: yaw (avec support heading hold)
+                self._handle_yaw_control()
+
+            # Contrôle profondeur (priorité gâchettes sur PID depth hold)
+            self._handle_depth_control()
+
+        # Affichage résumé état
+        self._print_state_summary()
+
+        # Envoi des commandes au ROV
         self.send_commands()
-        self.commands_old = self.commands
-
-
-            
+                    
             
 def main(args=None):
 

@@ -38,9 +38,9 @@ class SinglePointController:
         self.kp_lateral = 0.5     # Gain pour le latéral (m/s par m d'erreur)
         
         # Limites de vitesse (m/s et rad/s)
-        self.max_forward_speed = 0.7
-        self.max_lateral_speed = 0.4
-        self.max_angular_speed = 0.7
+        self.max_forward_speed = 0.5
+        self.max_lateral_speed = 0.5
+        self.max_angular_speed = 0.5
         
     def control_step(self, bearing, range_m, visible):
         """
