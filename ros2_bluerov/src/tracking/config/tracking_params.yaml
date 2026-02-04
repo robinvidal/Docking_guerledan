@@ -31,7 +31,10 @@ hough_lines_node:
 
     enable_detection: true
     filter_mode : 1  # 0: Aucun filtre, 1: Filtre Moyenne Mobile, 2: Filtre de Kalman
-    moving_average_window_size : 7  # Taille de la fenêtre pour le filtre moyenne mobile
+    moving_average_window_size : 10  # Taille de la fenêtre pour le filtre moyenne mobile
+    outlier_threshold_deg: 60   # Seuil pour détecter les mesures <<abberant fréro>> en degrés
+    max_consecutive_outliers: 3 # Nombre maximum de mesures aberrantes consécutives avant réinitialisation du filtre
+
 
 csrt_tracker_node:
   ros__parameters:
