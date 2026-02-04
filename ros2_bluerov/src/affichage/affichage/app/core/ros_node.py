@@ -26,6 +26,13 @@ class SonarViewerNode(Node):
         self.click_pub = self.create_publisher(ClickPosition, '/docking/sonar/click_position', 10)
         self.bbox_pub = self.create_publisher(BBoxSelection, '/docking/sonar/bbox_selection', 10)
         self.rotated_bbox_pub = self.create_publisher(RotatedBBoxInit, '/docking/sonar/rotated_bbox_init', 10)
+        
+        # Auto-detect tracking
+        self.auto_detect_trigger_pub = self.create_publisher(Bool, '/docking/tracking/trigger_auto_detect', 10)
+        self.auto_detect_status_sub = self.create_subscription(
+            Bool, '/docking/tracking/auto_detect_status', 
+            self.auto_detect_status_callback, 10
+        )
 
         self.current_pose = None
         self.current_state = None
@@ -72,6 +79,48 @@ class SonarViewerNode(Node):
             return True
 
         self.get_logger().warn('Service de paramètres blob_tracker_node non disponible')
+        return False
+    
+    def set_csrt_parameter(self, param_name, value):
+        """Change un paramètre sur le node csrt_tracker_node."""
+        if not hasattr(self, 'csrt_param_client') or self.csrt_param_client is None:
+            from rcl_interfaces.srv import SetParameters
+            self.csrt_param_client = self.create_client(SetParameters, '/csrt_tracker_node/set_parameters')
+
+        if isinstance(value, bool):
+            param_type = ParameterType.PARAMETER_BOOL
+        elif isinstance(value, int):
+            param_type = ParameterType.PARAMETER_INTEGER
+        elif isinstance(value, float):
+            param_type = ParameterType.PARAMETER_DOUBLE
+        else:
+            self.get_logger().error(f'Type de paramètre non supporté: {type(value)}')
+            return False
+
+        from rcl_interfaces.srv import SetParameters
+        from rcl_interfaces.msg import Parameter as ParameterMsg, ParameterValue
+
+        request = SetParameters.Request()
+        param = ParameterMsg()
+        param.name = param_name
+        param.value = ParameterValue()
+        param.value.type = param_type
+
+        if param_type == ParameterType.PARAMETER_BOOL:
+            param.value.bool_value = value
+        elif param_type == ParameterType.PARAMETER_INTEGER:
+            param.value.integer_value = value
+        elif param_type == ParameterType.PARAMETER_DOUBLE:
+            param.value.double_value = value
+
+        request.parameters = [param]
+
+        if self.csrt_param_client.service_is_ready():
+            self.csrt_param_client.call_async(request)
+            self.get_logger().debug(f'Paramètre csrt.{param_name} = {value}')
+            return True
+
+        self.get_logger().warn('Service de paramètres csrt_tracker_node non disponible')
         return False
 
     def raw_callback(self, msg):
@@ -154,3 +203,15 @@ class SonarViewerNode(Node):
             f'P1({p1_x:.2f}, {p1_y:.2f}), P2({p2_x:.2f}, {p2_y:.2f}), '
             f'P3({p3_x:.2f}, {p3_y:.2f}), P4({p4_x:.2f}, {p4_y:.2f})'
         )
+    
+    def auto_detect_status_callback(self, msg):
+        """Reçoit le statut de la recherche auto-detect."""
+        self.signals.auto_detect_status_changed.emit(msg.data)
+    
+    def publish_auto_detect_trigger(self, activate: bool):
+        """Active ou désactive la recherche automatique de cage."""
+        msg = Bool()
+        msg.data = activate
+        self.auto_detect_trigger_pub.publish(msg)
+        action = 'ACTIVÉ' if activate else 'DÉSACTIVÉ'
+        self.get_logger().info(f'Auto-detect {action}')

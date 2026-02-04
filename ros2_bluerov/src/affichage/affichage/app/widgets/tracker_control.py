@@ -28,8 +28,8 @@ class TrackerControlWidget(QWidget):
     # Signal émis pour activer/désactiver le mode sélection de bbox
     bbox_selection_requested = pyqtSignal(bool)  # True = activer, False = désactiver
     
-    # Signal émis pour activer/désactiver le mode sélection rotatif (3 points)
-    rotated_selection_requested = pyqtSignal(bool)
+    # Signal émis pour activer/désactiver l'auto-tracking
+    auto_tracking_requested = pyqtSignal(bool)
 
     def __init__(self, ros_node):
         super().__init__()
@@ -71,37 +71,38 @@ class TrackerControlWidget(QWidget):
         self.select_bbox_btn.clicked.connect(self.on_select_bbox_clicked)
         selection_layout.addWidget(self.select_bbox_btn)
         
-        # Bouton de sélection rotatif (4 coins)
-        self.select_rotated_btn = QPushButton("🔄 Sélectionner Cage Orientée (4 coins)")
-        self.select_rotated_btn.setStyleSheet("""
+        # Bouton Auto Tracking (détection automatique de cage)
+        self.auto_tracking_btn = QPushButton("🔍 Auto Tracking")
+        self.auto_tracking_btn.setStyleSheet("""
             QPushButton {
-                background-color: #3498db;
+                background-color: #9b59b6;
                 color: white;
                 font-weight: bold;
                 padding: 10px;
                 border-radius: 5px;
             }
             QPushButton:hover {
-                background-color: #2980b9;
+                background-color: #8e44ad;
             }
             QPushButton:pressed {
-                background-color: #1f618d;
+                background-color: #7d3c98;
             }
             QPushButton:checked {
                 background-color: #e74c3c;
             }
         """)
-        self.select_rotated_btn.setCheckable(True)
-        self.select_rotated_btn.clicked.connect(self.on_select_rotated_clicked)
-        selection_layout.addWidget(self.select_rotated_btn)
+        self.auto_tracking_btn.setCheckable(True)
+        self.auto_tracking_btn.clicked.connect(self.on_auto_tracking_clicked)
+        selection_layout.addWidget(self.auto_tracking_btn)
         
         scroll_layout.addLayout(selection_layout)
         
         help_label = QLabel(
             "<small><b>Mode sélection:</b> Cliquez sur le bouton, puis dessinez un rectangle "
             "avec la souris sur l'image cartésienne. Le tracker démarre automatiquement.<br>"
-            "<b>Mode orienté:</b> Cliquez les 4 coins de la cage dans <b>n'importe quel ordre</b>. "
-            "Le tracker suivra la position et rotation.</small>"
+            "<b>Auto Tracking:</b> Détection automatique de la cage en U via Hough Lines. "
+            "Une fois détectée, le tracker CSRT prend le relai. "
+            "Si le tracker perd la cage, la détection reprend automatiquement.</small>"
         )
         help_label.setWordWrap(True)
         help_label.setStyleSheet("color: #95a5a6; padding: 5px;")
@@ -255,24 +256,40 @@ class TrackerControlWidget(QWidget):
         if checked:
             self.select_bbox_btn.setText("❌ Annuler Sélection")
             # Désactiver l'autre bouton
-            self.select_rotated_btn.setChecked(False)
+            self.auto_tracking_btn.setChecked(False)
+            self.auto_tracking_btn.setText("🔍 Auto Tracking")
+            # Arrêter l'auto-tracking si actif
+            self.ros_node.publish_auto_detect_trigger(False)
         else:
             self.select_bbox_btn.setText("📦 Sélectionner Cage (CSRT)")
         
         # Émettre le signal pour activer/désactiver le mode sélection
         self.bbox_selection_requested.emit(checked)
     
-    def on_select_rotated_clicked(self, checked):
-        """Gère le clic sur le bouton de sélection orientée."""
+    def on_auto_tracking_clicked(self, checked):
+        """Gère le clic sur le bouton Auto Tracking."""
         if checked:
-            self.select_rotated_btn.setText("❌ Annuler Sélection")
+            self.auto_tracking_btn.setText("⏹️ Arrêter Auto Tracking")
             # Désactiver l'autre bouton
             self.select_bbox_btn.setChecked(False)
+            self.select_bbox_btn.setText("📦 Sélectionner Cage (CSRT)")
+            self.bbox_selection_requested.emit(False)
         else:
-            self.select_rotated_btn.setText("🔄 Sélectionner Cage Orientée (4 coins)")
+            self.auto_tracking_btn.setText("🔍 Auto Tracking")
         
-        # Émettre le signal pour activer/désactiver le mode sélection rotatif
-        self.rotated_selection_requested.emit(checked)
+        # Publier le trigger pour activer/désactiver l'auto-detect
+        self.ros_node.publish_auto_detect_trigger(checked)
+        self.auto_tracking_requested.emit(checked)
+    
+    def on_auto_detect_status_changed(self, is_searching: bool):
+        """Callback quand le statut auto-detect change (cage trouvée ou perdue)."""
+        if not is_searching and self.auto_tracking_btn.isChecked():
+            # La cage a été trouvée, le tracking CSRT a pris le relai
+            self.auto_tracking_btn.setText("✅ Tracking Actif (Auto)")
+            # Ne pas décocher le bouton pour permettre de relancer si besoin
+        elif is_searching and self.auto_tracking_btn.isChecked():
+            # La recherche est en cours (relance après perte)
+            self.auto_tracking_btn.setText("🔍 Recherche en cours...")
 
     def on_param_changed(self, name, value):
         success = self.ros_node.set_tracking_parameter(name, value)

@@ -11,3 +11,6 @@ class ROSSignals(QObject):
     new_tracked_object = pyqtSignal(object)
     new_pose = pyqtSignal(object)
     new_state = pyqtSignal(object)
+    
+    # Auto-detect status (True = searching, False = not searching)
+    auto_detect_status_changed = pyqtSignal(bool)

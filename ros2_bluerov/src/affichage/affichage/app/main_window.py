@@ -94,12 +94,9 @@ class MainWindow(QMainWindow):
             lambda enabled: self.compare_panel.cartesian_viewer.set_bbox_selection_mode(enabled)
         )
         
-        # Connecter le bouton de sélection rotatif (3 points)
-        self.tracker_widget.rotated_selection_requested.connect(
-            lambda enabled: self.cartesian_filtered_panel.viewer.set_rotated_selection_mode(enabled)
-        )
-        self.tracker_widget.rotated_selection_requested.connect(
-            lambda enabled: self.compare_panel.cartesian_viewer.set_rotated_selection_mode(enabled)
+        # Connecter le signal de statut auto-detect au tracker widget
+        self.ros_node.signals.auto_detect_status_changed.connect(
+            self.tracker_widget.on_auto_detect_status_changed
         )
 
         splitter.addWidget(right_container)
