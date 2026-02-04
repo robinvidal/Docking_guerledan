@@ -1,263 +1,202 @@
-"""
-Nœud de détection de lignes par transformée de Hough.
-S'abonne aux données cartésiennes filtrées et détecte les n meilleures lignes.
-"""
-
 import numpy as np
+import math
 import rclpy
 from rclpy.node import Node
 from docking_msgs.msg import FrameCartesian, DetectedLines
+from geometry_msgs.msg import PoseStamped
 
 try:
     import cv2
 except ImportError:
     cv2 = None
 
+def get_quaternion_from_euler(roll, pitch, yaw):
+    """Convertit un angle Euler (Yaw) en Quaternion."""
+    qx = np.sin(roll/2) * np.cos(pitch/2) * np.cos(yaw/2) - np.cos(roll/2) * np.sin(pitch/2) * np.sin(yaw/2)
+    qy = np.cos(roll/2) * np.sin(pitch/2) * np.cos(yaw/2) + np.sin(roll/2) * np.cos(pitch/2) * np.sin(yaw/2)
+    qz = np.cos(roll/2) * np.cos(pitch/2) * np.sin(yaw/2) - np.sin(roll/2) * np.sin(pitch/2) * np.cos(yaw/2)
+    qw = np.cos(roll/2) * np.cos(pitch/2) * np.cos(yaw/2) + np.sin(roll/2) * np.sin(pitch/2) * np.sin(yaw/2)
+    return [qx, qy, qz, qw]
 
 class HoughLinesNode(Node):
-    """Détecte des lignes avec transformée de Hough sur images cartésiennes."""
-    
     def __init__(self):
         super().__init__('hough_lines_node')
         
-        # Paramètres de détection
+        # --- PARAMÈTRES ---
         self.declare_parameter('enable_detection', True)
-        self.declare_parameter('num_lines', 5)  # Nombre de lignes à détecter
-        self.declare_parameter('rho_resolution', 1.0)  # Résolution en distance (pixels)
-        self.declare_parameter('theta_resolution', 1.0)  # Résolution angulaire (degrés)
-        self.declare_parameter('threshold', 50)  # Seuil de votes minimum
-        self.declare_parameter('min_line_length', 20)  # Longueur minimale (pixels)
-        self.declare_parameter('max_line_gap', 10)  # Gap maximal (pixels)
-        self.declare_parameter('use_probabilistic', True)  # Utiliser HoughLinesP
+        self.declare_parameter('rho_resolution', 1.0)
+        self.declare_parameter('theta_resolution', 1.0) # Degrés
+        self.declare_parameter('threshold', 40)
+        self.declare_parameter('min_line_length', 15)
+        self.declare_parameter('max_line_gap', 10)
         
-        # Subscription
+        # Filtres physiques (mètres)
+        self.declare_parameter('filter_min_length_m', 0.2)
+        self.declare_parameter('filter_max_length_m', 2.5)
+        self.declare_parameter('merge_rho_tolerance', 0.3)
+        self.declare_parameter('merge_theta_tolerance', 0.2)
+
+        # Géométrie Cage (U)
+        self.declare_parameter('cage_width', 0.82)
+        self.declare_parameter('dist_tol', 0.15)
+        self.declare_parameter('perp_tol', 0.25)
+        self.declare_parameter('conn_tol', 0.40)
+
+        # Pub/Sub
         self.subscription = self.create_subscription(
-            FrameCartesian,
-            '/docking/sonar/cartesian_filtered',
-            self.frame_callback,
-            10
-        )
+            FrameCartesian, '/docking/sonar/cartesian_filtered', self.frame_callback, 10)
+        self.line_pub = self.create_publisher(DetectedLines, '/docking/tracking/detected_lines', 10)
+        self.cage_pose_pub = self.create_publisher(PoseStamped, '/docking/tracking/cage_pose', 10)
+
+        self.get_logger().info('Hough Lines Node (U-Shape) initialisé.')
+
+    def merge_similar_lines(self, candidates):
+        if not candidates: return []
+        rho_tol = self.get_parameter('merge_rho_tolerance').value
+        theta_tol = self.get_parameter('merge_theta_tolerance').value
         
-        # Publisher
-        self.publisher_ = self.create_publisher(
-            DetectedLines,
-            '/docking/tracking/detected_lines',
-            10
-        )
+        candidates.sort(key=lambda x: x['length'], reverse=True)
+        merged = []
         
-        self.get_logger().info('Hough Lines node démarré')
-    
+        while len(candidates) > 0:
+            base = candidates.pop(0)
+            cluster = [base]
+            remaining = []
+            for other in candidates:
+                d_theta = abs(base['theta'] - other['theta'])
+                if d_theta > np.pi/2: d_theta = abs(np.pi - d_theta)
+                d_rho = abs(base['rho'] - other['rho'])
+                
+                if d_rho < rho_tol and d_theta < theta_tol:
+                    cluster.append(other)
+                else:
+                    remaining.append(other)
+            candidates = remaining
+            
+            # Moyenne simple des points pour la ligne fusionnée
+            p1 = np.mean([c['p1'] for c in cluster], axis=0)
+            p2 = np.mean([c['p2'] for c in cluster], axis=0)
+            length = np.linalg.norm(p2 - p1)
+            angle = np.arctan2(p2[1]-p1[1], p2[0]-p1[0])
+            theta = (angle + np.pi/2) % np.pi
+            rho = p1[0] * np.cos(theta) + p1[1] * np.sin(theta)
+
+            merged.append({'p1': p1, 'p2': p2, 'rho': rho, 'theta': theta, 'length': length, 'is_u': 0.0})
+        return merged
+
+    def detect_u_shape(self, lines):
+        self.get_logger().info(f"Analyse de {len(lines)} lignes candidates...", throttle_duration_sec=2.0)
+        if len(lines) < 3: return None, None, lines
+        
+        width_target = self.get_parameter('cage_width').value
+        dist_tol = self.get_parameter('dist_tol').value
+        perp_tol = self.get_parameter('perp_tol').value
+        conn_tol = self.get_parameter('conn_tol').value
+
+        best_score = -1
+        best_data = (None, None)
+
+        for i, base in enumerate(lines):
+            for j, arm1 in enumerate(lines):
+                if i == j: continue
+                for k, arm2 in enumerate(lines):
+                    if k == i or k == j: continue
+                    
+                    # 1. Vérifier perpendicularité (Base vs Bras)
+                    def check_perp(l1, l2):
+                        diff = abs(l1['theta'] - l2['theta'])
+                        return abs(diff - np.pi/2) < perp_tol or abs(diff - 3*np.pi/2) < perp_tol
+
+                    if not check_perp(base, arm1) or not check_perp(base, arm2): continue
+
+                    # 2. Distance entre bras (Largeur)
+                    m1, m2 = (arm1['p1']+arm1['p2'])/2, (arm2['p1']+arm2['p2'])/2
+                    dist = np.linalg.norm(m1 - m2)
+                    if abs(dist - width_target) > dist_tol: continue
+
+                    # 3. Proximité (Connexion bras-base)
+                    def get_min_dist(l1, l2):
+                        pts = [l1['p1'], l1['p2'], l2['p1'], l2['p2']]
+                        return min(np.linalg.norm(pts[0]-pts[2]), np.linalg.norm(pts[0]-pts[3]),
+                                   np.linalg.norm(pts[1]-pts[2]), np.linalg.norm(pts[1]-pts[3]))
+
+                    if get_min_dist(base, arm1) > conn_tol or get_min_dist(base, arm2) > conn_tol: continue
+
+                    score = base['length'] + arm1['length'] + arm2['length']
+                    if score > best_score:
+                        best_score = score
+                        bary = (base['p1'] + base['p2'] + arm1['p1'] + arm1['p2'] + arm2['p1'] + arm2['p2']) / 6
+                        base_mid = (base['p1'] + base['p2']) / 2
+                        # Direction : du fond du U vers l'ouverture
+                        angle = math.atan2(bary[1] - base_mid[1], bary[0] - base_mid[0])
+                        best_data = (bary, angle)
+                        # Marquer les lignes
+                        for idx in [i, j, k]: lines[idx]['is_u'] = 1.0
+
+        if best_data[0] is not None:
+            deg = math.degrees(best_data[1])
+            self.get_logger().info(f"✅ CAGE DÉTECTÉE | Pose: x={best_data[0][0]:.2f}m, y={best_data[0][1]:.2f}m | Yaw: {deg:.1f}°")
+
+        return best_data[0], best_data[1], lines
+
     def frame_callback(self, msg: FrameCartesian):
-        """Traite une frame cartésienne et détecte les lignes."""
-        if not self.get_parameter('enable_detection').value:
-            return
+        if not self.get_parameter('enable_detection').value or cv2 is None: return
+
+        img = np.array(msg.intensities, dtype=np.uint8).reshape((msg.height, msg.width))
         
-        if cv2 is None:
-            self.get_logger().warn('OpenCV non disponible, détection impossible', throttle_duration_sec=5.0)
-            return
+        # Hough Probabiliste
+        rho_res = self.get_parameter('rho_resolution').value
+        theta_res = self.get_parameter('theta_resolution').value * np.pi / 180.0
         
-        # Reconstruction de l'image
-        img = np.array(msg.intensities, dtype=np.uint8).reshape(
-            (msg.height, msg.width)
-        )
+        cv_lines = cv2.HoughLinesP(img, rho=rho_res, theta=theta_res, 
+                                   threshold=int(self.get_parameter('threshold').value),
+                                   minLineLength=int(self.get_parameter('min_line_length').value),
+                                   maxLineGap=int(self.get_parameter('max_line_gap').value))
         
-        # Paramètres
-        num_lines = int(self.get_parameter('num_lines').value)
-        rho_res = float(self.get_parameter('rho_resolution').value)
-        theta_res = float(self.get_parameter('theta_resolution').value) * np.pi / 180.0
-        threshold = int(self.get_parameter('threshold').value)
-        use_prob = self.get_parameter('use_probabilistic').value
-        
-        # Détection des lignes
-        if use_prob:
-            min_length = int(self.get_parameter('min_line_length').value)
-            max_gap = int(self.get_parameter('max_line_gap').value)
-            lines = cv2.HoughLinesP(
-                img,
-                rho=rho_res,
-                theta=theta_res,
-                threshold=threshold,
-                minLineLength=min_length,
-                maxLineGap=max_gap
-            )
-        else:
-            lines = cv2.HoughLines(
-                img,
-                rho=rho_res,
-                theta=theta_res,
-                threshold=threshold
-            )
-        
-        # Construction du message de sortie
+        candidates = []
+        if cv_lines is not None:
+            for l in cv_lines:
+                x1_px, y1_px, x2_px, y2_px = l[0]
+                # Pixels -> Mètres
+                p1 = np.array([-(x1_px - msg.origin_x) * msg.resolution, (y1_px - msg.origin_y) * msg.resolution + msg.min_range])
+                p2 = np.array([-(x2_px - msg.origin_x) * msg.resolution, (y2_px - msg.origin_y) * msg.resolution + msg.min_range])
+                
+                length = np.linalg.norm(p2 - p1)
+                if self.get_parameter('filter_min_length_m').value < length < self.get_parameter('filter_max_length_m').value:
+                    angle = np.arctan2(p2[1]-p1[1], p2[0]-p1[0])
+                    theta = (angle + np.pi/2) % np.pi
+                    rho = p1[0] * np.cos(theta) + p1[1] * np.sin(theta)
+                    candidates.append({'p1': p1, 'p2': p2, 'rho': rho, 'theta': theta, 'length': length})
+
+        merged = self.merge_similar_lines(candidates)
+        bary, yaw, final_lines = self.detect_u_shape(merged)
+
+        # Publication des lignes
         out_msg = DetectedLines()
         out_msg.header = msg.header
-        
-        if lines is None or len(lines) == 0:
-            out_msg.is_valid = False
-            out_msg.num_lines = 0
-            out_msg.rhos = []
-            out_msg.thetas = []
-            out_msg.x1_points = []
-            out_msg.y1_points = []
-            out_msg.x2_points = []
-            out_msg.y2_points = []
-            out_msg.confidences = []
-            self.publisher_.publish(out_msg)
-            return
-        
-        # Conversion pixels -> mètres
-        resolution = msg.resolution
-        max_range = msg.max_range
-        min_range = msg.min_range
-        origin_x = msg.origin_x
-        origin_y = msg.origin_y
-        
-        # Limiter au nombre demandé
-        num_detected = min(num_lines, len(lines))
-        
-        rhos = []
-        thetas = []
-        x1_points = []
-        y1_points = []
-        x2_points = []
-        y2_points = []
-        confidences = []
-        
-        if use_prob:
-            # HoughLinesP retourne des segments [x1, y1, x2, y2]
-            for i in range(num_detected):
-                x1_px, y1_px, x2_px, y2_px = lines[i][0]
-                
-                # Conversion pixels -> mètres (coordonnées cartésiennes)
-                # L'image Hough travaille sur l'image AVANT rotation de 90°
-                # Dans cette image: axe 0 (y_px) = Y frontal, axe 1 (x_px) = X latéral
-                # Inversion de x car l'axe x_px croît vers la droite mais x_m doit croître vers la gauche
-                # x_m = -(x_px - origin_x) * resolution  (latéral, inversé)
-                # y_m = (y_px - origin_y) * resolution + min_range  (frontal)
-                x1_m = -(float(x1_px) - origin_x) * resolution
-                y1_m = (float(y1_px) - origin_y) * resolution + min_range
-                x2_m = -(float(x2_px) - origin_x) * resolution
-                y2_m = (float(y2_px) - origin_y) * resolution + min_range
-                
-                # Calcul des paramètres polaires (rho, theta) de la ligne
-                # Direction de la ligne
-                dx = x2_m - x1_m
-                dy = y2_m - y1_m
-                
-                if abs(dx) < 1e-6 and abs(dy) < 1e-6:
-                    continue
-                
-                # Angle de la ligne (direction)
-                line_angle = np.arctan2(dy, dx)
-                # Normale à la ligne
-                theta = line_angle + np.pi / 2.0
-                # Normaliser theta dans [0, pi]
-                while theta < 0:
-                    theta += np.pi
-                while theta >= np.pi:
-                    theta -= np.pi
-                
-                # Distance perpendiculaire à l'origine
-                # rho = x * cos(theta) + y * sin(theta)
-                rho = x1_m * np.cos(theta) + y1_m * np.sin(theta)
-                
-                # Si rho est négatif, on inverse
-                if rho < 0:
-                    rho = -rho
-                    theta = theta + np.pi
-                    if theta >= np.pi:
-                        theta -= np.pi
-                
-                rhos.append(float(rho))
-                thetas.append(float(theta))
-                x1_points.append(float(x1_m))
-                y1_points.append(float(y1_m))
-                x2_points.append(float(x2_m))
-                y2_points.append(float(y2_m))
-                
-                # Confiance basée sur la longueur du segment
-                length = np.sqrt(dx**2 + dy**2)
-                conf = min(1.0, length / (max_range * 0.5))
-                confidences.append(float(conf))
-        
-        else:
-            # HoughLines retourne [rho, theta]
-            for i in range(num_detected):
-                rho_px, theta = lines[i][0]
-                
-                # Conversion rho de pixels vers mètres
-                rho_m = float(rho_px) * resolution
-                
-                # Calcul des points d'intersection avec les bordures
-                # On trouve les intersections avec les 4 bordures de l'image
-                cos_t = np.cos(theta)
-                sin_t = np.sin(theta)
-                
-                # Bordures en mètres
-                x_min = -max_range
-                x_max = max_range
-                y_min = min_range
-                y_max = max_range
-                
-                intersections = []
-                
-                # Intersection avec x = x_min
-                if abs(sin_t) > 1e-6:
-                    y = (rho_m - x_min * cos_t) / sin_t
-                    if y_min <= y <= y_max:
-                        intersections.append((x_min, y))
-                
-                # Intersection avec x = x_max
-                if abs(sin_t) > 1e-6:
-                    y = (rho_m - x_max * cos_t) / sin_t
-                    if y_min <= y <= y_max:
-                        intersections.append((x_max, y))
-                
-                # Intersection avec y = y_min
-                if abs(cos_t) > 1e-6:
-                    x = (rho_m - y_min * sin_t) / cos_t
-                    if x_min <= x <= x_max:
-                        intersections.append((x, y_min))
-                
-                # Intersection avec y = y_max
-                if abs(cos_t) > 1e-6:
-                    x = (rho_m - y_max * sin_t) / cos_t
-                    if x_min <= x <= x_max:
-                        intersections.append((x, y_max))
-                
-                if len(intersections) >= 2:
-                    x1_m, y1_m = intersections[0]
-                    x2_m, y2_m = intersections[1]
-                    
-                    rhos.append(float(rho_m))
-                    thetas.append(float(theta))
-                    x1_points.append(float(x1_m))
-                    y1_points.append(float(y1_m))
-                    x2_points.append(float(x2_m))
-                    y2_points.append(float(y2_m))
-                    
-                    # Confiance proportionnelle à rho (lignes proches = plus confiantes)
-                    conf = max(0.0, 1.0 - rho_m / max_range)
-                    confidences.append(float(conf))
-        
-        # Publication
-        out_msg.is_valid = len(rhos) > 0
-        out_msg.num_lines = len(rhos)
-        out_msg.rhos = rhos
-        out_msg.thetas = thetas
-        out_msg.x1_points = x1_points
-        out_msg.y1_points = y1_points
-        out_msg.x2_points = x2_points
-        out_msg.y2_points = y2_points
-        out_msg.confidences = confidences
-        
-        self.publisher_.publish(out_msg)
+        for l in final_lines:
+            out_msg.rhos.append(float(l['rho']))
+            out_msg.thetas.append(float(l['theta']))
+            out_msg.x1_points.append(float(l['p1'][0]))
+            out_msg.y1_points.append(float(l['p1'][1]))
+            out_msg.x2_points.append(float(l['p2'][0]))
+            out_msg.y2_points.append(float(l['p2'][1]))
+            out_msg.confidences.append(l['is_u'] if l['is_u'] > 0 else 0.4)
+        self.line_pub.publish(out_msg)
+
+        # Publication de la Pose de la cage
+        if bary is not None:
+            p_msg = PoseStamped()
+            p_msg.header = msg.header
+            p_msg.pose.position.x, p_msg.pose.position.y = float(bary[0]), float(bary[1])
+            q = get_quaternion_from_euler(0, 0, yaw)
+            p_msg.pose.orientation.x, p_msg.pose.orientation.y, p_msg.pose.orientation.z, p_msg.pose.orientation.w = q
+            self.cage_pose_pub.publish(p_msg)
 
 
 def main(args=None):
     rclpy.init(args=args)
     node = HoughLinesNode()
-    
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
@@ -265,7 +204,6 @@ def main(args=None):
     finally:
         node.destroy_node()
         rclpy.shutdown()
-
 
 if __name__ == '__main__':
     main()

@@ -33,6 +33,9 @@ class CartesianFilteredSonarPanel(QWidget):
     def update_tracked_object(self, tracked_msg):
         self.viewer.update_tracked_object(tracked_msg)
 
+    def update_cage_pose(self, pose_msg):
+        self.viewer.update_cage_pose(pose_msg)
+
 
 class CompareSonarPanel(QWidget):
     """Comparaison brut vs cartésien filtré."""
@@ -55,3 +58,6 @@ class CompareSonarPanel(QWidget):
     
     def update_tracked_object(self, tracked_msg):
         self.cartesian_viewer.update_tracked_object(tracked_msg)
+
+    def update_cage_pose(self, pose_msg):
+        self.cartesian_viewer.update_cage_pose(pose_msg)

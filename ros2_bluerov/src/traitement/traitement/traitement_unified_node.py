@@ -69,6 +69,17 @@ class TraitementUnifiedNode(Node):
         self.declare_parameter('cart_flip_horizontal', False)
         self.declare_parameter('cart_flip_vertical', False)
         
+        # Filtre Binarisation Percentile (garde les X% pixels les plus intenses)
+        self.declare_parameter('cart_enable_percentile_binarize', False)
+        self.declare_parameter('cart_percentile_keep_percent', 1.0)
+        
+        # Filtre Ouverture-Fermeture (Opening-Closing) - Nettoyage morphologique
+        self.declare_parameter('cart_enable_opening_closing', False)
+        self.declare_parameter('cart_opening_kernel_size', 3)
+        self.declare_parameter('cart_closing_kernel_size', 3)
+        self.declare_parameter('cart_opening_iterations', 1)
+        self.declare_parameter('cart_closing_iterations', 1)
+        
         # ========== SUBSCRIPTIONS ==========
         self.sonar_sub = self.create_subscription(
             Frame,
@@ -350,6 +361,95 @@ class TraitementUnifiedNode(Node):
         
         return img
     
+    def apply_percentile_binarize_filter(self, img: np.ndarray) -> np.ndarray:
+        """Filtre Binarisation Percentile - Garde uniquement les X% pixels les plus intenses.
+        
+        Ce filtre calcule le seuil correspondant au percentile (100 - keep_percent)
+        et met à 255 tous les pixels au-dessus de ce seuil, 0 sinon.
+        
+        Args:
+            img: Image en niveaux de gris (uint8)
+            
+        Returns:
+            Image binarisée avec seulement les pixels les plus intenses à 255
+        """
+        if not self.get_parameter('cart_enable_percentile_binarize').value:
+            return img
+        
+        keep_percent = float(self.get_parameter('cart_percentile_keep_percent').value)
+        
+        # Clamp entre 0.1% et 100%
+        keep_percent = max(0.1, min(100.0, keep_percent))
+        
+        # Calcul du percentile (ex: garder 1% = percentile 99)
+        percentile_value = 100.0 - keep_percent
+        
+        # Ne considérer que les pixels non-nuls pour le calcul du seuil
+        non_zero_pixels = img[img > 0]
+        
+        if len(non_zero_pixels) == 0:
+            return np.zeros_like(img)
+        
+        threshold = np.percentile(non_zero_pixels, percentile_value)
+        
+        # Binarisation: pixels >= seuil deviennent 255, sinon 0
+        result = np.where(img >= threshold, 255, 0).astype(np.uint8)
+        
+        return result
+    
+    def apply_opening_closing_filter(self, img: np.ndarray) -> np.ndarray:
+        """Filtre Ouverture-Fermeture - Nettoyage morphologique après binarisation.
+        
+        Opening (Ouverture) = Erosion + Dilatation:
+            - Supprime les petits objets isolés (bruit)
+            - Sépare les objets faiblement connectés
+        
+        Closing (Fermeture) = Dilatation + Erosion:
+            - Comble les petits trous dans les objets
+            - Connecte les objets proches
+        
+        L'ordre Opening puis Closing permet de:
+            1. D'abord nettoyer le bruit (opening)
+            2. Puis solidifier les structures restantes (closing)
+        
+        Args:
+            img: Image binaire (uint8)
+            
+        Returns:
+            Image nettoyée morphologiquement
+        """
+        if not self.get_parameter('cart_enable_opening_closing').value:
+            return img
+        
+        opening_kernel_size = int(self.get_parameter('cart_opening_kernel_size').value)
+        closing_kernel_size = int(self.get_parameter('cart_closing_kernel_size').value)
+        opening_iterations = int(self.get_parameter('cart_opening_iterations').value)
+        closing_iterations = int(self.get_parameter('cart_closing_iterations').value)
+        
+        result = img.copy()
+
+        # Closing (Fermeture) - Solidifie les structures
+        if closing_iterations > 0:
+            closing_kernel = cv2.getStructuringElement(
+                cv2.MORPH_RECT,
+                (closing_kernel_size, closing_kernel_size)
+            )
+            result = cv2.morphologyEx(result, cv2.MORPH_CLOSE, closing_kernel,
+                                       iterations=closing_iterations)
+        
+        # Opening (Ouverture) - Supprime le bruit
+        if opening_iterations > 0:
+            opening_kernel = cv2.getStructuringElement(
+                cv2.MORPH_RECT,
+                (opening_kernel_size, opening_kernel_size)
+            )
+            result = cv2.morphologyEx(result, cv2.MORPH_OPEN, opening_kernel, 
+                                       iterations=opening_iterations)
+        
+
+        
+        return result
+    
     # ========== CALLBACK PRINCIPAL ==========
     
     def frame_callback(self, msg: Frame):
@@ -407,6 +507,12 @@ class TraitementUnifiedNode(Node):
         
         # 6. Morphologie (closing - solidifie les structures)
         filtered_cart = self.apply_morphology_filter(filtered_cart)
+        
+        # 7. Binarisation percentile (garde les X% pixels les plus intenses)
+        filtered_cart = self.apply_percentile_binarize_filter(filtered_cart)
+        
+        # 8. Ouverture-Fermeture (nettoyage morphologique après binarisation)
+        filtered_cart = self.apply_opening_closing_filter(filtered_cart)
         
         # Publication cartésienne filtrée
         cart_msg = FrameCartesian()

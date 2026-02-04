@@ -143,6 +143,28 @@ class SonarCartesianImageWidget(pg.PlotWidget):
         # Pause pour la sélection
         self.is_paused = False
         self.paused_frame = None
+
+        # Centre du U détecté et orientation
+        self.u_center = pg.ScatterPlotItem(
+            size=18, symbol='x', pen=pg.mkPen('magenta', width=2), brush=None
+        )
+        self.u_center.setZValue(110)
+        self.addItem(self.u_center)
+        self.u_center.hide()
+
+        self.u_orientation_line = pg.PlotCurveItem(
+            pen=pg.mkPen('magenta', width=3, style=Qt.SolidLine)
+        )
+        self.u_orientation_line.setZValue(110)
+        self.addItem(self.u_orientation_line)
+        self.u_orientation_line.hide()
+
+        self.u_orientation_head = pg.PlotCurveItem(
+            pen=pg.mkPen('magenta', width=3, style=Qt.SolidLine)
+        )
+        self.u_orientation_head.setZValue(111)
+        self.addItem(self.u_orientation_head)
+        self.u_orientation_head.hide()
         
         # Stocker les dimensions de l'image pour conversion pixels
         self.image_width = 0
@@ -296,6 +318,61 @@ class SonarCartesianImageWidget(pg.PlotWidget):
             line_item.setData([x1, x2], [y1, y2])
             self.addItem(line_item)
             self.hough_lines.append(line_item)
+
+    def update_cage_pose(self, pose_msg):
+        """Met à jour l'affichage du centre du U et de son orientation (PoseStamped)."""
+        if pose_msg is None:
+            self.u_center.hide()
+            self.u_orientation_line.hide()
+            self.u_orientation_head.hide()
+            return
+
+        try:
+            x = float(pose_msg.pose.position.x)
+            y = float(pose_msg.pose.position.y)
+            qx = float(pose_msg.pose.orientation.x)
+            qy = float(pose_msg.pose.orientation.y)
+            qz = float(pose_msg.pose.orientation.z)
+            qw = float(pose_msg.pose.orientation.w)
+        except Exception:
+            return
+
+        # Calcul du yaw à partir du quaternion
+        # yaw (z) = atan2(2*(w*z + x*y), 1 - 2*(y*y + z*z))
+        yaw = np.arctan2(2.0 * (qw * qz + qx * qy), 1.0 - 2.0 * (qy * qy + qz * qz))
+
+        # Afficher le centre
+        self.u_center.setData(pos=[(x, y)])
+        self.u_center.show()
+
+        # Ligne d'orientation
+        L = max(0.2, min(0.8, self.cage_width))  # longueur de la flèche en m
+        ex = x + L * np.cos(yaw)
+        ey = y + L * np.sin(yaw)
+        self.u_orientation_line.setData([x, ex], [y, ey])
+        self.u_orientation_line.show()
+
+        # Tête de flèche (triangle)
+        head_len = 0.08
+        head_w = 0.06
+        # vecteur direction
+        dx = np.cos(yaw)
+        dy = np.sin(yaw)
+        # point base de la tête
+        bx = ex - head_len * dx
+        by = ey - head_len * dy
+        # perpendiculaire
+        px = -dy
+        py = dx
+        left_x = bx + (head_w / 2.0) * px
+        left_y = by + (head_w / 2.0) * py
+        right_x = bx - (head_w / 2.0) * px
+        right_y = by - (head_w / 2.0) * py
+
+        tx = [ex, left_x, right_x, ex]
+        ty = [ey, left_y, right_y, ey]
+        self.u_orientation_head.setData(tx, ty)
+        self.u_orientation_head.show()
     
     def _on_mouse_clicked(self, event):
         """Gère les clics souris pour sélection de bbox ou clic simple."""

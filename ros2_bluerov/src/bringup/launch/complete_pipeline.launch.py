@@ -77,14 +77,6 @@ def generate_launch_description():
         output='screen'
     )
 
-    localisation = Node(
-        package='localisation',
-        executable='localisation_node',
-        name='localisation_node',
-        parameters=[localisation_config],
-        output='screen'
-    )
-
     # ==== MAVROS / PX4 (inky) ====
     launch_mavros = IncludeLaunchDescription(
         AnyLaunchDescriptionSource(

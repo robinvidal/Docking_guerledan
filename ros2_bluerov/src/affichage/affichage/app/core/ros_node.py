@@ -3,6 +3,7 @@ import rclpy
 from rclpy.node import Node
 from rcl_interfaces.msg import ParameterType
 from docking_msgs.msg import Frame, FrameCartesian, DetectedLines, ClickPosition, BBoxSelection, PoseRelative, State, TrackedObject, RotatedBBoxInit
+from geometry_msgs.msg import PoseStamped
 from std_msgs.msg import Bool
 
 
@@ -17,6 +18,7 @@ class SonarViewerNode(Node):
         self.cartesian_filtered_sub = self.create_subscription(FrameCartesian, '/docking/sonar/cartesian_filtered', self.cartesian_filtered_callback, 10)
         self.detected_lines_sub = self.create_subscription(DetectedLines, '/docking/tracking/detected_lines', self.detected_lines_callback, 10)
         self.tracked_object_sub = self.create_subscription(TrackedObject, '/docking/tracking/tracked_object', self.tracked_object_callback, 10)
+        self.cage_pose_sub = self.create_subscription(PoseStamped, '/docking/tracking/cage_pose', self.cage_pose_callback, 10)
         self.pose_sub = self.create_subscription(PoseRelative, '/docking/localisation/pose', self.pose_callback, 10)
         self.state_sub = self.create_subscription(State, '/docking/mission/state', self.state_callback, 10)
 
@@ -80,6 +82,10 @@ class SonarViewerNode(Node):
 
     def detected_lines_callback(self, msg):
         self.signals.new_detected_lines.emit(msg)
+
+    def cage_pose_callback(self, msg):
+        """Re-émet la pose de la cage pour l'interface graphique."""
+        self.signals.new_cage_pose.emit(msg)
 
     def tracked_object_callback(self, msg):
         self.signals.new_tracked_object.emit(msg)
