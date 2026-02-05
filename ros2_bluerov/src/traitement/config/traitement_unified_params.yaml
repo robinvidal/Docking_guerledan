@@ -2,11 +2,11 @@ traitement_unified_node:
   ros__parameters:
     # ========== FILTRES POLAIRES ==========
     # Filtre Médian Polaire (réduction speckle)
-    polar_enable_median: true
+    polar_enable_median: false
     polar_median_kernel: 3
     
     # Filtre Frost (réduction adaptative du speckle)
-    polar_enable_frost: true
+    polar_enable_frost: false
     polar_frost_window_size: 3
     polar_frost_damping: 3.4
     
@@ -22,7 +22,7 @@ traitement_unified_node:
     
     # 1. Filtre Médian Cartésien (Denoising - supprime bruit poivre/sel)
     # ros2 param set /traitement_unified_node cart_enable_median true
-    cart_enable_median: true
+    cart_enable_median: false
     # kernel_size: 3, 5, 7 - Plus grand = moins de bruit mais perte de détails fins
     # ros2 param set /traitement_unified_node cart_median_kernel_size 5
     cart_median_kernel_size: 3
@@ -30,7 +30,7 @@ traitement_unified_node:
     # 2. Filtre CLAHE (Amélioration de Contraste Adaptative Locale)
     # Fait ressortir la structure métallique de la cage
     # ros2 param set /traitement_unified_node cart_enable_clahe true
-    cart_enable_clahe: true
+    cart_enable_clahe: false
     # clip_limit: 2.0 à 4.0 - Limite l'amplification du bruit
     # ros2 param set /traitement_unified_node cart_clahe_clip_limit 3.0
     cart_clahe_clip_limit: 2.0
@@ -41,15 +41,15 @@ traitement_unified_node:
     # 3. Filtre Seuil Bas (Threshold to Zero) - SEUL FILTRE BINARISANT
     # Met à zéro tout ce qui est en dessous du seuil (nettoie les faibles échos)
     # ros2 param set /traitement_unified_node cart_enable_threshold true
-    cart_enable_threshold: true
+    cart_enable_threshold: false
     # min_intensity_threshold: 0-255 - Valeur sous laquelle tout devient noir
     # ros2 param set /traitement_unified_node cart_min_intensity_threshold 50
-    cart_min_intensity_threshold: 40
+    cart_min_intensity_threshold: 0
     
     # 4. Filtre Morphologique (Closing = Dilatation + Érosion)
     # Solidifie les barres de la cage, comble les discontinuités
     # ros2 param set /traitement_unified_node cart_enable_morphology true
-    cart_enable_morphology: true
+    cart_enable_morphology: false
     # morph_kernel_size: 3 ou 5 - Taille de l'élément structurant
     # ros2 param set /traitement_unified_node cart_morph_kernel_size 3
     cart_morph_kernel_size: 3

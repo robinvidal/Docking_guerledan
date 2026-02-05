@@ -7,9 +7,9 @@
 
 * {
     font-family: "Montserrat", "Segoe UI", sans-serif;
-    color: #0C2B4E;
+    color: #6ca0b6;
     selection-background-color: transparent;
-    selection-color: #0C2B4E;
+    selection-color: #6ca0b6;
 }
 
 QMainWindow, QWidget {
