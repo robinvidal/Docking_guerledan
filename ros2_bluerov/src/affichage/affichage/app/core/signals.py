@@ -14,3 +14,6 @@ class ROSSignals(QObject):
     
     # Auto-detect status (True = searching, False = not searching)
     auto_detect_status_changed = pyqtSignal(bool)
+    
+    # Sonar configuration response (success, message, range, gain, mode, ping_rate)
+    sonar_config_response = pyqtSignal(bool, str, float, int, int, int)

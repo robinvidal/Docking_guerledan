@@ -34,6 +34,10 @@ class SinglePointController:
         self.state = "idle"  # "idle", "tracking", "arrived"
         
         # Gains des contrôleurs (à ajuster selon tests réels)
+        self.kp_heading = 0.5     # Gain pour le cap (rad/s par rad d'erreur)
+        self.kp_forward = 0.5    # Gain pour l'avance (m/s par m d'erreur)
+        self.kp_lateral = 0.5     # Gain pour le latéral (m/s par m d'erreur)
+        
         # Limites de vitesse (m/s et rad/s)
         self.max_forward_speed = 0.5 # 0.5
         self.max_lateral_speed = 0.5 # 0.5
@@ -105,7 +109,7 @@ class OrientedApproachController:
     - approach_angle_error: différence entre position angulaire actuelle et cible autour de la cage
     """
     
-    def __init__(self, stop_distance=0.5, orbit_distance=1.5, angle_tolerance_deg=5.0):
+    def __init__(self, stop_distance=0.5, orbit_distance=2.5, angle_tolerance_deg=5.0):
         """
         Args:
             stop_distance: Distance d'arrêt finale à la cible (m)
@@ -142,6 +146,8 @@ class OrientedApproachController:
         self.max_forward_speed = 0.5
         self.max_lateral_speed = 0.5
         self.max_angular_speed = 0.5
+
+        self.final_flag = False
         
     def control_step(self, bearing, range_m, approach_angle_error, visible):
         """
@@ -164,6 +170,7 @@ class OrientedApproachController:
             self.state = "idle"
             return 0.0, 0.0, 0.0
         
+        self.final_flag = False
         # Vérifier si on est arrivé (distance finale)
         if range_m < self.stop_distance:
             self.state = "arrived"
@@ -176,7 +183,7 @@ class OrientedApproachController:
         # ========== MACHINE À ÉTATS ==========
         
         # Marge pour la transition approche → orbite (évite les oscillations)
-        orbit_margin = 0.2  # 20cm de marge
+        orbit_margin = 1.0 # 1m de marge
         
         # Phase 1: Approche initiale jusqu'à orbit_distance + marge
         if range_m > self.orbit_distance + orbit_margin:
@@ -184,13 +191,18 @@ class OrientedApproachController:
             return self._approach_control(bearing, range_m, self.orbit_distance)
         
         if abs(approach_angle_error) > ( -self.angle_tolerance + np.pi):
+            self.final_flag = True
             # Phase 3: Approche finale (bien aligné)
             self.state = "Final_approach"
             return self._approach_control(bearing, range_m, self.stop_distance)
         else:
-            print("Approach angle error (deg):", np.degrees(approach_angle_error))
-            self.state = "Orbiting"
-            return self._orbit_control(bearing, range_m, approach_angle_error)
+            if self.final_flag:
+                self.state = "Final_approach"
+                return self._approach_control(bearing, range_m, self.stop_distance)
+            else:
+                print("Approach angle error (deg):", np.degrees(approach_angle_error))
+                self.state = "Orbiting"
+                return self._orbit_control(bearing, range_m, approach_angle_error)
     
     def _approach_control(self, bearing, range_m, target_distance):
         """
@@ -202,6 +214,7 @@ class OrientedApproachController:
             target_distance: Distance cible à atteindre (m)
         """
         # Heading: bearing = 0
+        print("Approaching...")
         angular_speed = self.kp_heading * bearing
         
         # Forward: avancer vers target_distance
@@ -258,7 +271,7 @@ class OrientedApproachController:
         # ========== LATERAL (P): orbiter pour minimiser l'erreur d'angle ==========
         # approach_angle_error > 0 → orbiter vers la droite (lateral > 0)
         # approach_angle_error < 0 → orbiter vers la gauche (lateral < 0)
-        orbit_direction = 1.0 if approach_angle_error > 0 else -1.0
+        orbit_direction = -1.0 if approach_angle_error > 0 else 1.0
         lateral_speed = orbit_direction * self.orbit_speed
 
         # Limitation

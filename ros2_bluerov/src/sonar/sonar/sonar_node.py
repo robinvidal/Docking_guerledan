@@ -11,6 +11,7 @@ import rclpy
 from rclpy.node import Node
 
 from docking_msgs.msg import Frame
+from docking_msgs.srv import ConfigureSonar
 
 
 class SonarNode(Node):
@@ -26,8 +27,8 @@ class SonarNode(Node):
         self.declare_parameter('ip_address', '192.168.1.10')
         self.declare_parameter('port', 52102)
         self.declare_parameter('range', 15.0)  # m
-        self.declare_parameter('gain_percent', 0)
-        self.declare_parameter('master_mode', 1)  # 1: LF, 2: HF
+        self.declare_parameter('gain_percent', 10)
+        self.declare_parameter('master_mode', 2)  # 1: LF, 2: HF
         self.declare_parameter('ping_rate', 0)    # 0: auto
         self.declare_parameter('frame_id', 'sonar_link')
         # Suppression de bandes d'artefacts sur les bords (colonnes bearings)
@@ -39,6 +40,13 @@ class SonarNode(Node):
 
         # Publisher
         self.publisher_ = self.create_publisher(Frame, '/docking/sonar/raw', 10)
+
+        # Service pour configuration dynamique
+        self.config_service = self.create_service(
+            ConfigureSonar,
+            '/docking/sonar/configure',
+            self._configure_sonar_callback
+        )
 
         # État courant du sonar (rempli par callbacks)
         self._last_bearings_deg: Optional[list] = None
@@ -127,6 +135,86 @@ class SonarNode(Node):
 
     def _status_callback(self, status):
         self.get_logger().info(f'STATUS: {status}')
+
+    # ---------- Service de configuration dynamique ----------
+    def _configure_sonar_callback(self, request, response):
+        """
+        Callback du service pour modifier la configuration du sonar en temps réel.
+        
+        Valeurs spéciales:
+        - range = 0.0 -> ne pas modifier
+        - gain_percent = -1 -> ne pas modifier
+        - master_mode = -1 -> ne pas modifier
+        - ping_rate = -1 -> ne pas modifier
+        """
+        if self._sonar is None:
+            response.success = False
+            response.message = "Sonar non initialisé"
+            response.current_range = 0.0
+            response.current_gain = 0
+            response.current_mode = 0
+            response.current_ping_rate = 0
+            return response
+
+        try:
+            # Récupérer la configuration actuelle
+            c = self._sonar.current_config()
+            changes = []
+
+            # Modifier seulement les paramètres demandés
+            if request.range > 0.0:
+                c.range = float(request.range)
+                changes.append(f"range={request.range}m")
+            
+            if request.gain_percent >= 0:
+                c.gainPercent = int(request.gain_percent)
+                changes.append(f"gain={request.gain_percent}%")
+            
+            if request.master_mode > 0:
+                c.masterMode = int(request.master_mode)
+                mode_name = "LF" if request.master_mode == 1 else "HF"
+                changes.append(f"mode={mode_name}")
+            
+            if request.ping_rate >= 0:
+                c.pingRate = int(request.ping_rate)
+                changes.append(f"pingRate={request.ping_rate}")
+
+            # Envoyer la nouvelle configuration
+            self._sonar.send_config(c)
+            
+            # Mettre à jour les paramètres ROS2 aussi
+            if request.range > 0.0:
+                self.set_parameters([rclpy.parameter.Parameter('range', rclpy.Parameter.Type.DOUBLE, request.range)])
+            if request.gain_percent >= 0:
+                self.set_parameters([rclpy.parameter.Parameter('gain_percent', rclpy.Parameter.Type.INTEGER, request.gain_percent)])
+            if request.master_mode > 0:
+                self.set_parameters([rclpy.parameter.Parameter('master_mode', rclpy.Parameter.Type.INTEGER, request.master_mode)])
+            if request.ping_rate >= 0:
+                self.set_parameters([rclpy.parameter.Parameter('ping_rate', rclpy.Parameter.Type.INTEGER, request.ping_rate)])
+
+            # Préparer la réponse
+            response.success = True
+            if changes:
+                response.message = f"Configuration mise à jour: {', '.join(changes)}"
+                self.get_logger().info(response.message)
+            else:
+                response.message = "Aucun paramètre modifié"
+            
+            response.current_range = float(c.range)
+            response.current_gain = int(c.gainPercent)
+            response.current_mode = int(c.masterMode)
+            response.current_ping_rate = int(c.pingRate)
+
+        except Exception as e:
+            response.success = False
+            response.message = f"Erreur lors de la configuration: {str(e)}"
+            self.get_logger().error(response.message)
+            response.current_range = 0.0
+            response.current_gain = 0
+            response.current_mode = 0
+            response.current_ping_rate = 0
+
+        return response
 
     # ---------- Publication ----------
     def _publish_frame(self):

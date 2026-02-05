@@ -3,6 +3,7 @@ import rclpy
 from rclpy.node import Node
 from rcl_interfaces.msg import ParameterType
 from docking_msgs.msg import Frame, FrameCartesian, DetectedLines, ClickPosition, BBoxSelection, PoseRelative, State, TrackedObject, RotatedBBoxInit
+from docking_msgs.srv import ConfigureSonar
 from geometry_msgs.msg import PoseStamped
 from std_msgs.msg import Bool
 
@@ -215,3 +216,65 @@ class SonarViewerNode(Node):
         self.auto_detect_trigger_pub.publish(msg)
         action = 'ACTIVÉ' if activate else 'DÉSACTIVÉ'
         self.get_logger().info(f'Auto-detect {action}')
+
+    # ==================== Configuration Sonar ====================
+    
+    def configure_sonar(self, range_m: float = 0.0, gain_percent: int = -1, 
+                        master_mode: int = -1, ping_rate: int = -1):
+        """
+        Appelle le service de configuration du sonar.
+        
+        Args:
+            range_m: Portée en mètres (0.0 = ne pas modifier)
+            gain_percent: Gain en % [0-100] (-1 = ne pas modifier)
+            master_mode: 1=LF, 2=HF (-1 = ne pas modifier)
+            ping_rate: 0=auto (-1 = ne pas modifier)
+        """
+        if not hasattr(self, 'sonar_config_client') or self.sonar_config_client is None:
+            self.sonar_config_client = self.create_client(
+                ConfigureSonar, 
+                '/docking/sonar/configure'
+            )
+        
+        if not self.sonar_config_client.service_is_ready():
+            self.get_logger().warn('Service /docking/sonar/configure non disponible')
+            self.signals.sonar_config_response.emit(
+                False, "Service sonar non disponible", 0.0, 0, 0, 0
+            )
+            return
+        
+        request = ConfigureSonar.Request()
+        request.range = float(range_m)
+        request.gain_percent = int(gain_percent)
+        request.master_mode = int(master_mode)
+        request.ping_rate = int(ping_rate)
+        
+        future = self.sonar_config_client.call_async(request)
+        future.add_done_callback(self._sonar_config_callback)
+        
+        self.get_logger().info(
+            f'Configuration sonar demandée: range={range_m}m, gain={gain_percent}%, '
+            f'mode={master_mode}, ping_rate={ping_rate}'
+        )
+    
+    def _sonar_config_callback(self, future):
+        """Callback appelé quand le service de configuration répond."""
+        try:
+            response = future.result()
+            self.signals.sonar_config_response.emit(
+                response.success,
+                response.message,
+                response.current_range,
+                response.current_gain,
+                response.current_mode,
+                response.current_ping_rate
+            )
+            if response.success:
+                self.get_logger().info(f'Sonar configuré: {response.message}')
+            else:
+                self.get_logger().error(f'Erreur config sonar: {response.message}')
+        except Exception as e:
+            self.get_logger().error(f'Exception config sonar: {e}')
+            self.signals.sonar_config_response.emit(
+                False, f"Exception: {str(e)}", 0.0, 0, 0, 0
+            )

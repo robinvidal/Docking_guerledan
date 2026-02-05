@@ -2,8 +2,6 @@
 Launch file pour démarrer automatiquement le pipeline avec le vrai sonar:
 - sonar_node (driver Oculus M750d)
 - sonar_viewer (visualisation)
-- traitement_node (avec params)
-- blob_tracker_node (avec params)
 """
 
 from launch import LaunchDescription
@@ -23,13 +21,7 @@ def generate_launch_description():
     traitement_config = os.path.join(
         get_package_share_directory('traitement'),
         'config',
-        'traitement_params.yaml'
-    )
-
-    tracking_config = os.path.join(
-        get_package_share_directory('tracking'),
-        'config',
-        'tracking_params.yaml'
+        'traitement_unified_params.yaml'
     )
 
     # Nodes
@@ -50,23 +42,14 @@ def generate_launch_description():
 
     traitement = Node(
         package='traitement',
-        executable='traitement_node',
-        name='traitement_node',
+        executable='traitement_unified_node',
+        name='traitement_unified_node',
         parameters=[traitement_config],
-        output='screen'
-    )
-
-    blob_tracker = Node(
-        package='tracking',
-        executable='blob_tracker_node',
-        name='blob_tracker_node',
-        parameters=[tracking_config],
         output='screen'
     )
 
     return LaunchDescription([
         sonar_node,
         traitement,
-        blob_tracker,
         sonar_viewer,
     ])

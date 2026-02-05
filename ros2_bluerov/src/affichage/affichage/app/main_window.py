@@ -16,6 +16,7 @@ from .widgets.sonar_panels import (
     CompareSonarPanel
 )
 from .widgets.tracker_control import TrackerControlWidget
+from .widgets.sonar_config_control import SonarConfigControlWidget
 from .core.config_loader import get_cage_dimensions
 
 
@@ -80,11 +81,33 @@ class MainWindow(QMainWindow):
 
         splitter.addWidget(left_container)
 
-        # Panneau Tracker directement (sans onglets)
+        # Panneau droit avec onglets (Tracker + Sonar Config)
         right_container = QWidget()
         right_layout = QVBoxLayout(right_container)
+        
+        # Boutons d'onglets pour le panneau droit
+        right_switch = QHBoxLayout()
+        self.tracker_tab_btn = QPushButton('🎯 Tracker')
+        self.sonar_config_tab_btn = QPushButton('🔊 Sonar')
+        for btn in (self.tracker_tab_btn, self.sonar_config_tab_btn):
+            btn.setCheckable(True)
+        right_switch.addWidget(self.tracker_tab_btn)
+        right_switch.addWidget(self.sonar_config_tab_btn)
+        right_switch.addStretch()
+        right_layout.addLayout(right_switch)
+        
+        # Stack pour les panneaux de droite
+        self.right_stack = QStackedWidget()
         self.tracker_widget = TrackerControlWidget(self.ros_node)
-        right_layout.addWidget(self.tracker_widget)
+        self.sonar_config_widget = SonarConfigControlWidget(self.ros_node)
+        self.right_stack.addWidget(self.tracker_widget)
+        self.right_stack.addWidget(self.sonar_config_widget)
+        right_layout.addWidget(self.right_stack)
+        
+        # Connexions des boutons d'onglets droite
+        self.tracker_tab_btn.clicked.connect(lambda: self.set_right_view(0))
+        self.sonar_config_tab_btn.clicked.connect(lambda: self.set_right_view(1))
+        self.set_right_view(0)  # Tracker par défaut
         
         # Connecter le bouton de sélection du tracker aux vues cartésiennes
         self.tracker_widget.bbox_selection_requested.connect(
@@ -145,6 +168,13 @@ class MainWindow(QMainWindow):
     def set_left_view(self, index):
         self.left_stack.setCurrentIndex(index)
         buttons = (self.raw_btn, self.cartesian_filtered_btn, self.compare_btn)
+        for i, btn in enumerate(buttons):
+            btn.setChecked(i == index)
+    
+    def set_right_view(self, index):
+        """Change l'onglet du panneau droit (0=Tracker, 1=Sonar Config)."""
+        self.right_stack.setCurrentIndex(index)
+        buttons = (self.tracker_tab_btn, self.sonar_config_tab_btn)
         for i, btn in enumerate(buttons):
             btn.setChecked(i == index)
     

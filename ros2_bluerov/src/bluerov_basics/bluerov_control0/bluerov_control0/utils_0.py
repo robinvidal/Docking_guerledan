@@ -134,9 +134,9 @@ class ROV(Node):
         # Heading PID state and gains (tunable)
         self._heading_integral = 0.0
         self._heading_error_prev = 0.0
-        self.Kp_heading = 2.0
-        self.Ki_heading = 0.01
-        self.Kd_heading = 0.5
+        self.kp_heading = 2.0
+        self.ki_heading = 0.01
+        self.kd_heading = 0.5
         self._heading_integral_min = -100.0
         self._heading_integral_max = 100.0
         self.integrator_tau_heading = 10.0  # seconds, for leaky integrator
@@ -152,7 +152,7 @@ class ROV(Node):
         
         # Données du tracker - Point cible unique
         self.target_range = 0.0    # Distance à la cible (m)
-        self.target_bearing = 0.0  # Bearing de la cible (rad)
+        self.target_bearing = np.deg2rad(240.0)  # Bearing de la cible (rad)
         self.target_visible = False
         
         # Instanciation du contrôleur simple (un seul point)
@@ -183,9 +183,9 @@ class ROV(Node):
         self._depth_integral = 0.0
         self._depth_error_prev = 0.0
         # PID gains (tunable)
-        self.Kp_depth = 100.0
-        self.Ki_depth = 5.0
-        self.Kd_depth = 10.0
+        self.kp_depth = 100.0
+        self.ki_depth = 5.0
+        self.kd_depth = 10.0
         # Integral windup limits (tunable)
         self._depth_integral_min = -50.0
         self._depth_integral_max = 50.0
@@ -535,9 +535,9 @@ class ROV(Node):
         )
         
         # Conversion des vitesses (m/s et rad/s) vers commandes RC (PWM 1000-2000)
-        self.commands[3] = int(1500 + angular_speed * 170)
-        self.commands[4] = int(1500 + forward_speed * 200)
-        self.commands[5] = int(1500 + lateral_speed * 200)
+        self.commands[3] = int(1500 + angular_speed * 180)
+        self.commands[4] = int(1500 + forward_speed * 180)
+        self.commands[5] = int(1500 + lateral_speed * 170)
         
         # Affichage de l'état
         state_name = self.oriented_controller.state.upper()
@@ -609,7 +609,7 @@ class ROV(Node):
         self._heading_error_prev = err_deg
         
         # PID output (deg -> RC mapping)
-        pid_out = (self.Kp_heading * err_deg) + (self.Ki_heading * self._heading_integral) + (self.Kd_heading * derivative)
+        pid_out = (self.kp_heading * err_deg) + (self.ki_heading * self._heading_integral) + (self.kd_heading * derivative)
         print(f"[HEADING HOLD] Target: {self.desired_heading:.1f}° | Current: {current_heading_deg:.1f}° | Err: {err_deg:+.1f}° | PID: {pid_out:.1f} | Cmd: {int(1500 + pid_out)} PWM")
         
         self.commands[3] = int(1500 + pid_out)
@@ -658,7 +658,7 @@ class ROV(Node):
         self._depth_error_prev = error
 
         # PID output
-        pid_out = (self.Kp_depth * error) + (self.Ki_depth * self._depth_integral) + (self.Kd_depth * derivative)
+        pid_out = (self.kp_depth * error) + (self.ki_depth * self._depth_integral) + (self.kd_depth * derivative)
 
         print(f"[DEPTH HOLD] Target: {self.desired_depth:.2f}m | Current: {self.depth:.2f}m | Err: {error:+.3f}m | PID: {pid_out:.1f} | Cmd: {int(1500 - pid_out)} PWM")
 

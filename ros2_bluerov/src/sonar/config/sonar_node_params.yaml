@@ -3,7 +3,7 @@
     ip_address: 192.168.1.10
     port: 52102
     range: 3.0
-    gain_percent: 50
+    gain_percent: 0
     master_mode: 1
     ping_rate: 0
     frame_id: sonar_link

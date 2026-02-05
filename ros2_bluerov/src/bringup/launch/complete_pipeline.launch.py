@@ -22,7 +22,7 @@ def generate_launch_description():
     traitement_config = os.path.join(
         get_package_share_directory('traitement'),
         'config',
-        'traitement_params.yaml'
+        'traitement_unified_params.yaml'
     )
 
     tracking_config = os.path.join(

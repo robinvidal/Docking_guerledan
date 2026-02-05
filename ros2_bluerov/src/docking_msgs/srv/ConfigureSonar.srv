@@ -1,0 +1,17 @@
+# Service pour configurer dynamiquement le sonar Oculus M750d
+# Utilisez une valeur négative (-1) pour ne pas modifier un paramètre
+# Utilisez 0 pour range si vous ne voulez pas le modifier
+
+# Request
+float64 range          # Portée en mètres (0.0 = ne pas modifier)
+int32 gain_percent     # Gain en % [0-100] (-1 = ne pas modifier)
+int32 master_mode      # Mode: 1=LF (basse fréquence), 2=HF (haute fréquence) (-1 = ne pas modifier)
+int32 ping_rate        # Taux de ping: 0=auto, 1=normal, 2=high, 3=highest, 4=low, 5=lowest (-1 = ne pas modifier)
+---
+# Response
+bool success           # True si la configuration a été appliquée avec succès
+string message         # Message descriptif (erreur ou confirmation)
+float64 current_range  # Portée actuelle après modification
+int32 current_gain     # Gain actuel après modification
+int32 current_mode     # Mode actuel après modification (1=LF, 2=HF)
+int32 current_ping_rate # Taux de ping actuel

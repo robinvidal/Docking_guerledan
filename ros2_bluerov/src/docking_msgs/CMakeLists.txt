@@ -11,7 +11,7 @@ find_package(rosidl_default_generators REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 
-# Declare message files
+# Declare message and service files
 rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/Frame.msg"
   "msg/FrameCartesian.msg"
@@ -23,6 +23,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/RotatedBBoxInit.msg"
   "msg/PoseRelative.msg"
   "msg/State.msg"
+  "srv/ConfigureSonar.srv"
   DEPENDENCIES std_msgs geometry_msgs
 )
 
