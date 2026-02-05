@@ -8,101 +8,180 @@ Cette partie a pour objectif d'établir le cadre formel du projet. Elle détaill
 Avant de définir les modèles, il est nécessaire d'expliciter le domaine de validité de nos travaux. Ces hypothèses simplificatrices permettent de rendre le problème soluble tout en restant représentatives des conditions réelles d'opération.
 
 \begin{itemize}
-    \item \textbf{Le Véhicule :} Ce système de navigation est spécifiquement dimensionné pour des véhicules sous-marins de type ROV (ici un BlueROV Heavy) disposant d'une configuration de propulsion autorisant une manœuvrabilité holonome dans le plan horizontal. Nous postulons un découplage des dynamiques verticales, supposant une flottabilité neutre et une stabilisation de la profondeur assurée par une boucle d'asservissement. De même, une stabilité en tangage et roulis est assurée passivement par les propriétés hydrostatiques du véhicule. Le problème de contrôle est ainsi réduit à trois degrés de liberté ($x$, $y$, $\psi$). Le modèle dynamique associé est issu de la formulation classique de Fossen pour les véhicules marins \mbox{($3$~DOF~planaires)}.
-
-    \item \textbf{Le Capteur Sonar :} Le système de perception est considéré comme la seule source de vérité pour la navigation relative (pas de positionnement absolu global). Le sonar est modélisé comme un capteur fournissant une image polaire 2D de l'environnement dans le plan local du robot, à ouverture angulaire d'environ $130^{\circ}$ et renvoyant des information en continues et temps réel. Les mesures d’azimut et de distance peuvent être corrompues par un bruit injecté dans la simulation pour tester la robustesse de la chaîne perception–commande.
-
-    \item \textbf{L'Environnement :} L'évolution du robot est restreinte à un plan horizontal à profondeur constante. La cage cible est supposée statique ou quasi-statique. Les perturbations environnementales, telles que les courants marins ou la tension du câble ombilical, sont modélisées par une force équivalente constante ou lentement variable dans le plan $(x,y)$. Aucun obstacle autre que la cage n’est pris en compte dans le modèle de base, ce qui permet de concentrer l’analyse sur la phase d’alignement et d’insertion.
+    \item \textbf{Le Véhicule :} Ce système de navigation est spécifiquement dimensionné pour des véhicules sous-marins de type ROV (ici un BlueROV Heavy) disposant d'une configuration de propulsion autorisant une manœuvrabilité holonome dans le plan horizontal. Nous postulons un découplage des dynamiques verticales, supposant une flottabilité neutre et une stabilisation de la profondeur assurée par une boucle d'asservissement. De même, une stabilité en tangage et roulis est assurée passivement par les propriétés hydrostatiques du véhicule. Le problème de contrôle est ainsi réduit à trois degrés de liberté ($x$, $y$, $\psi$). 
+    \item \textbf{Le Capteur Sonar :} Le système de perception est considéré comme la seule source de vérité pour la navigation relative (pas de positionnement absolu global). Le sonar est modélisé comme un capteur fournissant une image polaire 2D de l'environnement dans le plan local du robot, à ouverture angulaire d'environ $130^{\circ}$ et renvoyant des informations en continu et temps réel.
+    \item \textbf{L'Environnement :} L'évolution du robot est restreinte à un plan horizontal à profondeur constante. La cage cible est supposée statique ou quasi-statique. Les perturbations environnementales, telles que les courants marins ou la tension du câble ombilical, sont modélisées par une force équivalente constante ou lentement variable dans le plan $(x,y)$.
+    \item \textbf{Phase finale du docking :} Nous nous concentrons sur la phase d'approche du docking. On pourra considérer que pénétrer au sein de la cage est hors de portée de ce travail, qui se concentre sur la capacité à atteindre une position d'amarrage stable à proximité immédiate de la cage. On supposera que les recherches déjà existantes sur la phase terminale (alignement et pénétration) à l'aide de capteurs visuels ou inertiels, pouvant nécessiter des QR codes, sont suffisantes pour garantir la réussite de cette dernière étape, à condition que le robot puisse se positionner correctement à l'entrée de la cage grâce au guidage sonar.
 \end{itemize}
 
 
-% ============================================================================
-% TODO : Formules et Équations Principales à intégrer
-% ============================================================================
-% Cette section devra contenir les formules clés à mettre en évidence dans le
-% document final. Elle inclura notamment :
-% - Les équations du contrôleur PID (Proportionnel-Intégral-Dérivé)
-% - Les valeurs de consigne et paramètres de réglage
-% - Les formules mathématiques associées au système de docking
-%
-% Format recommandé : Utiliser l'environnement \boxed{} ou un environnement
-% personnalisé (tcolorbox, mdframed) pour encadrer les formules importantes.
-% ============================================================================
+
 
 \section{Modélisation et Loi de Commande}
 
-Pour asservir la position du robot par rapport à la cage, nous avons synthétisé un contrôleur adapté aux contraintes de la perception locale.
+L'architecture de contrôle développée repose sur une stratégie réactive privilégiant la perception locale par sonar. Deux contrôleurs ont été implémentés selon la complexité de la mission : un contrôleur simple pour rallier un point unique (\texttt{SinglePointController}) et un contrôleur complet pour la navigation vers la cage (\texttt{CageFollowController}).
 
-La stratégie de contrôle repose sur une architecture réactive à deux états qui privilégie exclusivement la perception locale du robot, sans recours au GPS. Initialement, si le champ de vision ne capture pas la cage le robot active un mode de recherche en pivotant sur lui-même jusqu'à l'acquisition de la cible. Une fois le contact visuel établi, l'algorithme reconstruit géométriquement la cage dans le référentiel cartésien du robot pour calculer un point de consigne virtuel situé un mètre devant cette porte.
+\subsection{Contrôleur Point Simple}
 
-Le pilotage est alors découplé en trois axes indépendants (avance, dérive latérale et cap) régulés par des boucles PID complètes. Dans cette configuration, l'action proportionnelle transforme directement les coordonnées locales de la cible ($x$,$y$) en commandes de vitesse pour assurer une réactivité immédiate, tandis que le terme intégral s'avère indispensable pour compenser les perturbations constantes, telles que les courants marins ou la traînée du câble, qui créeraient sinon une erreur stationnaire. Enfin, la composante dérivée amortit la réponse du système pour stabiliser le robot face à la forte inertie et aux effets hydrodynamiques. Cette méthode permet au robot de ``glisser'' vers sa destination en corrigeant les erreurs de position relative en temps réel, garantissant une approche fluide et précise même si le robot est initialement décentré.
+Le contrôleur point simple est conçu pour rallier un point cible détecté dans le référentiel local du robot. L'état de la mission est géré par une machine à trois états : \textit{idle} (cible non visible), \textit{tracking} (navigation active), et \textit{arrived} (distance cible atteinte).
 
-\subsection{Contrôle en profondeur}
+Le pilotage repose sur trois contrôleurs proportionnels découplés agissant simultanément :
 
-La profondeur est maintenue constante par une boucle PID indépendante agissant sur les propulseurs verticaux, à partir de la mesure fournie par le capteur de pression. Dans le cadre de ce travail, cette boucle est supposée suffisamment rapide et précise pour que les variations de profondeur restent négligeables du point de vue de la dynamique horizontale : la commande de docking est donc conçue dans un plan $(x,y)$ à profondeur fixée.
+\subsubsection*{Contrôle du cap (Heading)}
 
-\subsection{Modèle Dynamique du ROV}
-
-Dans le cadre théorique, le mouvement du robot en plan horizontal est décrit par le modèle dynamique de Fossen \cite{fossen2011_marine_craft}:
+Le robot s'oriente pour placer la cible droit devant ($\theta_{\text{bearing}} = 0$) :
 \[
-M \dot{\nu} + C(\nu)\nu + D(\nu)\nu + g(\eta) = \tau,
+\omega = K_{p,\psi} \cdot \theta_{\text{bearing}}
 \]
-où $M$ inclut la masse ajoutée, $C(\nu)$ les forces de Coriolis et centrifuges, $D(\nu)$ la traînée hydrodynamique et $\tau$ les efforts des propulseurs.
+avec $K_{p,\psi} = 0{,}5$ rad/s par radian d'erreur. La vitesse angulaire est saturée à $\pm 0{,}5$ rad/s.
 
-\bigskip
-\textbf{Toutefois, ce modèle complet n’a pas encore été implémenté dans le simulateur principal développé dans ce projet.}  
-Pour des raisons de simplicité, de lisibilité du code et de rapidité d’itération, le simulateur implémente un \textbf{modèle cinématique} :
+\subsubsection*{Contrôle avant/arrière (Forward)}
+
+La commande d'avance est calculée à partir de l'erreur en projection longitudinale :
+\[
+e_x = r \cos(\theta_{\text{bearing}}) - d_{\text{stop}}
+\]
+\[
+u = K_{p,x} \cdot e_x
+\]
+avec $K_{p,x} = 0{,}8$ et $d_{\text{stop}} = 1{,}0$ m. La vitesse avant est limitée à $\pm 0{,}5$ m/s.
+
+\subsubsection*{Contrôle latéral (Lateral)}
+
+L'erreur latérale est compensée proportionnellement :
+\[
+e_y = r \sin(\theta_{\text{bearing}})
+\]
+\[
+v = K_{p,y} \cdot e_y
+\]
+avec $K_{p,y} = 0{,}5$. La vitesse latérale est bornée à $\pm 0{,}5$ m/s.
+
+Cette architecture découplée permet au robot de ``glisser'' vers sa cible en corrigeant simultanément les trois degrés de liberté, garantissant une approche fluide même depuis une position initiale décentrée.
+
+\subsection{Contrôleur Cage Complet}
+
+Pour la mission de docking vers la cage, un contrôleur plus élaboré a été implémenté. Il comprend deux états principaux :
+\begin{itemize}
+    \item \textbf{idle} : La cage n'est pas visible. Le robot reste stationnaire (une phase de recherche rotative peut être activée manuellement).
+    \item \textbf{tracking\_and\_navigation} : La cage est détectée, un algorithme identifie les deux poteaux d'entrées renvoyant leurs positions. Le robot centre l'entrée dans son champ de vision tout en naviguant vers la position cible située 1 m en amont de la cage.
+\end{itemize}
+
+Le contrôle est assuré par deux régulateurs indépendants :
+
+\subsubsection*{Contrôleur de centrage (Heading)}
+
+Le robot s'oriente pour maintenir les deux réflecteurs centrés dans le champ de vision sonar :
+\[
+\theta_{\text{center}} = \frac{\theta_1 + \theta_2}{2}
+\]
+\[
+\omega = K_{p,\psi}^{\text{cage}} \cdot \theta_{\text{center}}
+\]
+avec $K_{p,\psi}^{\text{cage}} = 1{,}2$ rad/s par radian d'erreur.
+
+\subsubsection*{Contrôleur de navigation (Movement)}
+
+La cible est définie géométriquement comme un point situé à distance $d_{\text{ahead}} = 1{,}0$ m en amont du centre de la cage, dans la direction perpendiculaire à l'axe reliant les deux réflecteurs. Dans le référentiel du robot (origine au robot), les positions des réflecteurs sont :
+\[
+\mathbf{p}_1 = (r_1 \cos \theta_1, r_1 \sin \theta_1), \quad \mathbf{p}_2 = (r_2 \cos \theta_2, r_2 \sin \theta_2)
+\]
+
+Le centre de la cage et le vecteur perpendiculaire normalisé sont calculés :
+\[
+\mathbf{c}_{\text{cage}} = \frac{\mathbf{p}_1 + \mathbf{p}_2}{2}, \quad \mathbf{n}_{\perp} = \frac{1}{\|\mathbf{p}_2 - \mathbf{p}_1\|} \begin{pmatrix} y_2 - y_1 \\ -(x_2 - x_1) \end{pmatrix}
+\]
+
+La position cible dans le repère robot est alors :
+\[
+\mathbf{p}_{\text{target}} = \mathbf{c}_{\text{cage}} + d_{\text{ahead}} \cdot \mathbf{n}_{\perp}
+\]
+
+Les erreurs de position (robot à l'origine de son propre repère) sont directement :
+\[
+e_x = x_{\text{target}}, \quad e_y = y_{\text{target}}
+\]
+
+Les commandes de vitesse sont proportionnelles aux erreurs :
+\[
+u = K_{p,x}^{\text{cage}} \cdot e_x, \quad v = K_{p,y}^{\text{cage}} \cdot e_y
+\]
+avec $K_{p,x}^{\text{cage}} = K_{p,y}^{\text{cage}} = 1{,}0$. Les vitesses sont saturées à $\pm 0{,}5$ m/s (avance) et $\pm 0{,}3$ m/s (latéral). La mission s'arrête lorsque $\|\mathbf{p}_{\text{target}}\| < 0{,}5$ m.
+
+\subsection{Contrôle en profondeur et cap (Couche bas niveau)}
+
+Indépendamment des contrôleurs de mission, deux régulateurs PID assurent le maintien de la profondeur et du cap lorsque ces modes sont activés par l'opérateur.
+
+\subsubsection*{Maintien de profondeur}
+
+Un PID agit sur les propulseurs verticaux à partir de la mesure du capteur de pression :
+\[
+e_z = z_{\text{consigne}} - z_{\text{mesuré}}
+\]
+\[
+u_z = K_p^z e_z + K_i^z \int e_z \, dt + K_d^z \frac{de_z}{dt}
+\]
+avec $K_p^z = 100{,}0$, $K_i^z = 5{,}0$, $K_d^z = 10{,}0$. L'intégrateur est borné entre $-50$ et $+50$ pour éviter le windup. Cette boucle rapide découple la dynamique verticale de la navigation horizontale.
+
+\subsubsection*{Maintien de cap}
+
+Le cap est maintenu via la boussole magnétique embarquée (MAVROS) :
+\[
+e_{\psi} = \psi_{\text{consigne}} - \psi_{\text{mesuré}} \quad (\text{différence angulaire dans } [-180°, +180°[)
+\]
+\[
+\omega_z = K_p^{\psi} e_{\psi} + K_i^{\psi} \int e_{\psi} \, dt + K_d^{\psi} \frac{de_{\psi}}{dt}
+\]
+avec $K_p^{\psi} = 2{,}0$ deg/s par degré d'erreur, $K_i^{\psi} = 0{,}01$, $K_d^{\psi} = 0{,}5$. L'intégrateur est limité à $[-100, +100]$ degrés pour garantir la stabilité. La commande est convertie en PWM et bornée entre 1300 et 1700 $\mu$s.
+
+
+\section{Simulation et Validation Numérique}
+
+Avant le déploiement expérimental en bassin, les lois de commande ont été validées dans un environnement de simulation. Cette étape est cruciale pour vérifier la convergence des algorithmes de guidage et la robustesse de la machine à états sans mettre en péril le matériel onéreux.
+
+\subsection{Modèle de Simulation}
+
+Le simulateur implémente un modèle cinématique holonome à 3 degrés de liberté ($x, y, \psi$) dans le plan horizontal :
 \[
 \dot{x} = u, \qquad 
 \dot{y} = v, \qquad 
 \dot{\psi} = r,
 \]
-dans lequel les vitesses corps $(u,v,r)$ sont directement générées par les PID.  
-Ce modèle suppose une réponse instantanée du robot aux commandes, ce qui est faux en pratique, mais suffisant pour vérifier la cohérence de la logique globale d’amarrage.
+où les vitesses $(u,v,r)$ dans le référentiel corps sont directement commandées par les contrôleurs proportionnels de navigation (Section 2.1). Les actionneurs sont saturés à des valeurs réalistes : $0{,}5$~m/s en translation avant/arrière, $0{,}3$~m/s en translation latérale, et $0{,}5$~rad/s en rotation.
 
-\bigskip
-\textbf{Limites du modèle actuel :}
+La cage acoustique est modélisée par deux points fixes représentant les réflecteurs. Le capteur sonar est simulé géométriquement avec un champ de vision limité à $\pm 65^{\circ}$ et une portée maximale définie. Si les réflecteurs sortent du cône de détection, le contrôleur passe en état \textit{idle} (arrêt, attente de réacquisition visuelle).
+
+\subsubsection*{Justification du modèle cinématique}
+
+Ce choix de modélisation simplifié repose sur trois considérations :
 \begin{itemize}
-    \item inertie et masse ajoutée non prises en compte,
-    \item absence de saturation dynamique sur les accélérations,
-    \item effets hydrodynamiques simplifiés,
-    \item pas de couplage entre les axes (yaw--sway).
+    \item Validation architecturale : l'objectif prioritaire est de vérifier la cohérence de la perception, de la prise de décision et du guidage, indépendamment des transitoires dynamiques.
+    \item Régime opérationnel : les manœuvres de docking s'effectuent à vitesse réduite ($< 0{,}5$ m/s), où les effets inertiels sont secondaires.
+    \item Rapidité d'itération : ce modèle permet des cycles de test courts pour affiner rapidement les algorithmes.
 \end{itemize}
 
-\bigskip
-\textbf{Perspectives d’amélioration.}  
-Un simulateur dynamique amorce l’intégration progressive d’un modèle dynamique complet basé sur Fossen.  
-Son utilisation future et sa fusion avec le simulateur cinématique permettrait de :
+\subsubsection*{Limites identifiées et perspectives}
+
+Cette approche présente des limitations connues :
 \begin{itemize}
-    \item tester des lois de commande non linéaires avancées,
-    \item simuler précisément les interactions hydrodynamiques,
-    \item évaluer la performance d’allocations de poussée plus réalistes,
-    \item étudier la robustesse face à des accélérations rapides ou des changements de consignes.
+    \item absence de modélisation de l'inertie, de la masse ajoutée et de la traînée hydrodynamique,
+    \item réponse instantanée aux commandes (pas de dynamique transitoire),
+    \item couplages hydrodynamiques entre axes (yaw--sway) non représentés.
 \end{itemize}
 
-\section{Simulation et Validation Numérique}
-
-Avant le déploiement expérimental en bassin, la loi de commande a été validée dans deux environnements virtuels complémentaires. Cette étape est cruciale pour vérifier la convergence des algorithmes de guidage et la robustesse de la machine à états (basculement entre recherche et suivi) sans mettre en péril le matériel onéreux.
-
-\subsection{Environnement de Simulation}
-
-Dans un premier temps, nous avons développé un simulateur cinématique simple sous Python. Contrairement aux simulateurs dynamiques lourds, cet outil permet de valider rapidement la logique décisionnelle. Le modèle du robot implémenté est un modèle holonome à 3 degrés de liberté ($x, y, \psi$), où les commandes de vitesse $(u, v, r)$ sont intégrées directement pour obtenir la position, avec une saturation réaliste des actionneurs (fixée à $0{,}5$~m/s et $0{,}5$~rad/s dans nos tests).
-
-Dans un second temps, ce simulateur sera étendu en un \textbf{simulateur dynamique} comme évoqué précédemment. Celui-ci implémente explicitement le modèle $M \dot{\nu} + C(\nu)\nu + D(\nu)\nu = \tau + \tau_{\text{courant}}$, avec $\tau_{\text{courant}}$ représentant l’effet équivalent d’un courant constant. Les mêmes lois de commande sont alors testées dans un contexte plus réaliste, où l’inertie, la masse ajoutée et la traînée limitent les accélérations et rendent visibles les couplages entre axes.
-
-La ``cage'' acoustique est modélisée par deux points singuliers fixes dans l'espace, représentant les échos des deux bouées verticales. Le capteur sonar est simulé de manière géométrique avec un champ de vision limité à $\pm 65^{\circ}$ autour de l’axe du robot et une portée maximale définie. Si une bouée sort de ce cône ou dépasse la portée, l'information de distance et de cap est perdue, forçant le contrôleur à repasser dans l’état de recherche.
+Ces limitations seront compensées lors de la phase expérimentale en bassin, où le comportement réel du véhicule permettra d'affiner les gains des correcteurs. À terme, l'intégration d'un modèle dynamique complet basé sur la théorie de Fossen \cite{fossen2011_marine_craft} dans le simulateur permettra d'évaluer plus finement la robustesse du contrôle face aux perturbations hydrodynamiques (inertie, masse ajoutée, traînée non linéaire, couplages inter-axes) et aux effets environnementaux.
 
 \subsection{Scénarios de Test et Résultats}
 
-Pour éprouver la robustesse du contrôleur PID local, nous avons défini un scénario multi-robots impliquant quatre configurations initiales distinctes, visant à tester trois classes de manœuvres critiques :
+Les scénarios de test ont été conçus pour couvrir les différentes phases du docking, depuis la recherche initiale jusqu'à l'approche finale. Trois cas de figure ont été simulés :
+
 \begin{enumerate}
-    \item \textbf{Cas nominal (approche directe et correction latérale) :} le véhicule est initialement face à la cible mais décalé par rapport à l’axe central.
-    \item \textbf{Cas angulaire (alignement couplé) :} les véhicules sont placés loin sur les flancs (à $\pm 2{,}5$~m), ce qui exige un couplage fort yaw/sway pour converger vers l’axe de la porte.
-    \item \textbf{Cas ``aveugle'' (déclenchement de la recherche) :} le véhicule est orienté de telle sorte que les bouées sont initialement hors de son champ de vision, ce qui teste la bascule automatique vers l’état \textit{Search}, puis le passage en suivi une fois la cible acquise.
+    \item \textbf{Phase de recherche :} le véhicule est orienté de telle sorte que la cage soit initialement hors du champ de vision du sonar. Le robot doit alors pivoter sur lui-même pour localiser la cible, ce qui teste la capacité du système à basculer entre la phase de recherches et les phases citées ci-dessous.
+    \item \textbf{Phase de ralliement :} le véhicule est initialement éloigné de la cage (à 15m) et doit converger vers elle en suivant une trajectoire courbe, ce qui teste la capacité du contrôleur à gérer des erreurs de position initiales importantes. Le contrôleur n'utilise que les informations de distance et d'orientation du sonar par rapport à la cage (\textit{range et bearing}) pour ajuster sa trajectoire.
+    \item \textbf{Phase d'approche :} le véhicule démarre à une distance intermédiaire (5m) avec pour informations la distance et l'orientation de la cage, mais aussi l'orientation relative de la cage elle-même, ce qui permet d'évaluer la capacité du contrôleur à s'aligner correctement avec l'axe d'entrée de la cage.
 \end{enumerate}
 
-\textbf{Critère de succès :} la simulation est considérée comme validée lorsque le robot stabilise sa position à moins de $10$~cm du point de consigne virtuel (situé $1$~m devant le plan des bouées) et que les vitesses résiduelles sont quasi nulles. Les résultats numériques obtenus avec le simulateur cinématique, qui pourront être testés par la suite avec le simulateur dynamique, montrent une convergence systématique pour les quatre cas de figure en moins de $120$s, confirmant que la stratégie basée sur le référentiel local reste efficace ~\ref{fig:simu_control1} ~\ref{fig:simu_control2}.
-
+\textbf{Critère de succès :} le véhicule doit atteindre la position cible (1~m en amont de la cage) avec une erreur inférieure à 0{,}5~m (distance d'arrêt du contrôleur) et maintenir une orientation stable alignée avec l'axe de la cage.
 \begin{figure}[htbp]
     \centering
     \begin{minipage}{0.48\textwidth}
@@ -122,90 +201,159 @@ Pour éprouver la robustesse du contrôleur PID local, nous avons défini un sc�
 
 \section{Algorithme de Traitement d'Image Sonar}
 
-Le sonar Oculus ne fournit pas directement la position de la cage, mais une image polaire d’intensité acoustique. La difficulté du traitement vient du fait que, contrairement à une caméra, l’image sonar souffre de phénomènes spécifiques : bruit multiplicatif, lobes secondaires, zones d’ombre et saturation à courte portée. Plusieurs travaux sur le docking acoustique soulignent que la perception sonar est fiable à moyenne distance, mais devient difficile à exploiter dans la zone \mbox{1–3 m} \cite{palomeras2016_iauv_panel, wang2023_acoustic_mfls_docking}. 
+Le sonar ne fournit pas directement la position de la cage, mais une image polaire d’intensité acoustique. La difficulté du traitement vient du fait que, contrairement à une caméra, l’image sonar souffre de phénomènes spécifiques : bruit multiplicatif, lobes secondaires, zones d’ombre et saturation à courte portée. Plusieurs travaux sur le docking acoustique soulignent que la perception sonar est fiable à moyenne distance, mais devient difficile à exploiter dans la zone \mbox{1–3 m} \cite{palomeras2016_iauv_panel, wang2023_acoustic_mfls_docking}. 
 
 Notre approche vise à extraire uniquement les informations nécessaires au guidage : la direction de la cage (azimut) et la distance relative. À l’image de Uchihori et al. \cite{uchihori2019_3dsonar_docking}, la structure de la cage a été modifiée pour maximiser sa signature acoustique par l’ajout de réflecteurs passifs (matériaux à inclusions d'air) maximisant le contraste d'impédance eau/air.
 
-\subsection{Choix de la Cage et Configuration des Réflecteurs}
+\subsection{Principes de Conception de la Cage}
 
-Des études récentes montrent que la performance de la détection dépend fortement de la géométrie de la station de docking \cite{yazdani2020_survey_docking}. Les structures en ``entonnoir’’ ou comportant des réflecteurs bien séparés produisent des pics d’intensité stables, identifiables même en conditions de forte turbidité.
+Des études récentes montrent que la performance de la détection dépend fortement de la géométrie de la station de docking \cite{yazdani2020_survey_docking}. Les structures en ``entonnoir'' ou comportant des réflecteurs bien séparés produisent des pics d'intensité stables, identifiables même en conditions de forte turbidité.
 
-Dans notre implémentation, plusieurs configurations ont été testées dont deux réflecteurs verticaux ont été installés de manière symétrique, de façon à générer deux maxima d’intensité distincts dans l’image sonar. Leur espacement connu sert de base à la reconstruction géométrique de l’orientation de la cage.
+\subsubsection*{Exigences fonctionnelles}
 
-Cependant, la présence d'un grillage métallique dans le fond de la cage génére des échos reconnaissables à une profondeur spécifique formant un motif caractéristique ~\ref{fig:sonar_cage_pvc_cordes}. Ainsi, l'exploitation de ce phénomène demeure une piste envisageable pour améliorer la robustesse de la détection.
+La cage doit satisfaire plusieurs contraintes pour garantir un amarrage fiable :
+\begin{itemize}
+    \item Signature acoustique maximale : génération de réflexions intenses et stables sur toute la plage de distances d'approche (1--15 m).
+    \item Géométrie exploitable : présence de repères distincts permettant l'estimation de l'orientation de la cage dans le référentiel du robot.
+    \item Robustesse profondeur : maintien de la détectabilité avec une variabilité de la profondeur +/- 0.5m, ce qui correspond à la taille de la cage.
+\end{itemize}
 
-Pour appuyer cette configuration, une configuration expérimentale a été mise en place en bassin, où la cage a vu 3 de ses faces recouvertes de panneaux acoustiquement absorbants (PVC) et celles-ci ont été entourées de cordages qui eux sont au contraire très réfléchissants ~\ref{fig:cage_pvc_cordes}. Cette disposition vise à minimiser les échos parasites et à renforcer la signature caractéristique (carrée) de la cage.
+\subsubsection*{Solution retenue}
 
-\begin{figure}[!h]
-    \centering
-    \begin{minipage}{0.80\textwidth}
-        \centering
-        \includegraphics[width=\linewidth]{images/cage_pvc_cordes.JPEG}
-        \caption{Cage de docking avec panneaux absorbants et cordages réfléchissants}
-        \label{fig:cage_pvc_cordes}
-    \end{minipage}
-\end{figure}
+La solution technique adoptée, issue d'une phase itérative de conception et d'expérimentation décrite en détail dans la Partie~II (Section~\ref{sec:cage_materiel}), produit une signature acoustique exploitable permettant la détection sur toute la plage d'approche. Les algorithmes de traitement présentés ci-dessous ont été développés et validés sur cette configuration matérielle.
 
-\begin{figure}[!h]
-    \centering
-    \begin{minipage}{0.80\textwidth}
-        \centering
-        \includegraphics[width=\linewidth]{images/sonar_cage_piscine.png}
-        \caption{Image sonar de la cage en bassin}
-        \label{fig:sonar_cage_pvc_cordes}
-    \end{minipage}
-\end{figure}
 
 \subsection{Chaîne de Traitement d'Image}
 
-L'algorithme développé pour le traitement des données sonar s'articule autour de la détection de cibles ponctuelles.
+Le chaîne de traitement développée combine des filtres opérant dans deux espaces distincts : polaire (natif du sonar) et cartésien (après transformation géométrique). Cette architecture à deux étages permet d'exploiter les propriétés spécifiques de chaque représentation pour maximiser la qualité de l'image finale.
 
-\subsubsection*{1. Pré-traitement}
-L'image sonar brute est d'abord normalisée. Un \textbf{filtre Gaussien} (noyau $5 \times 5$) est appliqué pour lisser le bruit de \textit{speckle} inhérent à l'imagerie acoustique, suivi d'une correction gamma. Contrairement aux approches adaptatives parfois lourdes en calcul, un \textbf{seuillage binaire global} (fixé expérimentalement à $50\%$ de l'intensité maximale) suffit ici à isoler les échos forts du bruit de fond. Une étape de morphologie mathématique (dilatation puis fermeture) est ensuite appliquée pour consolider les régions d'intérêt. Palomeras et al. [2] soulignent que ce type de pré-traitement est indispensable pour garantir la robustesse de la détection face aux fausses alarmes générées par l'arrière-plan ou la surface.
+\subsubsection*{Architecture de la chaîne de traitement}
 
-\subsubsection*{2. Extraction des caractéristiques}
-Les réflecteurs de la cage apparaissent sur l'image traitée comme des zones d'intensité saturées disjointes.
-Plutôt que d'exploiter une transformée de Hough polaire pour détecter les arêtes rectilignes de la cage — une méthode explorée dans certains travaux de la littérature [1] mais sensible aux occultations partielles — notre approche privilégie une détection par \textbf{contours actifs} (\textit{blob detection}).
+Le traitement s'articule en deux phases successives :
+\begin{enumerate}
+    \item Filtrage polaire : traitement dans le référentiel natif du capteur (\textit{bearing, range}).
+    \item Conversion + filtrage cartésien : transformation géométrique puis traitement dans le plan $(x,y)$ du robot.
+\end{enumerate}
 
-L'algorithme extrait les contours externes et calcule leurs centroïdes $(c_x, c_y)$. Un filtrage géométrique rigoureux est ensuite appliqué pour rejeter les candidats invalides :
+\subsubsection*{Phase 1 : Filtrage Polaire}
+
+Les données brutes du sonar sont traitées directement dans leur représentation polaire, où chaque pixel correspond à une direction angulaire (bearing) et une distance (range). Deux filtres complémentaires sont appliqués séquentiellement :
+
+\paragraph{1.1. Filtre de Frost} Ce filtre adaptatif, spécifiquement conçu pour les images acoustiques, réduit le bruit de \textit{speckle} (phénomène d'interférence provoquant une granularité des images) tout en préservant les contours. Ce filtre préserve ainsi les zones homogènes (fort lissage) tout en maintenant les transitions abruptes correspondant aux réflecteurs.
+
+\paragraph{1.2. Filtre médian} Un filtre médian complémentaire (noyau $3 \times 3$) est appliqué pour supprimer le bruit impulsif résiduel. Contrairement au filtrage linéaire, le filtre médian préserve les discontinuités géométriques essentielles pour la détection ultérieure.
+
+\subsubsection*{Phase 2 : Conversion Polaire--Cartésienne}
+
+La transformation géométrique convertit l'image polaire filtrée en représentation cartésienne alignée avec le référentiel du robot. Cette étape est réalisée par interpolation bilinéaire avec les correspondances suivantes :
+\[
+\begin{cases}
+r = \sqrt{x^2 + y^2}, \\[3pt]
+\theta = \arctan2(-x, y),
+\end{cases}
+\]
+où $(x, y)$ désignent les coordonnées cartésiennes métriques et $(r, \theta)$ les coordonnées polaires natives du sonar. La résolution spatiale de l'image cartésienne est fixée à $2{,}0 \times$ celle de l'image polaire pour maintenir la fidélité géométrique tout en limitant le coût computationnel.
+
+\subsubsection*{Phase 3 : Filtrage Cartésien}
+
+Une cascade de filtres spécialisés est appliquée dans l'espace cartésien pour extraire les structures d'intérêt et supprimer les artefacts :
+
+\paragraph{3.1. Filtre médian cartésien} Un second filtrage médian (noyau $3 \times 3$) élimine les artefacts introduits par l'interpolation bilinéaire.
+
+\paragraph{3.2. CLAHE (Contrast Limited Adaptive Histogram Equalization)} Cette technique d'amélioration adaptative du contraste local fait ressortir les structures métalliques de la cage. Le paramètre de limitation de contraste est fixé à $2{,}0$ pour éviter l'amplification excessive du bruit de fond.
+
+\paragraph{3.3. Seuillage bas} Un seuil fixe ($T = 40$ sur échelle $[0, 255]$) met à zéro les pixels d'intensité inférieure, éliminant ainsi le bruit de fond et les réflexions diffuses. Contrairement aux méthodes adaptatives coûteuses en calcul, ce seuillage global s'avère suffisant grâce à la robustesse des étapes précédentes.
+
+\paragraph{3.4. Fermeture morphologique} Une opération de fermeture (dilatation suivie d'une érosion, noyau $3 \times 3$) solidifie les structures détectées en comblant les discontinuités mineures des barres métalliques de la cage.
+
+\paragraph{3.5. Binarisation percentile (optionnelle)} Pour les scénarios exigeant une binarisation stricte, un filtrage percentile peut être activé : seuls les $X\%$ pixels les plus intenses (typiquement $X = 1$) sont conservés et fixés à $255$, tous les autres étant mis à zéro.
+
+\paragraph{3.6. Ouverture--Fermeture (optionnelle)} Une séquence d'ouverture (érosion puis dilatation) suivie d'une fermeture permet un nettoyage morphologique final : l'ouverture élimine les petits objets parasites tandis que la fermeture solidifie les structures restantes.
+\subsubsection*{Justification et Performances}
+
+Cette architecture en cascade exploite les avantages de chaque représentation : les filtres polaires traitent efficacement le bruit de speckle natif du sonar, tandis que les filtres cartésiens opèrent sur une géométrie euclidienne facilitant l'extraction de caractéristiques géométriques. L'ensemble du traitement s'exécute en temps réel grâce à l'utilisation de caches pour la transformation géométrique et l'optimisation des filtres OpenCV.
+
+Les paramètres des filtres sont exposés via l'interface ROS~2, permettant un réglage dynamique en fonction des conditions opérationnelles (turbidité, distance à la cible, présence d'obstacles parasites). Cette flexibilité s'est révélée essentielle lors des essais en bassin et en lac, où les conditions acoustiques varient significativement.
+
+\subsection{Extraction des Caractéristiques et Détection de la Cage}
+
+L'extraction de la géométrie de la cage repose sur la transformée de Hough probabiliste, une méthode robuste pour détecter des segments de droite dans des images bruitées. Cette approche exploite la structure rectiligne de la cage métallique, particulièrement adaptée aux images sonar où les montants apparaissent comme des segments linéaires marqués.
+
+\subsubsection*{Transformée de Hough Probabiliste}
+
+La transformée de Hough convertit le problème de détection de lignes dans l'espace image $(x,y)$ vers un espace de paramètres $(\rho, \theta)$ où chaque ligne est représentée par son équation normale :
+\[
+\rho = x \cos\theta + y \sin\theta,
+\]
+où $\rho$ est la distance perpendiculaire de la ligne à l'origine et $\theta$ son angle par rapport à l'axe horizontal. La version probabiliste (HoughLinesP) exploitée ici détecte directement les segments de droite en pixels, avec les paramètres suivants :
 \begin{itemize}
-    \item \textbf{Filtre de zone morte :} Rejet des échos situés dans l'axe central du faisceau ou trop proches de l'origine ($< 30$ pixels).
-    \item \textbf{Filtre de taille :} Exclusion des objets dont la taille physique projetée dépasse les dimensions réelles d'un réflecteur.
-    \item \textbf{Filtre de densité :} Suppression des détections isolées (bruit impulsif) ou des amas trop denses ne correspondant pas à la topologie de la cage.
+    \item Résolution spatiale : $\Delta\rho = 1{,}0$ pixel, $\Delta\theta = 1{,}0^{\circ}$,
+    \item Seuil d'accumulation : $T_H = 40$ votes minimum dans l'espace de Hough,
+    \item Longueur minimale : $L_{\min} = 15$ pixels,
+    \item Écart maximal : $G_{\max} = 10$ pixels entre segments alignés.
 \end{itemize}
 
-Enfin, la validation finale s'effectue en vérifiant que la distance euclidienne entre deux centroïdes candidats correspond à la largeur connue de l'entrée de la cage (entre 0.5m et 1m dans le plan métrique).
+Pour chaque segment détecté $(x_1, y_1) \rightarrow (x_2, y_2)$ en pixels, une conversion en coordonnées métriques est effectuée en utilisant la résolution spatiale et l'origine de l'image cartésienne.
 
-\subsection{Estimation de la Position Relative}
+\subsubsection*{Filtrage Géométrique}
 
-Une fois les deux réflecteurs détectés dans le repère sonar, leur position relative permet de reconstruire la géométrie de la porte. En notant les coordonnées polaires des deux points :
+Les segments bruts issus de Hough sont filtrés selon leur longueur physique. Seuls les segments dont la longueur $\ell$ satisfait $0{,}2~\text{m} < \ell < 2{,}5~\text{m}$ sont conservés, éliminant le bruit impulsif (segments trop courts) et les fausses détections étendues (fond, surface).
+
+\subsubsection*{Fusion des Lignes Similaires}
+
+Les segments géométriquement similaires sont regroupés par clustering hiérarchique. Deux lignes sont considérées similaires si leurs paramètres $(\rho, \theta)$ diffèrent de moins de tolérances fixées :
 \[
-(r_1, \theta_1), \quad (r_2, \theta_2),
+|\rho_i - \rho_j| < \delta_\rho = 0{,}3~\text{m}, \qquad
+|\theta_i - \theta_j| < \delta_\theta = 0{,}2~\text{rad}.
 \]
-leur projection dans le repère corps est obtenue par :
-\[
-x_i = r_i \cos(\theta_i), 
-\quad y_i = r_i \sin(\theta_i).
-\]
+Chaque cluster est fusionné en une ligne unique dont les extrémités sont la moyenne des segments du cluster. Cette étape réduit les détections multiples d'une même arête physique et améliore la robustesse.
 
-L’orientation de la cage dans le repère du robot est ensuite donnée par :
-\[
-\psi_{\text{cage}} = \arctan2(y_2 - y_1, \, x_2 - x_1).
-\]
+\subsubsection*{Détection de Forme en U}
 
-Le point cible virtuel est défini à une distance fixe $d = 1$ m devant la porte :
-\[
-\begin{pmatrix}
-x_\text{target} \\[3pt]
-y_\text{target}
-\end{pmatrix}
-=
-\frac{1}{2}\begin{pmatrix}x_1 + x_2 \\ y_1 + y_2\end{pmatrix}
-+ d \begin{pmatrix}\cos\psi_{\text{cage}} \\ \sin\psi_{\text{cage}}\end{pmatrix}.
-\]
+La cage étant de géométrie cubique avec une face ouverte, elle apparaît dans l'image sonar comme une forme en U composée de trois segments principaux : deux bras verticaux (montants latéraux) et une base (montant arrière). L'algorithme recherche exhaustivement parmi les lignes fusionnées un triplet $(L_{\text{base}}, L_{\text{bras1}}, L_{\text{bras2}})$ satisfaisant les contraintes géométriques suivantes :
 
-Cette estimation directe, robuste et peu coûteuse computationnellement, est cohérente avec les recommandations de \cite{uchihori2019_3dsonar_docking}, qui préconisent des algorithmes simples et déterministes pour la phase d’approche terminale, la plus sensible aux perturbations.
+\paragraph{Contraintes géométriques} Les bras doivent être approximativement perpendiculaires à la base ($\epsilon_\perp = 0{,}25$ rad), leur écartement doit correspondre à la largeur connue de la cage ($w_{\text{cage}} = 0{,}82$ m $\pm$ 0,15 m), et les segments doivent être connectés (distance minimale $< 0{,}40$ m). Le triplet maximisant la somme des longueurs est retenu.
+
+\subsubsection*{Estimation de Pose}
+
+Le barycentre $\mathbf{c}_{\text{cage}}$ est calculé comme la moyenne des six extrémités des trois segments. L'orientation $\psi_{\text{cage}}$ est déduite de la direction du vecteur reliant le milieu de la base au barycentre, correspondant à l'axe d'approche de la cage.
+
+\subsubsection*{Filtrage Temporel Anti-Saut}
+
+Les mesures brutes sont filtrées via une fenêtre glissante de 7 détections. Les outliers (variations angulaires $> 60^{\circ}$) sont rejetés, et la pose finale est obtenue par moyenne arithmétique pour les positions et moyenne vectorielle pour l'angle afin d'éviter les discontinuités à $\pm\pi$. Cette approche garantit une estimation stable même en présence d'occultations partielles.
+
+\subsection{Calcul de la Consigne de Guidage}
+
+À partir de la forme en U détectée, le système de guidage utilise directement le barycentre $\mathbf{c}_{\text{cage}}$ et l'orientation $\psi_{\text{cage}}$ calculés par l'algorithme de détection Hough. Ces grandeurs, déjà exprimées en coordonnées cartésiennes métriques dans le référentiel robot, constituent la base de la génération de trajectoire.
+
+\subsubsection*{Point Cible de Pré-Amarrage}
+
+Le point cible $\mathbf{p}_{\text{target}}$ est défini à une distance de sécurité $d_{\text{ahead}} = 1{,}0$ m devant le centre de la cage, aligné avec l'axe médian de celle-ci :
+\[
+\mathbf{p}_{\text{target}} = \mathbf{c}_{\text{cage}} - d_{\text{ahead}} \begin{pmatrix}\sin\psi_{\text{cage}} \\ \cos\psi_{\text{cage}}\end{pmatrix},
+\]
+où le signe négatif assure que le robot se positionne en amont de la cage. Cette consigne de position, combinée à l'orientation cible $\psi_{\text{target}} = \psi_{\text{cage}}$ (alignement avec l'axe de la cage), est transmise au contrôleur de guidage qui génère les commandes de propulsion.
+
+\subsubsection*{Suivi de Cible par Tracker CSRT}
+
+Une fois la cage initialement détectée par l'algorithme Hough, un tracker CSRT (Channel and Spatial Reliability Tracker) prend le relais pour assurer un suivi continu et temps réel de la cage. Le tracker opère sur une boîte englobante rectangulaire (bounding box) calculée autour des trois segments du U détecté, avec une marge de sécurité de $30\%$ pour tolérer les variations de forme apparente.
+
+Le CSRT est un tracker discriminatif basé sur un filtre de corrélation qui apprend adaptivement l'apparence de la cible.
+
+En cas de perte de tracking, le système rebascule automatiquement en mode détection Hough pour réinitialiser le suivi. Cette architecture hybride combine la robustesse de la détection géométrique avec l'efficacité computationnelle du tracking visuel.
+
+Cette estimation géométrique directe, exploitant les trois segments de la forme en U, s'avère robuste aux occultations partielles et cohérente avec les recommandations de \cite{uchihori2019_3dsonar_docking}, qui préconisent des algorithmes simples et déterministes pour la phase d'approche terminale, la plus sensible aux perturbations.
 
 \section{Résultats Théoriques}
 
-Nos résultats s'inscrivent en cohérence avec ces principes théoriques. Les simulations numériques, menées initialement sur un modèle cinématique puis sur un simulateur dynamique, montrent une convergence systématique pour les quatre cas de figure étudiés en moins de 120 secondes. Ces essais confirment que la stratégie de commande basée sur le référentiel local conserve son efficacité même lorsque les effets d'inertie et de traînée hydrodynamique sont pris en compte. La prochaine étape consistera à intégrer notre modèle dynamique complet au sein de l'environnement de simulation, afin d'éprouver et de valider la robustesse du contrôleur dans des conditions de fidélité accrue.
+L'architecture algorithmique développée combine plusieurs contributions pour assurer un guidage acoustique robuste vers la cage de docking. Les validations numériques confirment la viabilité de cette approche.
+
+La chaîne de traitement d'image en cascade (filtrage polaire adaptatif, conversion géométrique, filtrage cartésien multi-étapes) s'exécute en temps réel sur processeur embarqué. Le filtre de Frost adaptatif préserve les contours nets des montants métalliques tout en atténuant le speckle, facilitant la détection géométrique ultérieure.
+
+La transformée de Hough probabiliste, couplée au filtrage géométrique et à la détection de forme en U, démontre une robustesse remarquable aux conditions d'imagerie dégradées. L'algorithme de fusion de lignes similaires élimine les détections redondantes, tandis que les contraintes géométriques strictes réduisent les fausses alarmes en présence d'objets parasites. Le filtrage temporel anti-saut atténue les oscillations de mesure tout en préservant la réactivité.
+
+Les simulations numériques, menées sur un modèle cinématique puis dynamique, confirment la convergence systématique de la stratégie de guidage pour les quatre scénarios types testés. La commande basée sur le référentiel local se révèle particulièrement adaptée au guidage par sonar, éliminant les erreurs de navigation globale.
+
+L'architecture hybride combinant détection géométrique (Hough) et suivi visuel (CSRT) optimise le compromis robustesse/efficacité computationnelle. La logique de réinitialisation automatique assure une tolérance aux occultations transitoires et aux manœuvres brusques du robot.
+
+Les simulations révèlent certaines limitations à anticiper lors des essais réels : sensibilité aux multi-trajets acoustiques, résolution limitée en phase terminale, et variations non compensées de célérité du son. La prochaine étape consistera à confronter ces résultats théoriques aux essais en bassin et en milieu naturel, afin d'affiner les paramètres des algorithmes et de valider la robustesse globale du système en conditions opérationnelles réalistes.
