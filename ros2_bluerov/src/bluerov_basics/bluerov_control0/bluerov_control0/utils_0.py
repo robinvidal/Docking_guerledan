@@ -36,7 +36,7 @@ from std_msgs.msg import Float64, Bool, Float32MultiArray
 from docking_msgs.msg import TrackedObject
 
 # Import du contrôleur de mission (version simple: un seul point)
-from .control import SinglePointController
+from .control import SinglePointController, OrientedApproachController
 
 import importlib
 
@@ -157,6 +157,21 @@ class ROV(Node):
         
         # Instanciation du contrôleur simple (un seul point)
         self.point_controller = SinglePointController(stop_distance=0.5)
+
+        # Oriented approach mission: Y => enable; LH+Y => disable
+        self.oriented_approach_mission = False
+        
+        # Angle d'orientation de la cage (valeur fixe, à ajuster selon la cage)
+        # Convention: angle en radians, repère monde mathématique (0° = Est, 90° = Nord)
+        # Exemple: np.pi/4 = 45° = cage orientée vers le Nord-Est
+        self.cage_angle = np.pi / 4  # TODO: Ajuster selon l'orientation réelle de la cage
+        
+        # Instanciation du contrôleur d'approche orientée
+        self.oriented_controller = OrientedApproachController(
+            stop_distance=0.5,
+            orbit_distance=1.5,
+            angle_tolerance_deg=5.0
+        )
 
                 # Desired depth to maintain when depth_hold is True.
         # Initialized to current depth; will be updated after manual joystick moves.
@@ -444,6 +459,24 @@ class ROV(Node):
                     self._heading_error_prev = 0.0
                     print(f"[HEADING HOLD] Activated (X) → Target: {self.desired_heading:.1f}°")
 
+    def _handle_oriented_approach_toggle(self):
+        """Active/désactive la mission d'approche orientée (Bouton Y)."""
+        if self.button("Y") != 0:
+            if self.button("LH") != 0:
+                # LH + Y : deactivate (only if currently active)
+                if self.oriented_approach_mission:
+                    self.oriented_approach_mission = False
+                    print("[MISSION] Oriented approach deactivated (LH + Y) → Manual mode")
+            else:
+                # Y alone : activate (only if currently inactive)
+                if not self.oriented_approach_mission:
+                    # Désactiver la mission A si active
+                    if self.point_follow_mission:
+                        self.point_follow_mission = False
+                        print("[MISSION] Point follow deactivated → Switching to Oriented Approach")
+                    self.oriented_approach_mission = True
+                    print(f"[MISSION] Oriented Approach ACTIVATED (Y) → Cage angle: {np.degrees(self.cage_angle):.0f}°")
+
     def _handle_point_follow_mission(self):
         """Exécute la mission de suivi de point (contrôle auto yaw, avance, latéral)."""
         # Appel au contrôleur simple
@@ -463,6 +496,54 @@ class ROV(Node):
         if self.target_visible:
             print(f"[{state_name}] Target @ {self.target_range:.2f}m, {np.degrees(self.target_bearing):+.0f}° | "
                   f"Robot state: Depth :({self.depth:.2f}m, Heading: {self.heading:.1f}°) | "
+                  f"Cmds: Yaw={self.commands[3]} Fwd={self.commands[4]} Lat={self.commands[5]}")
+        else:
+            print(f"[{state_name}] Target not visible - waiting...")
+
+    def _handle_oriented_approach_mission(self):
+        """Exécute la mission d'approche orientée (contrôle auto yaw, avance, latéral).
+        
+        Cette mission permet d'approcher une cible en arrivant par un angle spécifique,
+        comme pour entrer dans une cage par l'ouverture.
+        
+        Phases:
+        1. APPROACHING: Approche jusqu'à orbit_distance (1.5m)
+        2. ORBITING: Tourne autour de la cible pour s'aligner avec l'angle de la cage
+        3. FINAL_APPROACH: Approche finale jusqu'à stop_distance (0.5m)
+        """
+        # Calcul de l'erreur d'angle d'approche
+        # heading est en degrés (0° = Nord), on le convertit en radians (repère math)
+        heading_rad = math.radians(self.heading)
+        # Conversion: heading navigation (0°=Nord) vers math (0°=Est): math_angle = 90° - nav_angle
+        heading_math = math.pi/2 - heading_rad
+        
+        # L'angle du robot autour de la cible = heading_math + bearing + π
+        # (direction depuis laquelle le robot voit la cible, dans le repère monde)
+        robot_angle_around_target = heading_math + self.target_bearing + math.pi
+        
+        # L'angle d'approche cible = cage_angle + π (le robot doit arriver FACE à la cage)
+        desired_approach_angle = self.cage_angle + math.pi
+        
+        # Erreur = angle_cible - position_actuelle
+        approach_angle_error = desired_approach_angle - robot_angle_around_target
+        # Normaliser entre -π et π
+        approach_angle_error = math.atan2(math.sin(approach_angle_error), math.cos(approach_angle_error))
+        
+        # Appel au contrôleur d'approche orientée
+        forward_speed, lateral_speed, angular_speed = self.oriented_controller.control_step(
+            self.target_bearing, self.target_range, approach_angle_error, self.target_visible
+        )
+        
+        # Conversion des vitesses (m/s et rad/s) vers commandes RC (PWM 1000-2000)
+        self.commands[3] = int(1500 + angular_speed * 170)
+        self.commands[4] = int(1500 + forward_speed * 200)
+        self.commands[5] = int(1500 + lateral_speed * 200)
+        
+        # Affichage de l'état
+        state_name = self.oriented_controller.state.upper()
+        if self.target_visible:
+            print(f"[{state_name}] Target @ {self.target_range:.2f}m, brg={np.degrees(self.target_bearing):+.0f}° | "
+                  f"Angle err: {np.degrees(approach_angle_error):+.0f}° | "
                   f"Cmds: Yaw={self.commands[3]} Fwd={self.commands[4]} Lat={self.commands[5]}")
         else:
             print(f"[{state_name}] Target not visible - waiting...")
@@ -588,7 +669,7 @@ class ROV(Node):
     def _print_state_summary(self):
         """Affiche le résumé de l'état actuel du ROV."""
         print(f"[STATE] Armed: {self.armed} | Depth: {self.depth:.2f}m | Heading: {self.heading:.1f}°")
-        print(f"[MODES] DepthHold: {self.depth_hold} | HeadingHold: {self.heading_hold} | PointMission: {self.point_follow_mission}")
+        print(f"[MODES] DepthHold: {self.depth_hold} | HeadingHold: {self.heading_hold} | PointMission(A): {self.point_follow_mission} | OrientedApproach(Y): {self.oriented_approach_mission}")
         print(f"[COMMANDS] Elev: {self.commands[2]} | Yaw: {self.commands[3]} | Forward: {self.commands[4]} | Lateral: {self.commands[5]} | Light: {self.commands[8]}")
         if self.target_visible:
             print(f"[TARGET] Range: {self.target_range:.2f}m | Bearing: {np.degrees(self.target_bearing):+.0f}°")
@@ -631,10 +712,14 @@ class ROV(Node):
             self._handle_depth_hold_toggle()       # Bouton B
             self._handle_point_follow_toggle()     # Bouton A
             self._handle_heading_hold_toggle()     # Bouton X
+            self._handle_oriented_approach_toggle() # Bouton Y
 
             # Contrôle du mouvement (mission auto ou manuel)
-            if self.point_follow_mission:
-                # La mission gère yaw, avance et latéral automatiquement
+            if self.oriented_approach_mission:
+                # Mission Y: approche orientée (yaw, avance, latéral automatiques)
+                self._handle_oriented_approach_mission()
+            elif self.point_follow_mission:
+                # Mission A: suivi de point simple (yaw, avance, latéral automatiques)
                 self._handle_point_follow_mission()
             else:
                 # Mode manuel: translation (avance/latéral)
