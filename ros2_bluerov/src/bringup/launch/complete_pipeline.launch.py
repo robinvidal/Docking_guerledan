@@ -70,6 +70,15 @@ def generate_launch_description():
         output='screen'
     )
 
+    # Détection de lignes Hough pour orientation cage (publie /debug/yaw_filtered)
+    # hough_lines = Node(
+    #     package='tracking',
+    #     executable='hough_lines_node',
+    #     name='hough_lines_node',
+    #     parameters=[tracking_config],
+    #     output='screen'
+    # )
+
     sonar_viewer = Node(
         package='affichage',
         executable='sonar_viewer',
@@ -145,6 +154,7 @@ def generate_launch_description():
         sonar_node,
         traitement,
         csrt_tracker,          # Nouveau système CSRT (sélection: Ctrl+Clic dans Sonar Viewer)
+        # hough_lines,           # Détection orientation cage via Hough (publie /debug/yaw_filtered)
         sonar_viewer,
 
         # PX4 / MAVROS + control stack

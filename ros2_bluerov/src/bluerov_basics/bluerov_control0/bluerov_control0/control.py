@@ -267,6 +267,7 @@ class OrientedApproachController:
         angular_speed = np.clip(angular_speed, -self.max_angular_speed, self.max_angular_speed)
         print(f"  forward_speed: {forward_speed:.2f} (P:{p_forward:.2f} D:{d_forward:.2f}), "
               f"lateral_speed: {lateral_speed:.2f}, "
-              f"angular_speed: {angular_speed:.2f} (P:{p_angular:.2f} D:{d_angular:.2f})")
+              f"angular_speed: {angular_speed:.2f} (P:{p_angular:.2f} D:{d_angular:.2f})"
+              f" approach_angle_error (deg): {math.degrees(approach_angle_error):.2f}")
         
         return forward_speed, lateral_speed, angular_speed
