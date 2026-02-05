@@ -27,9 +27,9 @@ class HoughLinesNode(Node):
         self.declare_parameter('enable_detection', True)
         self.declare_parameter('rho_resolution', 1.0)
         self.declare_parameter('theta_resolution', 1.0)
-        self.declare_parameter('threshold', 40)
-        self.declare_parameter('min_line_length', 15)
-        self.declare_parameter('max_line_gap', 10)
+        self.declare_parameter('threshold', 0.20)
+        self.declare_parameter('min_line_length', 0.2)
+        self.declare_parameter('max_line_gap', 0.20)
         
         # Filtres physiques
         self.declare_parameter('filter_min_length_m', 0.2)
@@ -42,20 +42,26 @@ class HoughLinesNode(Node):
         self.declare_parameter('conn_tol', 0.40)
 
         # --- PARAMÈTRES DE FILTRAGE ---
-        # Taille de la fenêtre glissante (ex: 7 mesures)
-        self.declare_parameter('window_size', 7) 
+        self.declare_parameter('window_size_ang', 7) 
+        self.declare_parameter('window_size_pos', 3) 
         
-        # Anti-Saut : Rejet si l'angle change trop vite
+        # Anti-Saut
         self.declare_parameter('outlier_threshold_deg', 60.0) 
+        self.declare_parameter('outlier_threshold_pos', 0.5) # AJOUT : Seuil de saut position (0.5m par défaut)
         self.declare_parameter('max_consecutive_outliers', 5)
 
-        # --- INITIALISATION DU BUFFER UNIQUE ---
-        win_size = self.get_parameter('window_size').value
-        self.history = deque(maxlen=win_size)
+        # --- INITIALISATION ---
+        win_pos = self.get_parameter('window_size_pos').value
+        win_ang = self.get_parameter('window_size_ang').value
+        
+        self.history_pos = deque(maxlen=win_pos)
+        self.history_ang = deque(maxlen=win_ang)
 
         # Variables d'état
         self.last_valid_yaw = None
-        self.consecutive_outliers = 0
+        self.consecutive_outliers_yaw = 0
+        self.last_valid_pos = None     # Stockera le tuple (x, y)
+        self.consecutive_outliers_pos = 0
 
         # --- PUBLISHERS ---
         self.subscription = self.create_subscription(
@@ -63,11 +69,10 @@ class HoughLinesNode(Node):
         self.line_pub = self.create_publisher(DetectedLines, '/docking/tracking/detected_lines', 10)
         self.cage_pose_pub = self.create_publisher(PoseStamped, '/docking/tracking/cage_pose', 10)
 
-        # Debug (Pour vérifier Raw vs Filtered)
         self.pub_dbg_raw = self.create_publisher(Float32, '/debug/yaw_raw', 10)
         self.pub_dbg_filtered = self.create_publisher(Float32, '/debug/yaw_filtered', 10)
 
-        self.get_logger().info(f'Hough Lines Node Initialisé (Window: {win_size}, Anti-Outlier: Actif)')
+        self.get_logger().info(f'Hough Lines Node Initialisé (Anti-Saut Position & Angle Actif)')
 
     def merge_similar_lines(self, candidates):
         if not candidates: return []
@@ -133,22 +138,20 @@ class HoughLinesNode(Node):
                         for idx in [i, j, k]: lines[idx]['is_u'] = 1.0
         return best_data[0], best_data[1], lines
 
-    def compute_average_pose(self, history_buffer):
-        if not history_buffer: return None, None, None
-        xs = [h[0] for h in history_buffer]
-        ys = [h[1] for h in history_buffer]
-        avg_x = np.mean(xs)
-        avg_y = np.mean(ys)
-        
-        # Moyenne vectorielle pour l'angle (Crucial pour éviter les sauts +/- PI)
-        angles = [h[2] for h in history_buffer]
+    def compute_avg_pos(self, hist_pos):
+        if not hist_pos: return None, None
+        xs = [h[0] for h in hist_pos]
+        ys = [h[1] for h in hist_pos]
+        return np.mean(xs), np.mean(ys)
+
+    def compute_avg_ang(self, hist_ang):
+        if not hist_ang: return None
+        angles = list(hist_ang)
         sin_sum = np.sum(np.sin(angles))
         cos_sum = np.sum(np.cos(angles))
-        avg_yaw = np.arctan2(sin_sum, cos_sum)
-        return avg_x, avg_y, avg_yaw
+        return np.arctan2(sin_sum, cos_sum)
 
     def angle_diff(self, a, b):
-        """ Différence angulaire normalisée entre -PI et PI """
         d = a - b
         while d > np.pi: d -= 2*np.pi
         while d < -np.pi: d += 2*np.pi
@@ -157,20 +160,29 @@ class HoughLinesNode(Node):
     def frame_callback(self, msg: FrameCartesian):
         if not self.get_parameter('enable_detection').value or cv2 is None: return
 
-        # Gestion dynamique de la taille de fenêtre (si modifiée en runtime)
-        current_win = self.get_parameter('window_size').value
-        if self.history.maxlen != current_win:
-             # On recrée la deque avec la nouvelle taille (en gardant les éléments existants)
-             self.history = deque(self.history, maxlen=current_win)
+        curr_win_pos = self.get_parameter('window_size_pos').value
+        curr_win_ang = self.get_parameter('window_size_ang').value
+
+        if self.history_pos.maxlen != curr_win_pos:
+            self.history_pos = deque(self.history_pos, maxlen=curr_win_pos)
+        if self.history_ang.maxlen != curr_win_ang:
+            self.history_ang = deque(self.history_ang, maxlen=curr_win_ang)
 
         img = np.array(msg.intensities, dtype=np.uint8).reshape((msg.height, msg.width))
+        res = msg.resolution 
+        
+        thresh_m = self.get_parameter('threshold').value
+        threshold_px = int(max(1, thresh_m / res))
+        min_line_m = self.get_parameter('min_line_length').value
+        min_line_px = int(max(1, min_line_m / res))
+        max_gap_m = self.get_parameter('max_line_gap').value
+        max_gap_px = int(max(1, max_gap_m / res))
+
         rho_res = self.get_parameter('rho_resolution').value
         theta_res = self.get_parameter('theta_resolution').value * np.pi / 180.0
         
         cv_lines = cv2.HoughLinesP(img, rho=rho_res, theta=theta_res, 
-                                   threshold=int(self.get_parameter('threshold').value),
-                                   minLineLength=int(self.get_parameter('min_line_length').value),
-                                   maxLineGap=int(self.get_parameter('max_line_gap').value))
+                                   threshold=threshold_px, minLineLength=min_line_px, maxLineGap=max_gap_px)     
         
         candidates = []
         if cv_lines is not None:
@@ -188,56 +200,71 @@ class HoughLinesNode(Node):
         merged = self.merge_similar_lines(candidates)
         bary, yaw, final_lines = self.detect_u_shape(merged)
 
-        # --- LOGIQUE DE FILTRAGE ---
+        # --- LOGIQUE DE FILTRAGE SÉPARÉE ET SÉCURISÉE ---
         if bary is not None:
             raw_x, raw_y, raw_yaw = float(bary[0]), float(bary[1]), float(yaw)
+            max_outliers = self.get_parameter('max_consecutive_outliers').value
             
-            accept_measurement = True
+            # --- 1. GESTION POSITION (Anti-Saut Euclidien) ---
+            accept_pos = True
+            if self.last_valid_pos is not None:
+                # Seuil en mètres (ex: 0.5 m)
+                thresh_pos = self.get_parameter('outlier_threshold_pos').value
+                # Calcul distance 2D
+                dist = np.linalg.norm(np.array([raw_x, raw_y]) - np.array(self.last_valid_pos))
+                
+                if dist > thresh_pos:
+                    self.consecutive_outliers_pos += 1
+                    if self.consecutive_outliers_pos <= max_outliers:
+                        accept_pos = False
+                    else:
+                        self.get_logger().warn(f"Position Force Update: saut de {dist:.2f}m accepté après persistance")
+                        self.consecutive_outliers_pos = 0
+                else:
+                    self.consecutive_outliers_pos = 0
             
-            # 1. Vérification Anti-Saut
+            if accept_pos:
+                self.last_valid_pos = (raw_x, raw_y)
+                self.history_pos.append((raw_x, raw_y))
+            
+            # --- 2. GESTION ANGLE (Anti-Saut Angulaire) ---
+            accept_angle = True
             if self.last_valid_yaw is not None:
-                threshold = np.radians(self.get_parameter('outlier_threshold_deg').value)
-                max_outliers = self.get_parameter('max_consecutive_outliers').value
+                thresh_ang = np.radians(self.get_parameter('outlier_threshold_deg').value)
                 
                 diff = abs(self.angle_diff(raw_yaw, self.last_valid_yaw))
                 
-                if diff > threshold:
-                    self.consecutive_outliers += 1
-                    if self.consecutive_outliers <= max_outliers:
-                        accept_measurement = False
+                if diff > thresh_ang:
+                    self.consecutive_outliers_yaw += 1
+                    if self.consecutive_outliers_yaw <= max_outliers:
+                        accept_angle = False
                     else:
-                        # Sécurité : On accepte si le saut persiste
-                        self.get_logger().warn("Force update: Trop de rejets consécutifs.")
-                        self.consecutive_outliers = 0
+                        self.get_logger().warn(f"Yaw Force Update: saut de {math.degrees(diff):.1f}° accepté")
+                        self.consecutive_outliers_yaw = 0
                 else:
-                    self.consecutive_outliers = 0
+                    self.consecutive_outliers_yaw = 0
 
-            # 2. Mise à jour de l'historique
-            if accept_measurement:
+            if accept_angle:
                 self.last_valid_yaw = raw_yaw
-                self.history.append((raw_x, raw_y, raw_yaw))
+                self.history_ang.append(raw_yaw)
 
-            # 3. Calcul de la Pose Moyenne (Filtrée)
-            final_x, final_y, final_yaw = self.compute_average_pose(self.history)
+            # --- 3. CALCUL MOYENNES & PUBLICATION ---
+            avg_x, avg_y = self.compute_avg_pos(self.history_pos)
+            avg_yaw = self.compute_avg_ang(self.history_ang)
 
-            # 4. Publication
-            if final_x is not None:
-                # Debug
+            if avg_x is not None and avg_yaw is not None:
                 self.pub_dbg_raw.publish(Float32(data=math.degrees(raw_yaw)))
-                self.pub_dbg_filtered.publish(Float32(data=math.degrees(final_yaw)))
+                self.pub_dbg_filtered.publish(Float32(data=math.degrees(avg_yaw)))
 
-                # Pose Officielle
                 p_msg = PoseStamped()
                 p_msg.header = msg.header
-                p_msg.pose.position.x = float(final_x)
-                p_msg.pose.position.y = float(final_y)
-                q = get_quaternion_from_euler(0, 0, final_yaw)
+                p_msg.pose.position.x = float(avg_x)
+                p_msg.pose.position.y = float(avg_y)
+                q = get_quaternion_from_euler(0, 0, avg_yaw)
                 p_msg.pose.orientation.x, p_msg.pose.orientation.y = q[0], q[1]
                 p_msg.pose.orientation.z, p_msg.pose.orientation.w = q[2], q[3]
                 self.cage_pose_pub.publish(p_msg)
         else:
-            # Optionnel : Conserver l'historique pour lisser la reprise, 
-            # ou self.history.clear() pour repartir de zéro.
             pass
 
 def main(args=None):

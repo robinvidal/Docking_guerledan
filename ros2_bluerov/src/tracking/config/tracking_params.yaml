@@ -22,19 +22,21 @@ hough_lines_node:
   ros__parameters:
     enable_detection: false
     num_lines: 20
-    threshold: 50
+    threshold: 0.20
     rho_resolution: 1.0
     theta_resolution: 1.0
     use_probabilistic: true
-    min_line_length: 30
-    max_line_gap: 10
+    min_line_length: 0.20
+    max_line_gap: 0.20
 
     enable_detection: true
-    filter_mode : 1  # 0: Aucun filtre, 1: Filtre Moyenne Mobile, 2: Filtre de Kalman
-    moving_average_window_size : 10  # Taille de la fenêtre pour le filtre moyenne mobile
+    window_size_ang: 10  # Taille de la fenêtre pour le filtre moyenne mobile
+    window_size_pos: 3 # taille de la fenêtre pour le filtre moyenne mobile sur la position
     outlier_threshold_deg: 60.0   # Seuil pour détecter les mesures <<abberant fréro>> en degrés
+    outlier_threshold_pos : 2.0  # Seuil pour détecter les mesures aberrantes en position (en mètres)
     max_consecutive_outliers: 3 # Nombre maximum de mesures aberrantes consécutives avant réinitialisation du filtre
 
+    
 
 csrt_tracker_node:
   ros__parameters:
