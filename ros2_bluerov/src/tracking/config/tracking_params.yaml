@@ -17,6 +17,7 @@ blob_tracker_node:
     max_jump_m: 1.0
     top_k_candidates: 20
     recovery_enabled: true
+
 hough_lines_node:
   ros__parameters:
     enable_detection: false
@@ -27,6 +28,13 @@ hough_lines_node:
     use_probabilistic: true
     min_line_length: 30
     max_line_gap: 10
+
+    enable_detection: true
+    filter_mode : 1  # 0: Aucun filtre, 1: Filtre Moyenne Mobile, 2: Filtre de Kalman
+    moving_average_window_size : 10  # Taille de la fenêtre pour le filtre moyenne mobile
+    outlier_threshold_deg: 60.0   # Seuil pour détecter les mesures <<abberant fréro>> en degrés
+    max_consecutive_outliers: 3 # Nombre maximum de mesures aberrantes consécutives avant réinitialisation du filtre
+
 
 csrt_tracker_node:
   ros__parameters:

@@ -34,10 +34,6 @@ class SinglePointController:
         self.state = "idle"  # "idle", "tracking", "arrived"
         
         # Gains des contrôleurs (à ajuster selon tests réels)
-        self.kp_heading = 0.5     # 0.5
-        self.kp_forward = 0.8     # 0.8
-        self.kp_lateral = 0.5     # 0.5
-        
         # Limites de vitesse (m/s et rad/s)
         self.max_forward_speed = 0.5 # 0.5
         self.max_lateral_speed = 0.5 # 0.5

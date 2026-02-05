@@ -485,11 +485,11 @@ class ROV(Node):
         )
         
         # Conversion des vitesses (m/s et rad/s) vers commandes RC (PWM 1000-2000)
-        self.commands[3] = int(1500 + angular_speed * 170) 
+        self.commands[3] = int(1500 + angular_speed * 100) 
         
         self.commands[4] = int(1500 + forward_speed * 200)
         
-        self.commands[5] = int(1500 + lateral_speed * 200)
+        self.commands[5] = int(1500 + lateral_speed * 150)
         
         # Affichage de l'état
         state_name = self.point_controller.state.upper()
