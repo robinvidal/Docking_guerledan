@@ -41,6 +41,24 @@ class HoughLinesNode(Node):
         self.declare_parameter('perp_tol', 0.25)
         self.declare_parameter('conn_tol', 0.40)
 
+        # --- GESTION DU CAP (HEADING) AVEC SÉCURITÉ ---
+        self.declare_parameter('heading_topic', '/bluerov/compass/heading') # Mettez le bon topic ici
+        self.declare_parameter('heading_timeout', 1.0) # Temps en secondes avant de remettre à 0
+        
+        self.robot_heading_rad = 0.0
+        self.last_heading_time = self.get_clock().now() # Initialisation du temps
+        
+        # Abonnement
+        topic_name = self.get_parameter('heading_topic').value
+        self.sub_heading = self.create_subscription(
+            Float32, 
+            topic_name, 
+            self.heading_callback, 
+            10
+        )
+        
+        self.get_logger().info(f'Listening to heading on {topic_name} (Timeout: {self.get_parameter("heading_timeout").value}s)')
+
         # --- PARAMÈTRES DE FILTRAGE ---
         self.declare_parameter('window_size_ang', 7) 
         self.declare_parameter('window_size_pos', 3) 
@@ -73,6 +91,13 @@ class HoughLinesNode(Node):
         self.pub_dbg_filtered = self.create_publisher(Float32, '/debug/yaw_filtered', 10)
 
         self.get_logger().info(f'Hough Lines Node Initialisé (Anti-Saut Position & Angle Actif)')
+
+    def heading_callback(self, msg: Float32):
+        # 1. Mise à jour de la valeur (Conversion Degrés -> Radians)
+        self.robot_heading_rad = self.normalize_angle(math.radians(msg.data))
+        
+        # 2. Mise à jour du "Top Horloge" (Watchdog)
+        self.last_heading_time = self.get_clock().now()
 
     def merge_similar_lines(self, candidates):
         if not candidates: return []
@@ -200,9 +225,44 @@ class HoughLinesNode(Node):
         merged = self.merge_similar_lines(candidates)
         bary, yaw, final_lines = self.detect_u_shape(merged)
 
+
         # --- LOGIQUE DE FILTRAGE SÉPARÉE ET SÉCURISÉE ---
         if bary is not None:
+
+            # === 1. GESTION DU CAP (WATCHDOG & PROJECTION) ===
+            # Calcul du temps écoulé depuis le dernier message de cap
+            current_time = self.get_clock().now()
+            # Sécurité si last_heading_time n'est pas encore défini
+            if not hasattr(self, 'last_heading_time'): self.last_heading_time = current_time
+
+            elapsed = (current_time - self.last_heading_time).nanoseconds / 1e9
+            
+            # Récupération sécurisée du timeout
+            try: timeout_val = self.get_parameter('heading_timeout').value
+            except: timeout_val = 1.0
+
+            # Détermination du cap effectif (0.0 si timeout)
+            effective_heading = self.robot_heading_rad
+            if elapsed > timeout_val:
+                effective_heading = 0.0
+
             raw_x, raw_y, raw_yaw = float(bary[0]), float(bary[1]), float(yaw)
+
+            # --- passage en repère monde de l'angle de la cage 
+
+            header = effective_heading
+            x1= raw_x
+            y1= raw_y
+            angle_cage = math.atan2(y1, x1) + header
+            mat_rotation= np.array([[np.cos(angle_cage), -np.sin(angle_cage)], [np.sin(angle_cage), np.cos(angle_cage)]])
+            x2= x1 + 1.0 * np.cos(raw_yaw)
+            y2= y1 + 1.0 * np.sin(raw_yaw)
+            beta= math.atan2((mat_rotation @ np.array([x1-x2, y1-y2]))[1], (mat_rotation @ np.array([x1-x2, y1-y2]))[0]) 
+            yaw_monde = (beta + np.pi) % (2*np.pi) - np.pi
+            raw_yaw = yaw_monde
+
+            #self.get_logger().info(f"Raw Yaw (monde): {math.degrees(raw_yaw):.2f}° | Heading Used: {math.degrees(effective_heading):.2f}° | Elapsed: {elapsed:.2f}s")
+
             max_outliers = self.get_parameter('max_consecutive_outliers').value
             
             # --- 1. GESTION POSITION (Anti-Saut Euclidien) ---
@@ -251,7 +311,7 @@ class HoughLinesNode(Node):
             # --- 3. CALCUL MOYENNES & PUBLICATION ---
             avg_x, avg_y = self.compute_avg_pos(self.history_pos)
             avg_yaw = self.compute_avg_ang(self.history_ang)
-
+            self.get_logger().warn(f"Yaw Raw: {math.degrees(raw_yaw):.2f}° | Yaw Filtered: {math.degrees(avg_yaw):.2f}° ")
             if avg_x is not None and avg_yaw is not None:
                 self.pub_dbg_raw.publish(Float32(data=math.degrees(raw_yaw)))
                 self.pub_dbg_filtered.publish(Float32(data=math.degrees(avg_yaw)))

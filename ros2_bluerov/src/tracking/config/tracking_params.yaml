@@ -30,7 +30,7 @@ hough_lines_node:
     max_line_gap: 0.20
 
     enable_detection: true
-    window_size_ang: 10  # Taille de la fenêtre pour le filtre moyenne mobile
+    window_size_ang: 30  # Taille de la fenêtre pour le filtre moyenne mobile
     window_size_pos: 3 # taille de la fenêtre pour le filtre moyenne mobile sur la position
     outlier_threshold_deg: 60.0   # Seuil pour détecter les mesures <<abberant fréro>> en degrés
     outlier_threshold_pos : 2.0  # Seuil pour détecter les mesures aberrantes en position (en mètres)
