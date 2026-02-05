@@ -37,23 +37,27 @@ Ce projet implémente un pipeline complet de perception et contrôle permettant 
 ## Structure du projet
 
 ```
-Docking/
-├── src/ros2_bluerov/          # Workspace ROS 2 principal
-│   └── src/
-│       ├── sonar/             # Driver et simulation sonar Oculus
-│       ├── traitement/        # Filtrage images sonar (polar/cartesian)
-│       ├── tracking/          # Détection bords cage (CSRT, Hough)
-│       ├── localisation/      # Estimation pose relative
-│       ├── control/           # Contrôleurs PID
-│       ├── mission/           # Machine d'états docking
-│       ├── affichage/         # IHM Qt/PyQtGraph
-│       ├── bringup/           # Launch files orchestration
-│       ├── docking_msgs/      # Messages ROS custom
-│       └── docking_utils/     # Utilitaires communs
+Docking_guerledan/                 # Racine du dépôt GitHub
+├── ros2_bluerov/                  # Workspace ROS 2 principal
+│   ├── src/
+│   │   ├── sonar/                 # Driver et simulation sonar Oculus
+│   │   ├── traitement/            # Filtrage images sonar (polar/cartesian)
+│   │   ├── tracking/              # Détection bords cage (CSRT, Hough)
+│   │   ├── localisation/          # Estimation pose relative
+│   │   ├── control/               # Contrôleurs PID
+│   │   ├── mission/               # Machine d'états docking
+│   │   ├── affichage/             # IHM Qt/PyQtGraph
+│   │   ├── bringup/               # Launch files orchestration
+│   │   ├── docking_msgs/          # Messages ROS custom
+│   │   └── docking_utils/         # Utilitaires communs
+│   ├── build/                     # Dossier de compilation (généré)
+│   └── install/                   # Dossier d'installation (généré)
 │
-├── simulation/                # Simulation 2D Python (tests contrôle)
-├── docs/                      # Documentation et rapport LaTeX
-└── divers/                    # Archives codes expérimentaux
+├── simulation/                    # Simulation 2D Python (tests contrôle)
+├── docs/                          # Documentation et rapport LaTeX
+├── divers/                        # Archives codes expérimentaux
+├── bluerov2/                      # Description URDF et contrôleurs
+└── bluerov_sim/                   # Simulateur simple
 ```
 
 ## Installation
@@ -88,20 +92,24 @@ pip install numpy==1.24.0 opencv-python==4.2.0 opencv-contrib-python \
 ### Compilation du workspace
 
 ```bash
-# Depuis la racine du workspace ros2_bluerov
-cd <chemin_vers_projet>/Docking/src/ros2_bluerov
+# Cloner le dépôt
+git clone https://github.com/<votre-organisation>/Docking_guerledan.git
+cd Docking_guerledan
+
+# Compiler le workspace ROS 2
+cd ros2_bluerov
 colcon build --symlink-install
 source install/setup.bash
 
 # Ajouter au ~/.bashrc pour persistance
-echo "source <chemin_vers_projet>/Docking/src/ros2_bluerov/install/setup.bash" >> ~/.bashrc
+echo "source $(pwd)/install/setup.bash" >> ~/.bashrc
 ```
 
 ### Installation GeographicLib (MAVROS)
 
 ```bash
-# Script fourni dans le dépôt
-cd <chemin_vers_projet>/Docking
+# Script fourni dans le dépôt (depuis la racine du projet)
+cd Docking_guerledan
 bash install_geographiclib_datasets.sh
 ```
 
@@ -204,7 +212,8 @@ pid_surge:
 Test rapide des lois de commande sans ROS :
 
 ```bash
-cd <chemin_vers_projet>/Docking/simulation
+# Depuis la racine du projet
+cd Docking_guerledan/simulation
 python3 simulation_bluerov.py
 ```
 
@@ -216,7 +225,8 @@ python3 simulation_bluerov.py
 ### Tests unitaires ROS
 
 ```bash
-cd <chemin_vers_projet>/Docking/src/ros2_bluerov
+# Depuis la racine du projet
+cd Docking_guerledan/ros2_bluerov
 colcon test
 colcon test-result --verbose
 ```
@@ -316,6 +326,7 @@ ros2 run sonar sonar_driver_node
 ## Contributeurs
 
 Projet académique ENSTA Bretagne - Guerlédan 2025/2026
+
 Auteurs : Bourgeois Thomas, Dunot Clément, Lefèvre Maxime, Vidal Robin
 
 ## Licence
