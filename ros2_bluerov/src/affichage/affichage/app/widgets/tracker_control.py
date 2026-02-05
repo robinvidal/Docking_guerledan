@@ -23,7 +23,7 @@ from ..core.utils import load_yaml_params
 
 
 class TrackerControlWidget(QWidget):
-    """Control panel for blob tracker parameters."""
+    """Control panel for tracker with unified traitement parameters."""
     
     # Signal émis pour activer/désactiver le mode sélection de bbox
     bbox_selection_requested = pyqtSignal(bool)  # True = activer, False = désactiver
@@ -42,10 +42,11 @@ class TrackerControlWidget(QWidget):
         scroll_content = QWidget()
         scroll_layout = QVBoxLayout(scroll_content)
 
-        header = QLabel("🎛️ <b>Contrôles Tracker</b><br><small>Réglez les paramètres du tracker en temps réel.</small>")
+        header = QLabel("🎛️ <b>Contrôles Tracker & Traitement Unified</b><br><small>Réglez les paramètres de traitement en temps réel.</small>")
         header.setWordWrap(True)
         scroll_layout.addWidget(header)
         
+        # ==================== BOUTONS TRACKER ====================
         # Bouton de sélection de cage (CSRT)
         selection_layout = QHBoxLayout()
         self.select_bbox_btn = QPushButton("📦 Sélectionner Cage (CSRT)")
@@ -108,141 +109,127 @@ class TrackerControlWidget(QWidget):
         help_label.setStyleSheet("color: #95a5a6; padding: 5px;")
         scroll_layout.addWidget(help_label)
 
-        general = QGroupBox("⚙️ Général")
-        gform = QFormLayout()
-        enable_cb = QCheckBox()
-        enable_cb.setChecked(True)
-        enable_cb.stateChanged.connect(lambda s: self.on_param_changed('enable_tracker', s == Qt.Checked))
-        gform.addRow('Activer tracker:', enable_cb)
-        self.param_widgets['enable_tracker'] = enable_cb
+        # ==================== FILTRES POLAIRES ====================
+        polar_median_group = self._create_group_box(
+            "📊 Filtre Médian (Polaire)",
+            [
+                ('polar_enable_median', 'Activer Médian', 'bool', True),
+                ('polar_median_kernel', 'Taille kernel', 'int', 3, 3, 15, 2),
+            ],
+        )
+        scroll_layout.addWidget(polar_median_group)
 
-        template_spin = QSpinBox()
-        template_spin.setMinimum(3)
-        template_spin.setMaximum(101)
-        template_spin.setValue(21)
-        template_spin.setSingleStep(2)
-        template_spin.valueChanged.connect(lambda v: self.on_param_changed('template_size', v))
-        gform.addRow('Taille template (px):', template_spin)
-        self.param_widgets['template_size'] = template_spin
+        polar_frost_group = self._create_group_box(
+            "❄️ Filtre Frost (Polaire)",
+            [
+                ('polar_enable_frost', 'Activer Frost', 'bool', False),
+                ('polar_frost_window_size', 'Taille fenêtre', 'int', 3, 3, 15, 2),
+                ('polar_frost_damping', 'Damping factor', 'double', 3.4, 0.1, 10.0, 0.1),
+            ],
+        )
+        scroll_layout.addWidget(polar_frost_group)
 
-        search_spin = QSpinBox()
-        search_spin.setMinimum(1)
-        search_spin.setMaximum(200)
-        search_spin.setValue(24)
-        search_spin.valueChanged.connect(lambda v: self.on_param_changed('search_radius', v))
-        gform.addRow('Rayon recherche (px):', search_spin)
-        self.param_widgets['search_radius'] = search_spin
+        # ==================== PARAMÈTRES CARTÉSIENS ====================
+        cartesian_general_group = self._create_group_box(
+            "🔄 Paramètres Cartésiens",
+            [
+                ('cartesian_scale_factor', 'Facteur échelle', 'double', 2.0, 0.5, 4.0, 0.1),
+                ('enable_spatial_filter', 'Filtre spatial', 'bool', False),
+                ('spatial_filter_radius', 'Rayon filtre spatial (m)', 'double', 2.0, 0.1, 10.0, 0.1),
+                ('spatial_filter_sigma', 'Sigma filtre spatial', 'double', 0.8, 0.1, 5.0, 0.1),
+            ],
+        )
+        scroll_layout.addWidget(cartesian_general_group)
 
-        init_mode_check = QCheckBox()
-        init_mode_check.setChecked(False)
-        init_mode_check.stateChanged.connect(lambda s: self.on_param_changed('init_mode', 'center' if s == Qt.Checked else 'max'))
-        gform.addRow("Init centre (sinon 'max'):", init_mode_check)
+        # ==================== FILTRES CARTÉSIENS ====================
+        cart_median_group = self._create_group_box(
+            "🧹 Médian Cartésien (Denoising)",
+            [
+                ('cart_enable_median', 'Activer Médian', 'bool', False),
+                ('cart_median_kernel_size', 'Taille kernel', 'int', 3, 3, 15, 2),
+            ],
+        )
+        scroll_layout.addWidget(cart_median_group)
 
-        intensity_spin = QSpinBox()
-        intensity_spin.setMinimum(0)
-        intensity_spin.setMaximum(255)
-        intensity_spin.setValue(120)
-        intensity_spin.valueChanged.connect(lambda v: self.on_param_changed('intensity_threshold', v))
-        gform.addRow('Seuil intensité init:', intensity_spin)
-        self.param_widgets['intensity_threshold'] = intensity_spin
+        cart_clahe_group = self._create_group_box(
+            "📈 CLAHE (Contraste Adaptatif)",
+            [
+                ('cart_enable_clahe', 'Activer CLAHE', 'bool', False),
+                ('cart_clahe_clip_limit', 'Clip limit', 'double', 2.0, 1.0, 10.0, 0.5),
+                ('cart_clahe_tile_grid_size', 'Taille grille', 'int', 8, 2, 32, 1),
+            ],
+        )
+        scroll_layout.addWidget(cart_clahe_group)
 
-        general.setLayout(gform)
-        scroll_layout.addWidget(general)
+        cart_threshold_group = self._create_group_box(
+            "🎚️ Seuil Bas (Threshold)",
+            [
+                ('cart_enable_threshold', 'Activer seuil', 'bool', False),
+                ('cart_min_intensity_threshold', 'Seuil intensité min', 'int', 0, 0, 255, 5),
+            ],
+        )
+        scroll_layout.addWidget(cart_threshold_group)
 
-        geom = QGroupBox('📐 Géométrie')
-        g2 = QFormLayout()
-        dist_spin = QDoubleSpinBox()
-        dist_spin.setMinimum(0.0)
-        dist_spin.setMaximum(100.0)
-        dist_spin.setDecimals(3)
-        dist_spin.setValue(2.0)
-        dist_spin.valueChanged.connect(lambda v: self.on_param_changed('distance_expected', v))
-        g2.addRow('Distance attendue (m):', dist_spin)
-        self.param_widgets['distance_expected'] = dist_spin
+        cart_morph_group = self._create_group_box(
+            "🔲 Morphologie (Closing)",
+            [
+                ('cart_enable_morphology', 'Activer morphologie', 'bool', False),
+                ('cart_morph_kernel_size', 'Taille kernel', 'int', 3, 3, 15, 2),
+                ('cart_morph_iterations', 'Itérations', 'int', 1, 1, 10, 1),
+            ],
+        )
+        scroll_layout.addWidget(cart_morph_group)
 
-        eps_spin = QDoubleSpinBox()
-        eps_spin.setMinimum(0.0)
-        eps_spin.setMaximum(10.0)
-        eps_spin.setDecimals(3)
-        eps_spin.setValue(0.3)
-        eps_spin.valueChanged.connect(lambda v: self.on_param_changed('distance_epsilon', v))
-        g2.addRow('Epsilon anneau (m):', eps_spin)
-        self.param_widgets['distance_epsilon'] = eps_spin
+        cart_flip_group = self._create_group_box(
+            "🔄 Flip/Miroir",
+            [
+                ('cart_flip_horizontal', 'Flip horizontal', 'bool', False),
+                ('cart_flip_vertical', 'Flip vertical', 'bool', False),
+            ],
+        )
+        scroll_layout.addWidget(cart_flip_group)
 
-        sigma_spin = QDoubleSpinBox()
-        sigma_spin.setMinimum(0.0)
-        sigma_spin.setMaximum(10.0)
-        sigma_spin.setDecimals(3)
-        sigma_spin.setValue(0.2)
-        sigma_spin.valueChanged.connect(lambda v: self.on_param_changed('distance_sigma', v))
-        g2.addRow('Sigma distance (m):', sigma_spin)
-        self.param_widgets['distance_sigma'] = sigma_spin
+        cart_percentile_group = self._create_group_box(
+            "✂️ Binarisation Percentile",
+            [
+                ('cart_enable_percentile_binarize', 'Activer binarisation', 'bool', False),
+                ('cart_percentile_keep_percent', 'Garder X% intenses', 'double', 10.0, 0.1, 100.0, 0.5),
+            ],
+        )
+        scroll_layout.addWidget(cart_percentile_group)
 
-        geom.setLayout(g2)
-        scroll_layout.addWidget(geom)
+        cart_opening_closing_group = self._create_group_box(
+            "🔳 Opening-Closing (Nettoyage)",
+            [
+                ('cart_enable_opening_closing', 'Activer Opening-Closing', 'bool', False),
+                ('cart_opening_kernel_size', 'Kernel Opening', 'int', 3, 3, 15, 2),
+                ('cart_closing_kernel_size', 'Kernel Closing', 'int', 3, 3, 15, 2),
+                ('cart_opening_iterations', 'Itérations Opening', 'int', 1, 0, 10, 1),
+                ('cart_closing_iterations', 'Itérations Closing', 'int', 1, 0, 10, 1),
+            ],
+        )
+        scroll_layout.addWidget(cart_opening_closing_group)
 
-        scoring = QGroupBox('🏷️ Scoring')
-        sform = QFormLayout()
-        ncc_spin = QDoubleSpinBox()
-        ncc_spin.setMinimum(0.0)
-        ncc_spin.setMaximum(1.0)
-        ncc_spin.setDecimals(3)
-        ncc_spin.setSingleStep(0.01)
-        ncc_spin.setValue(0.5)
-        ncc_spin.valueChanged.connect(lambda v: self.on_param_changed('ncc_threshold', v))
-        sform.addRow('NCC threshold:', ncc_spin)
-        self.param_widgets['ncc_threshold'] = ncc_spin
-
-        w1 = QDoubleSpinBox(); w1.setDecimals(2); w1.setRange(0.0,1.0); w1.setValue(0.6)
-        w1.valueChanged.connect(lambda v: self.on_param_changed('weight_ncc', v))
-        sform.addRow('Poids NCC (w1):', w1); self.param_widgets['weight_ncc'] = w1
-
-        w2 = QDoubleSpinBox(); w2.setDecimals(2); w2.setRange(0.0,1.0); w2.setValue(0.25)
-        w2.valueChanged.connect(lambda v: self.on_param_changed('weight_stability', v))
-        sform.addRow('Poids stabilité (w2):', w2); self.param_widgets['weight_stability'] = w2
-
-        w3 = QDoubleSpinBox(); w3.setDecimals(2); w3.setRange(0.0,1.0); w3.setValue(0.15)
-        w3.valueChanged.connect(lambda v: self.on_param_changed('weight_distance', v))
-        sform.addRow('Poids distance (w3):', w3); self.param_widgets['weight_distance'] = w3
-
-        min_tot = QDoubleSpinBox(); min_tot.setDecimals(3); min_tot.setRange(0.0,1.0); min_tot.setValue(0.4)
-        min_tot.valueChanged.connect(lambda v: self.on_param_changed('min_total_score', v))
-        sform.addRow('Score min total:', min_tot); self.param_widgets['min_total_score'] = min_tot
-
-        scoring.setLayout(sform)
-        scroll_layout.addWidget(scoring)
-
-        recovery = QGroupBox('🔁 Recovery & Stabilité')
-        rform = QFormLayout()
-        stab_win = QSpinBox(); stab_win.setRange(1, 50); stab_win.setValue(5)
-        stab_win.valueChanged.connect(lambda v: self.on_param_changed('stability_window', v))
-        rform.addRow('Fenêtre stabilité (frames):', stab_win); self.param_widgets['stability_window'] = stab_win
-
-        stab_thr = QDoubleSpinBox(); stab_thr.setDecimals(3); stab_thr.setRange(0.0,1.0); stab_thr.setValue(0.4)
-        stab_thr.valueChanged.connect(lambda v: self.on_param_changed('stability_threshold', v))
-        rform.addRow('Seuil stabilité:', stab_thr); self.param_widgets['stability_threshold'] = stab_thr
-
-        max_jump = QDoubleSpinBox(); max_jump.setDecimals(3); max_jump.setRange(0.0, 10.0); max_jump.setValue(1.0)
-        max_jump.valueChanged.connect(lambda v: self.on_param_changed('max_jump_m', v))
-        rform.addRow('Max jump (m):', max_jump); self.param_widgets['max_jump_m'] = max_jump
-
-        topk = QSpinBox(); topk.setRange(2, 200); topk.setValue(20)
-        topk.valueChanged.connect(lambda v: self.on_param_changed('top_k_candidates', v))
-        rform.addRow('Top K candidates:', topk); self.param_widgets['top_k_candidates'] = topk
-
-        rec_cb = QCheckBox(); rec_cb.setChecked(True)
-        rec_cb.stateChanged.connect(lambda s: self.on_param_changed('recovery_enabled', s == Qt.Checked))
-        rform.addRow('Recovery activé:', rec_cb); self.param_widgets['recovery_enabled'] = rec_cb
-
-        recovery.setLayout(rform)
-        scroll_layout.addWidget(recovery)
+        # Info
+        info_label = QLabel(
+            "ℹ️ Les modifications sont appliquées en temps réel au nœud traitement_unified_node.\n"
+            "Utilisez 'Sauvegarder' pour rendre les changements permanents."
+        )
+        info_label.setWordWrap(True)
+        scroll_layout.addWidget(info_label)
 
         # Footer
         footer = QHBoxLayout()
         footer.addStretch()
-        save = QPushButton('💾 Sauvegarder')
-        save.clicked.connect(self.save_to_yaml)
-        footer.addWidget(save)
+        
+        reset_btn = QPushButton('🔄 Réinitialiser')
+        reset_btn.clicked.connect(self.reset_to_defaults)
+        footer.addWidget(reset_btn)
+        
+        save_btn = QPushButton('💾 Sauvegarder')
+        save_btn.clicked.connect(self.save_to_yaml)
+        footer.addWidget(save_btn)
+        
         scroll_layout.addLayout(footer)
 
         scroll_layout.addStretch()
@@ -250,6 +237,79 @@ class TrackerControlWidget(QWidget):
         main_layout.addWidget(scroll)
 
         self._apply_yaml_defaults()
+
+    def _create_group_box(self, title, params):
+        """Crée un groupe de paramètres avec widgets appropriés."""
+        group = QGroupBox(title)
+        layout = QFormLayout()
+
+        for param_info in params:
+            if param_info[2] == 'bool':
+                param_name, label, _, default = param_info
+                checkbox = QCheckBox()
+                checkbox.setChecked(default)
+                checkbox.stateChanged.connect(
+                    lambda state, name=param_name: self.on_param_changed(name, state == Qt.Checked)
+                )
+                layout.addRow(label + ':', checkbox)
+                self.param_widgets[param_name] = checkbox
+
+            elif param_info[2] == 'int':
+                param_name, label, _, default, min_val, max_val, step = param_info
+                widget_layout = QHBoxLayout()
+                
+                slider = QSlider(Qt.Horizontal)
+                slider.setMinimum(min_val)
+                slider.setMaximum(max_val)
+                slider.setValue(default)
+                slider.setSingleStep(step)
+
+                spinbox = QSpinBox()
+                spinbox.setMinimum(min_val)
+                spinbox.setMaximum(max_val)
+                spinbox.setValue(default)
+                spinbox.setSingleStep(step)
+
+                slider.valueChanged.connect(spinbox.setValue)
+                spinbox.valueChanged.connect(slider.setValue)
+                spinbox.valueChanged.connect(
+                    lambda value, name=param_name: self.on_param_changed(name, value)
+                )
+
+                widget_layout.addWidget(slider, 3)
+                widget_layout.addWidget(spinbox, 1)
+                layout.addRow(label + ':', widget_layout)
+                self.param_widgets[param_name] = spinbox
+
+            elif param_info[2] == 'double':
+                param_name, label, _, default, min_val, max_val, step = param_info
+                widget_layout = QHBoxLayout()
+
+                slider = QSlider(Qt.Horizontal)
+                slider.setMinimum(int(min_val / step))
+                slider.setMaximum(int(max_val / step))
+                slider.setValue(int(default / step))
+
+                spinbox = QDoubleSpinBox()
+                spinbox.setMinimum(min_val)
+                spinbox.setMaximum(max_val)
+                spinbox.setValue(default)
+                spinbox.setSingleStep(step)
+                spinbox.setDecimals(len(str(step).split('.')[-1]) if '.' in str(step) else 1)
+
+                slider.valueChanged.connect(lambda v, sb=spinbox, s=step: sb.setValue(v * s))
+                spinbox.valueChanged.connect(lambda v, sl=slider, s=step: sl.setValue(int(v / s)))
+                spinbox.valueChanged.connect(
+                    lambda value, name=param_name: self.on_param_changed(name, value)
+                )
+
+                widget_layout.addWidget(slider, 3)
+                widget_layout.addWidget(spinbox, 1)
+                layout.addRow(label + ':', widget_layout)
+                self.param_widgets[param_name] = spinbox
+
+        group.setLayout(layout)
+        return group
     
     def on_select_bbox_clicked(self, checked):
         """Gère le clic sur le bouton de sélection de cage."""
@@ -286,19 +346,20 @@ class TrackerControlWidget(QWidget):
         if not is_searching and self.auto_tracking_btn.isChecked():
             # La cage a été trouvée, le tracking CSRT a pris le relai
             self.auto_tracking_btn.setText("✅ Tracking Actif (Auto)")
-            # Ne pas décocher le bouton pour permettre de relancer si besoin
         elif is_searching and self.auto_tracking_btn.isChecked():
             # La recherche est en cours (relance après perte)
             self.auto_tracking_btn.setText("🔍 Recherche en cours...")
 
     def on_param_changed(self, name, value):
-        success = self.ros_node.set_tracking_parameter(name, value)
+        """Envoie le paramètre modifié au nœud traitement_unified_node."""
+        success = self.ros_node.set_traitement_unified_parameter(name, value)
         if success:
-            self.ros_node.get_logger().info(f'Tracker: {name}={value}')
+            self.ros_node.get_logger().info(f'Traitement Unified: {name}={value}')
 
     def _apply_yaml_defaults(self):
-        params = load_yaml_params('tracking', 'tracking_params.yaml', self.ros_node.get_logger())
-        sub = params.get('blob_tracker_node', {}).get('ros__parameters', {}) if isinstance(params, dict) else {}
+        """Charge les valeurs par défaut depuis le fichier YAML."""
+        params = load_yaml_params('traitement', 'traitement_unified_params.yaml', self.ros_node.get_logger())
+        sub = params.get('traitement_unified_node', {}).get('ros__parameters', {}) if isinstance(params, dict) else {}
         if not sub:
             return
         for name, value in sub.items():
@@ -313,9 +374,10 @@ class TrackerControlWidget(QWidget):
                 elif isinstance(widget, QDoubleSpinBox):
                     widget.setValue(float(value))
             except Exception:
-                self.ros_node.get_logger().debug(f'Param tracker {name} ignore (val={value})')
+                self.ros_node.get_logger().debug(f'Param unified {name} ignore (val={value})')
 
     def get_current_params(self):
+        """Récupère tous les paramètres actuels."""
         params = {}
         for name, widget in self.param_widgets.items():
             if isinstance(widget, QCheckBox):
@@ -324,28 +386,93 @@ class TrackerControlWidget(QWidget):
                 params[name] = widget.value()
         return params
 
+    def reset_to_defaults(self):
+        """Réinitialise tous les paramètres aux valeurs par défaut."""
+        reply = QMessageBox.question(
+            self,
+            "Confirmer réinitialisation",
+            "Voulez-vous vraiment réinitialiser tous les paramètres aux valeurs par défaut ?",
+            QMessageBox.Yes | QMessageBox.No,
+        )
+
+        if reply == QMessageBox.Yes:
+            defaults = {
+                # Filtres polaires
+                'polar_enable_median': True,
+                'polar_median_kernel': 3,
+                'polar_enable_frost': False,
+                'polar_frost_window_size': 3,
+                'polar_frost_damping': 3.4,
+                # Paramètres cartésiens
+                'cartesian_scale_factor': 2.0,
+                'enable_spatial_filter': False,
+                'spatial_filter_radius': 2.0,
+                'spatial_filter_sigma': 0.8,
+                # Filtres cartésiens
+                'cart_enable_median': False,
+                'cart_median_kernel_size': 3,
+                'cart_enable_clahe': False,
+                'cart_clahe_clip_limit': 2.0,
+                'cart_clahe_tile_grid_size': 8,
+                'cart_enable_threshold': False,
+                'cart_min_intensity_threshold': 0,
+                'cart_enable_morphology': False,
+                'cart_morph_kernel_size': 3,
+                'cart_morph_iterations': 1,
+                'cart_flip_horizontal': False,
+                'cart_flip_vertical': False,
+                'cart_enable_percentile_binarize': False,
+                'cart_percentile_keep_percent': 10.0,
+                'cart_enable_opening_closing': False,
+                'cart_opening_kernel_size': 3,
+                'cart_closing_kernel_size': 3,
+                'cart_opening_iterations': 1,
+                'cart_closing_iterations': 1,
+            }
+
+            for name, value in defaults.items():
+                if name in self.param_widgets:
+                    widget = self.param_widgets[name]
+                    if isinstance(widget, QCheckBox):
+                        widget.setChecked(value)
+                    elif isinstance(widget, (QSpinBox, QDoubleSpinBox)):
+                        widget.setValue(value)
+
     def save_to_yaml(self):
+        """Sauvegarde les paramètres actuels dans un fichier YAML."""
         params = self.get_current_params()
-        yaml_content = {'blob_tracker_node': {'ros__parameters': params}}
+        yaml_content = {'traitement_unified_node': {'ros__parameters': params}}
 
         default_path = (
             self._find_ros2_root()
             / 'src'
-            / 'tracking'
+            / 'traitement'
             / 'config'
-            / 'tracking_params.yaml'
+            / 'traitement_unified_params.yaml'
         )
 
-        file_path, _ = QFileDialog.getSaveFileName(self, 'Sauvegarder paramètres tracker', str(default_path), 'YAML Files (*.yaml *.yml)')
+        file_path, _ = QFileDialog.getSaveFileName(
+            self, 
+            'Sauvegarder paramètres Traitement Unified', 
+            str(default_path), 
+            'YAML Files (*.yaml *.yml)'
+        )
         if file_path:
             try:
                 with open(file_path, 'w', encoding='utf-8') as f:
                     yaml.dump(yaml_content, f, default_flow_style=False, sort_keys=False)
-                QMessageBox.information(self, 'Sauvegarde réussie', f'Sauvegardé: {file_path}')
+                QMessageBox.information(
+                    self, 
+                    'Sauvegarde réussie', 
+                    f'Paramètres sauvegardés dans:\n{file_path}\n\n'
+                    'Pour les utiliser au démarrage:\n'
+                    f'ros2 run traitement traitement_unified_node --ros-args --params-file {file_path}'
+                )
             except Exception as exc:
                 QMessageBox.critical(self, 'Erreur', f'Erreur: {exc}')
 
     def _find_ros2_root(self) -> Path:
+        """Trouve le répertoire racine ros2_bluerov."""
         for parent in Path(__file__).resolve().parents:
             if parent.name == 'ros2_bluerov':
                 return parent
