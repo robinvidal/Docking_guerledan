@@ -42,7 +42,7 @@ class HoughLinesNode(Node):
         self.declare_parameter('conn_tol', 0.40)
 
         # --- GESTION DU CAP (HEADING) AVEC SÉCURITÉ ---
-        self.declare_parameter('heading_topic', '/bluerov/compass/heading') # Mettez le bon topic ici
+        self.declare_parameter('heading_topic', '/mavros/global_position/compass_hdg') # Mettez le bon topic ici
         self.declare_parameter('heading_timeout', 1.0) # Temps en secondes avant de remettre à 0
         
         self.robot_heading_rad = 0.0
