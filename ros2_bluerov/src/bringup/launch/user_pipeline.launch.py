@@ -35,8 +35,6 @@ def generate_launch_description():
         output='screen'
     )
 
-    # NOTE: Décommenter blob_tracker OU csrt_tracker selon besoin
-    # Sélection bbox: Ctrl+Clic dans Sonar Viewer (image cartésienne)
     return LaunchDescription([
         sonar_mock,
         sonar_viewer
