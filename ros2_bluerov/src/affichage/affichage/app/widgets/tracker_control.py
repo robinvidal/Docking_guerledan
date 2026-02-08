@@ -27,9 +27,6 @@ class TrackerControlWidget(QWidget):
     
     # Signal émis pour activer/désactiver le mode sélection de bbox
     bbox_selection_requested = pyqtSignal(bool)  # True = activer, False = désactiver
-    
-    # Signal émis pour activer/désactiver l'auto-tracking
-    auto_tracking_requested = pyqtSignal(bool)
 
     def __init__(self, ros_node):
         super().__init__()
@@ -339,7 +336,6 @@ class TrackerControlWidget(QWidget):
         
         # Publier le trigger pour activer/désactiver l'auto-detect
         self.ros_node.publish_auto_detect_trigger(checked)
-        self.auto_tracking_requested.emit(checked)
     
     def on_auto_detect_status_changed(self, is_searching: bool):
         """Callback quand le statut auto-detect change (cage trouvée ou perdue)."""

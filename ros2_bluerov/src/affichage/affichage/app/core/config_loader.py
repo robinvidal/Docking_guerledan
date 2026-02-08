@@ -48,33 +48,3 @@ def get_cage_dimensions():
     except Exception as e:
         print(f"Erreur lors de la lecture des dimensions de la cage: {e}")
         return 0.9, 0.5  # Valeurs par défaut
-
-
-def get_hough_params():
-    """
-    Récupère les paramètres de Hough depuis la configuration.
-    
-    Returns:
-        dict: Paramètres de Hough.
-    """
-    config = load_tracking_params()
-    
-    try:
-        return config.get('hough_lines_node', {}).get('ros__parameters', {})
-    except Exception:
-        return {}
-
-
-def get_csrt_params():
-    """
-    Récupère les paramètres CSRT depuis la configuration.
-    
-    Returns:
-        dict: Paramètres CSRT.
-    """
-    config = load_tracking_params()
-    
-    try:
-        return config.get('csrt_tracker_node', {}).get('ros__parameters', {})
-    except Exception:
-        return {}

@@ -1,7 +1,7 @@
 import rclpy
 from rclpy.node import Node
 from rcl_interfaces.msg import ParameterType
-from docking_msgs.msg import Frame, FrameCartesian, DetectedLines, ClickPosition, BBoxSelection, TrackedObject, RotatedBBoxInit
+from docking_msgs.msg import Frame, FrameCartesian, DetectedLines, BBoxSelection, TrackedObject
 from docking_msgs.srv import ConfigureSonar
 from geometry_msgs.msg import PoseStamped
 from std_msgs.msg import Bool
@@ -24,9 +24,7 @@ class SonarViewerNode(Node):
         self.cage_pose_sub = self.create_subscription(PoseStamped, '/docking/tracking/cage_pose', self.cage_pose_callback, 10)
 
         # Publishers
-        self.click_pub = self.create_publisher(ClickPosition, '/docking/sonar/click_position', 10)
         self.bbox_pub = self.create_publisher(BBoxSelection, '/docking/sonar/bbox_selection', 10)
-        self.rotated_bbox_pub = self.create_publisher(RotatedBBoxInit, '/docking/sonar/rotated_bbox_init', 10)
         
         # Auto-detect tracking
         self.auto_detect_trigger_pub = self.create_publisher(Bool, '/docking/tracking/trigger_auto_detect', 10)
@@ -79,48 +77,6 @@ class SonarViewerNode(Node):
         self.get_logger().warn('Service de paramètres traitement_unified_node non disponible')
         return False
 
-    def set_csrt_parameter(self, param_name, value):
-        """Change un paramètre sur le node csrt_tracker_node."""
-        if not hasattr(self, 'csrt_param_client') or self.csrt_param_client is None:
-            from rcl_interfaces.srv import SetParameters
-            self.csrt_param_client = self.create_client(SetParameters, '/csrt_tracker_node/set_parameters')
-
-        if isinstance(value, bool):
-            param_type = ParameterType.PARAMETER_BOOL
-        elif isinstance(value, int):
-            param_type = ParameterType.PARAMETER_INTEGER
-        elif isinstance(value, float):
-            param_type = ParameterType.PARAMETER_DOUBLE
-        else:
-            self.get_logger().error(f'Type de paramètre non supporté: {type(value)}')
-            return False
-
-        from rcl_interfaces.srv import SetParameters
-        from rcl_interfaces.msg import Parameter as ParameterMsg, ParameterValue
-
-        request = SetParameters.Request()
-        param = ParameterMsg()
-        param.name = param_name
-        param.value = ParameterValue()
-        param.value.type = param_type
-
-        if param_type == ParameterType.PARAMETER_BOOL:
-            param.value.bool_value = value
-        elif param_type == ParameterType.PARAMETER_INTEGER:
-            param.value.integer_value = value
-        elif param_type == ParameterType.PARAMETER_DOUBLE:
-            param.value.double_value = value
-
-        request.parameters = [param]
-
-        if self.csrt_param_client.service_is_ready():
-            self.csrt_param_client.call_async(request)
-            self.get_logger().debug(f'Paramètre csrt.{param_name} = {value}')
-            return True
-
-        self.get_logger().warn('Service de paramètres csrt_tracker_node non disponible')
-        return False
-
     def raw_callback(self, msg):
         self.signals.new_raw_frame.emit(msg)
 
@@ -137,20 +93,6 @@ class SonarViewerNode(Node):
     def tracked_object_callback(self, msg):
         self.signals.new_tracked_object.emit(msg)
     
-    def publish_click_position(self, x_m: float, y_m: float):
-        """Publie la position d'un clic souris sur le sonar."""
-        msg = ClickPosition()
-        msg.header.stamp = self.get_clock().now().to_msg()
-        msg.header.frame_id = 'sonar'
-        msg.x = float(x_m)
-        msg.y = float(y_m)
-        msg.pixel_x = 0  # Non utilisé pour l'instant
-        msg.pixel_y = 0
-        msg.is_valid = True
-        
-        self.click_pub.publish(msg)
-        self.get_logger().info(f'Clic publié: x={x_m:.2f}m, y={y_m:.2f}m')
-    
     def publish_bbox_selection(self, x: int, y: int, width: int, height: int):
         """Publie une bounding box sélectionnée manuellement."""
         msg = BBoxSelection()
@@ -164,29 +106,6 @@ class SonarViewerNode(Node):
         
         self.bbox_pub.publish(msg)
         self.get_logger().info(f'BBox publiée: ({x}, {y}, {width}, {height})')
-    
-    def publish_rotated_bbox_init(self, p1_x: float, p1_y: float, p2_x: float, p2_y: float, 
-                                   p3_x: float, p3_y: float, p4_x: float, p4_y: float):
-        """Publie une initialisation de bbox rotatif (4 coins)."""
-        msg = RotatedBBoxInit()
-        msg.header.stamp = self.get_clock().now().to_msg()
-        msg.header.frame_id = 'sonar'
-        msg.p1_x = float(p1_x)
-        msg.p1_y = float(p1_y)
-        msg.p2_x = float(p2_x)
-        msg.p2_y = float(p2_y)
-        msg.p3_x = float(p3_x)
-        msg.p3_y = float(p3_y)
-        msg.p4_x = float(p4_x)
-        msg.p4_y = float(p4_y)
-        msg.is_valid = True
-        
-        self.rotated_bbox_pub.publish(msg)
-        self.get_logger().info(
-            f'Rotated BBox publiée: 4 coins - '
-            f'P1({p1_x:.2f}, {p1_y:.2f}), P2({p2_x:.2f}, {p2_y:.2f}), '
-            f'P3({p3_x:.2f}, {p3_y:.2f}), P4({p4_x:.2f}, {p4_y:.2f})'
-        )
     
     def auto_detect_status_callback(self, msg):
         """Reçoit le statut de la recherche auto-detect."""

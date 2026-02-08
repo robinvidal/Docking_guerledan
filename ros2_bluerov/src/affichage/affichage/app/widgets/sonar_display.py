@@ -22,11 +22,6 @@ class SonarCartesianWidget(pg.PlotWidget):
         self.image_item.setZValue(-10)
         self.image_item.hide()
 
-        self.borders_scatter = pg.ScatterPlotItem(
-            size=15, pen=pg.mkPen(None), brush=pg.mkBrush(255, 0, 0, 255)
-        )
-        self.addItem(self.borders_scatter)
-
         self.center_line = pg.PlotCurveItem(pen=pg.mkPen('w', width=1, style=Qt.DashLine))
         self.addItem(self.center_line)
         self.center_line.setData([0, 0], [0, 50])
@@ -180,17 +175,3 @@ class SonarCartesianWidget(pg.PlotWidget):
                 self.scatter.setData(pos=points, brush=brushes)
             else:
                 self.scatter.setData([], [])
-
-    def update_borders(self, borders_msg):
-        if not borders_msg or not borders_msg.is_valid:
-            self.borders_scatter.setData([], [])
-            return
-
-        points = []
-        for r_val, theta in zip(borders_msg.ranges, borders_msg.bearings):
-            x = r_val * np.sin(theta)
-            y = r_val * np.cos(theta)
-            points.append([x, y])
-
-        if points:
-            self.borders_scatter.setData(pos=np.array(points))

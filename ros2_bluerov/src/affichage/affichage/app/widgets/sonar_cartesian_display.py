@@ -11,14 +11,8 @@ from PyQt5.QtCore import Qt, QRectF, pyqtSignal, QTimer
 class SonarCartesianImageWidget(pg.PlotWidget):
     """Vue cartésienne pour FrameCartesian avec affichage image direct."""
     
-    # Signal émis lors d'un clic (x_m, y_m en mètres)
-    click_position = pyqtSignal(float, float)
-    
     # Signal émis lors de la sélection d'une bbox (x, y, width, height en pixels)
     bbox_selected = pyqtSignal(int, int, int, int)
-    
-    # Signal émis lors de la sélection rotatif (4 coins en mètres: p1_x, p1_y, p2_x, p2_y, p3_x, p3_y, p4_x, p4_y)
-    rotated_bbox_selected = pyqtSignal(float, float, float, float, float, float, float, float)
 
     def __init__(self, title="Sonar Cartésien"):
         super().__init__()
@@ -29,11 +23,6 @@ class SonarCartesianImageWidget(pg.PlotWidget):
 
         self.image_item = pg.ImageItem()
         self.addItem(self.image_item)
-
-        self.borders_scatter = pg.ScatterPlotItem(
-            size=15, pen=pg.mkPen(None), brush=pg.mkBrush(255, 0, 0, 255)
-        )
-        self.addItem(self.borders_scatter)
 
         self.center_line = pg.PlotCurveItem(pen=pg.mkPen('w', width=1, style=Qt.DashLine))
         self.addItem(self.center_line)
@@ -121,24 +110,6 @@ class SonarCartesianImageWidget(pg.PlotWidget):
         self.bbox_selection_rect.setZValue(101)
         self.addItem(self.bbox_selection_rect)
         self.bbox_selection_rect.hide()
-        
-        # Mode de sélection rotatif (3 points)
-        self.rotated_selection_mode = False
-        self.rotated_points = []  # Liste de 3 points (x_m, y_m)
-        self.rotated_markers = pg.ScatterPlotItem(
-            size=25, pen=pg.mkPen('b', width=3), brush=pg.mkBrush(0, 0, 255, 150)
-        )
-        self.rotated_markers.setZValue(102)
-        self.addItem(self.rotated_markers)
-        self.rotated_markers.hide()
-        
-        # Lignes entre les points (preview du rectangle)
-        self.rotated_preview = pg.PlotCurveItem(
-            pen=pg.mkPen('cyan', width=3, style=Qt.SolidLine)
-        )
-        self.rotated_preview.setZValue(101)
-        self.addItem(self.rotated_preview)
-        self.rotated_preview.hide()
         
         # Pause pour la sélection
         self.is_paused = False
@@ -272,21 +243,6 @@ class SonarCartesianImageWidget(pg.PlotWidget):
         
         # Ligne centrale
         self.center_line.setData([0, 0], [0, max_r])
-
-    def update_borders(self, borders_msg):
-        """Met à jour l'affichage des bordures."""
-        if not borders_msg or not borders_msg.is_valid:
-            self.borders_scatter.setData([], [])
-            return
-
-        points = []
-        for r_val, theta in zip(borders_msg.ranges, borders_msg.bearings):
-            x = r_val * np.sin(theta)
-            y = r_val * np.cos(theta)
-            points.append([x, y])
-
-        if points:
-            self.borders_scatter.setData(pos=np.array(points))
     
     def update_detected_lines(self, lines_msg):
         """Met à jour l'affichage des lignes détectées par Hough."""
@@ -384,42 +340,6 @@ class SonarCartesianImageWidget(pg.PlotWidget):
         x_m = mouse_point.x()
         y_m = mouse_point.y()
         
-        # Mode sélection rotatif (4 coins)
-        if self.rotated_selection_mode:
-            self.rotated_points.append((x_m, y_m))
-            
-            # Afficher les marqueurs des points cliqués
-            points_array = np.array(self.rotated_points)
-            self.rotated_markers.setData(pos=points_array)
-            self.rotated_markers.show()
-            
-            # Preview du rectangle
-            num_points = len(self.rotated_points)
-            if num_points == 2:
-                # Afficher la ligne entre P1 et P2
-                p1, p2 = self.rotated_points
-                self.rotated_preview.setData([p1[0], p2[0]], [p1[1], p2[1]])
-                self.rotated_preview.show()
-            elif num_points == 3:
-                # Afficher 2 côtés
-                p1, p2, p3 = self.rotated_points
-                x_coords = [p1[0], p2[0], p3[0]]
-                y_coords = [p1[1], p2[1], p3[1]]
-                self.rotated_preview.setData(x_coords, y_coords)
-                self.rotated_preview.show()
-            elif num_points == 4:
-                # Afficher le rectangle complet
-                p1, p2, p3, p4 = self.rotated_points
-                x_coords = [p1[0], p2[0], p3[0], p4[0], p1[0]]
-                y_coords = [p1[1], p2[1], p3[1], p4[1], p1[1]]
-                self.rotated_preview.setData(x_coords, y_coords)
-                self.rotated_preview.show()
-                
-                # Finaliser et émettre le signal
-                self._finalize_rotated_selection()
-            
-            return
-        
         # Mode sélection de bbox activé par le bouton
         if self.bbox_selection_mode:
             if self.bbox_start_point is None:
@@ -436,7 +356,7 @@ class SonarCartesianImageWidget(pg.PlotWidget):
                 self.set_bbox_selection_mode(False)
             return
         
-        # Clic normal (sans mode sélection)
+        # Clic normal (sans mode sélection) - affichage visuel temporaire
         # Afficher le marker (point rouge)
         self.click_marker.setData(pos=[(x_m, y_m)])
         self.click_marker.show()
@@ -451,10 +371,7 @@ class SonarCartesianImageWidget(pg.PlotWidget):
         
         # Démarrer le timer pour masquer après 1 seconde
         self.click_timer.start(1000)
-        
-        # Émettre le signal
-        self.click_position.emit(float(x_m), float(y_m))
-    
+
     def _hide_click_marker(self):
         """Masque le marker et la bbox de clic."""
         self.click_marker.hide()
@@ -477,9 +394,6 @@ class SonarCartesianImageWidget(pg.PlotWidget):
         self.bbox_selection_mode = enabled
         
         if enabled:
-            # Désactiver le mode rotatif si activé
-            if self.rotated_selection_mode:
-                self.set_rotated_selection_mode(False)
             # Pause et préparer la sélection
             self.is_paused = True
             self.bbox_start_point = None
@@ -490,44 +404,6 @@ class SonarCartesianImageWidget(pg.PlotWidget):
             self.bbox_start_point = None
             self.bbox_current_point = None
             self.bbox_selection_rect.hide()
-    
-    def set_rotated_selection_mode(self, enabled):
-        """Active ou désactive le mode sélection rotatif (3 points)."""
-        self.rotated_selection_mode = enabled
-        
-        if enabled:
-            # Désactiver le mode bbox si activé
-            if self.bbox_selection_mode:
-                self.set_bbox_selection_mode(False)
-            # Pause et préparer la sélection
-            self.is_paused = True
-            self.rotated_points = []
-            self.rotated_markers.hide()
-            self.rotated_preview.hide()
-        else:
-            # Reprendre et nettoyer
-            self.is_paused = False
-            self.rotated_points = []
-            self.rotated_markers.hide()
-            self.rotated_preview.hide()
-    
-    def _finalize_rotated_selection(self):
-        """Finalise la sélection rotatif et émet le signal avec 4 coins en mètres."""
-        if len(self.rotated_points) != 4:
-            return
-        
-        p1, p2, p3, p4 = self.rotated_points
-        
-        # Émettre le signal avec les 4 coins en mètres
-        self.rotated_bbox_selected.emit(
-            float(p1[0]), float(p1[1]),
-            float(p2[0]), float(p2[1]),
-            float(p3[0]), float(p3[1]),
-            float(p4[0]), float(p4[1])
-        )
-        
-        # Désactiver le mode automatiquement
-        self.set_rotated_selection_mode(False)
     
     def _update_bbox_selection_display(self):
         """Met à jour l'affichage du rectangle de sélection."""

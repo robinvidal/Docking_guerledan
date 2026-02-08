@@ -15,14 +15,11 @@ find_package(geometry_msgs REQUIRED)
 rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/Frame.msg"
   "msg/FrameCartesian.msg"
-  "msg/Borders.msg"
   "msg/DetectedLines.msg"
   "msg/ClickPosition.msg"
   "msg/BBoxSelection.msg"
   "msg/TrackedObject.msg"
   "msg/RotatedBBoxInit.msg"
-  "msg/PoseRelative.msg"
-  "msg/State.msg"
   "srv/ConfigureSonar.srv"
   DEPENDENCIES std_msgs geometry_msgs
 )
