@@ -1,6 +1,22 @@
 """
-Nœud ROS2 pour publier les données du sonar Oculus M750d au format docking_msgs/Frame.
-S'appuie sur la bibliothèque Python "oculus_python" (même API que l'exemple Divers/test_accoustic_cage_guerledan/oculus_sonar_test_v2.py).
+Nœud ROS2 Driver - Interface avec le sonar Oculus M750d.
+
+Ce module fournit le driver ROS2 pour le sonar acoustique Oculus M750d.
+Il utilise le SDK Python "oculus_python" pour communiquer avec le matériel
+et publie les données au format docking_msgs/Frame.
+
+Fonctionnalités principales:
+    - Communication avec le sonar Oculus via SDK Python
+    - Publication des frames sonar brutes sur /docking/sonar/raw
+    - Service de reconfiguration dynamique du sonar
+    - Masquage automatique des artefacts de bord
+
+Prérequis:
+    - SDK oculus_python installé et configuré
+    - Sonar Oculus M750d connecté au réseau (IP: 192.168.1.10 par défaut)
+
+Auteur: Équipe Docking Guerlédan ROB26
+Date: 2026
 """
 
 import math
@@ -15,51 +31,76 @@ from docking_msgs.srv import ConfigureSonar
 
 
 class SonarNode(Node):
-    """Driver sonar Oculus M750d publiant sur 
-    - topic: /docking/sonar/raw
-    - type: docking_msgs/Frame
+    """
+    Driver ROS2 pour le sonar Oculus M750d.
+    
+    Ce nœud interface directement avec le matériel sonar via le SDK oculus_python.
+    Il reçoit les pings du sonar en temps réel et les convertit au format
+    docking_msgs/Frame pour publication sur le topic ROS2.
+    
+    Publications:
+        - /docking/sonar/raw (docking_msgs/Frame): Données sonar brutes
+        
+    Services:
+        - /docking/sonar/configure (ConfigureSonar): Configuration dynamique
     """
 
     def __init__(self):
         super().__init__('sonar_node')
 
-        # Paramètres utilisateur
-        self.declare_parameter('ip_address', '192.168.1.10')
-        self.declare_parameter('port', 52102)
-        self.declare_parameter('range', 15.0)  # m
-        self.declare_parameter('gain_percent', 10)
-        self.declare_parameter('master_mode', 2)  # 1: LF, 2: HF
-        self.declare_parameter('ping_rate', 0)    # 0: auto
-        self.declare_parameter('frame_id', 'sonar_link')
-        # Suppression de bandes d'artefacts sur les bords (colonnes bearings)
-        self.declare_parameter('mask_left_bearings', 5)   # nb de colonnes à gauche à masquer
-        self.declare_parameter('mask_right_bearings', 0)  # nb de colonnes à droite à masquer
-        self.declare_parameter('edge_mask_auto', False)    # détection auto d'une bande anormale au bord
-        self.declare_parameter('edge_mask_threshold', 2.5)  # facteur * médiane des moyennes colonnes
-        # Pas de mode mock: ce node ne publie que des données réelles provenant du sonar
+        # ===================================================================
+        # DÉCLARATION DES PARAMÈTRES ROS2
+        # ===================================================================
+        
+        # --- Paramètres de connexion réseau ---
+        self.declare_parameter('ip_address', '192.168.1.10')  # IP du sonar Oculus
+        self.declare_parameter('port', 52102)                 # Port de communication
+        
+        # --- Paramètres de configuration du sonar ---
+        self.declare_parameter('range', 15.0)        # Portée maximale (m)
+        self.declare_parameter('gain_percent', 10)   # Gain acoustique (%)
+        self.declare_parameter('master_mode', 2)     # Mode: 1=Basse Fréquence, 2=Haute Fréquence
+        self.declare_parameter('ping_rate', 0)       # Taux de ping: 0=automatique
+        self.declare_parameter('frame_id', 'sonar_link')  # Repère TF du sonar
+        
+        # --- Paramètres de masquage des artefacts de bord ---
+        # Les bords de l'image sonar peuvent contenir des artefacts (bandes brillantes)
+        self.declare_parameter('mask_left_bearings', 0)    # Colonnes à masquer à gauche
+        self.declare_parameter('mask_right_bearings', 0)   # Colonnes à masquer à droite
+        self.declare_parameter('edge_mask_auto', False)    # Détection automatique des bandes
+        self.declare_parameter('edge_mask_threshold', 2.5) # Seuil de détection (x médiane)
 
-        # Publisher
+        # ===================================================================
+        # CONFIGURATION ROS2: PUBLISHERS ET SERVICES
+        # ===================================================================
+        
+        # Publisher vers le topic de données sonar brutes
         self.publisher_ = self.create_publisher(Frame, '/docking/sonar/raw', 10)
 
-        # Service pour configuration dynamique
+        # Service pour reconfiguration dynamique du sonar
         self.config_service = self.create_service(
             ConfigureSonar,
             '/docking/sonar/configure',
             self._configure_sonar_callback
         )
 
-        # État courant du sonar (rempli par callbacks)
-        self._last_bearings_deg: Optional[list] = None
-        self._last_ping_data: Optional[list] = None  # 2D (range, bearing)
-        self._last_gains: Optional[list] = None
-        self._last_range_m: Optional[float] = None
-        self._last_master_mode: Optional[int] = None
+        # ===================================================================
+        # ÉTAT INTERNE (Données reçues du SDK)
+        # ===================================================================
+        # Ces variables sont mises à jour par les callbacks du SDK
+        # et lues lors de la publication (accès protégé par _lock)
+        self._last_bearings_deg: Optional[list] = None   # Angles azimutaux (degrés)
+        self._last_ping_data: Optional[list] = None      # Intensités 2D (range, bearing)
+        self._last_gains: Optional[list] = None          # Gains par bin de distance
+        self._last_range_m: Optional[float] = None       # Portée configurée (m)
+        self._last_master_mode: Optional[int] = None     # Mode actif (LF/HF)
 
+        # Handle du SDK Oculus
         self._sonar = None
-        self._config_sent = False
-        self._lock = threading.Lock()
+        self._config_sent = False  # Flag pour envoi unique de la config initiale
+        self._lock = threading.Lock()  # Protection des accès concurrents
 
-        # Initialisation du sonar réel uniquement
+        # Initialisation de la connexion au sonar
         self._init_sonar()
 
     # ---------- Intégration SDK Oculus ----------
@@ -69,6 +110,7 @@ class SonarNode(Node):
         except Exception as e:
             self.get_logger().error(f"Impossible d'importer oculus_python : {e}")
             self.get_logger().error('Installez/activez le SDK Oculus avant d’exécuter ce node.')
+            self.get_logger().error('Donnez le chemin du SDK dans le PYTHONPATH ou utilisez un environnement virtuel avec oculus_python installé.')
             return
 
         try:
@@ -78,74 +120,123 @@ class SonarNode(Node):
             # Enregistrement des callbacks
             self._sonar.add_message_callback(self._message_callback)
             self._sonar.add_ping_callback(self._ping_callback)
-            # self._sonar.add_status_callback(self._status_callback)
+            # self._sonar.add_status_callback(self._status_callback) # Optionnel pour debug
 
             self.get_logger().info('Sonar démarré, attente des pings...')
         except Exception as e:
             self.get_logger().error(f'Échec démarrage sonar: {e}')
 
     def _message_callback(self, msg):
-        """Premier message -> envoi de la configuration initiale."""
+        """
+        Callback appelé lors de la réception du premier message du sonar.
+        
+        Utilisé pour envoyer la configuration initiale une seule fois,
+        dès que la communication avec le sonar est établie.
+        
+        Args:
+            msg: Message reçu du SDK (non utilisé directement)
+        """
         if self._config_sent or self._sonar is None:
             return
 
         try:
+            # Récupération et modification de la configuration actuelle
             c = self._sonar.current_config()
             c.range = float(self.get_parameter('range').get_parameter_value().double_value)
             c.masterMode = int(self.get_parameter('master_mode').get_parameter_value().integer_value)
             c.gainPercent = int(self.get_parameter('gain_percent').get_parameter_value().integer_value)
             c.pingRate = int(self.get_parameter('ping_rate').get_parameter_value().integer_value)
 
-            self.get_logger().info(f'Envoi config sonar: range={c.range}m, master={c.masterMode}, gain={c.gainPercent}%, pingRate={c.pingRate}')
+            self.get_logger().info(
+                f'Envoi config sonar: range={c.range}m, master={c.masterMode}, '
+                f'gain={c.gainPercent}%, pingRate={c.pingRate}'
+            )
             self._sonar.send_config(c)
             self._config_sent = True
         except Exception as e:
             self.get_logger().error(f'Échec envoi config: {e}')
 
     def _ping_callback(self, metadata):
-        """Réception d'un ping -> convertir et publier Frame."""
+        """
+        Callback de réception d'un ping sonar.
+        
+        Appelé par le SDK à chaque nouveau ping reçu. Extrait les données
+        du format SDK et les stocke pour publication.
+        
+        STRUCTURE DES DONNÉES SDK:
+        ===========================
+        - bearing_data(): Angles azimutaux en centi-degrés (int)
+        - raw_ping_data(): Intensités brutes, shape (n_range, n_bearing)
+        - gains(): Gains par bin de distance (pour compensation)
+        - range(): Portée configurée (m)
+        - master_mode(): Mode actif (1=LF, 2=HF)
+        
+        NOTE: Les données sont stockées sous verrou pour éviter les
+        accès concurrents lors de la publication.
+        
+        Args:
+            metadata: Objet métadonnées du ping (SDK Oculus)
+        """
         try:
-            # Extraire données du SDK comme dans l'exemple utilisateur
-            bearings_deg = [0.01 * b for b in metadata.bearing_data()]  # degrés
-
-            # Matrices 2D (range, bearing)
             import numpy as np
+            
+            # Extraction des angles azimutaux (conversion centi-degrés → degrés)
+            bearings_deg = [0.01 * b for b in metadata.bearing_data()]
+
+            # Extraction des intensités brutes - shape (n_range, n_bearing)
             rawPing = np.array(metadata.raw_ping_data(), dtype=np.float32)
 
-            # Gains
+            # Extraction des gains (pour compensation optionnelle)
             if metadata.has_gains():
                 gains = np.array(metadata.gains(), dtype=np.float32)
             else:
                 gains = np.ones([metadata.range_count()], dtype=np.float32)
 
-            # Ping compensé (comme dans script) – utile si nécessaire
+            # Calcul des données compensées (non utilisé actuellement)
+            # FORMULE: pingData = raw / √gains (compensation d'atténuation)
             pingData = np.array(metadata.ping_data(), dtype=np.float32) / np.sqrt(gains)[:, np.newaxis]
 
+            # Stockage thread-safe des données
             with self._lock:
                 self._last_bearings_deg = bearings_deg
-                self._last_ping_data = rawPing  # utiliser intensités brutes
+                self._last_ping_data = rawPing  # Utilisation des intensités brutes
                 self._last_gains = gains
                 self._last_range_m = float(metadata.range())
                 self._last_master_mode = int(metadata.master_mode())
 
-            # Publier immédiatement
+            # Publication immédiate après réception
             self._publish_frame()
         except Exception as e:
             self.get_logger().error(f'Erreur ping_callback: {e}')
 
     def _status_callback(self, status):
+        """Callback de réception des status du sonar (debug)."""
         self.get_logger().info(f'STATUS: {status}')
 
-    # ---------- Service de configuration dynamique ----------
+    # ===================================================================
+    # SERVICE DE CONFIGURATION DYNAMIQUE
+    # ===================================================================
+    
     def _configure_sonar_callback(self, request, response):
         """
-        Callback du service pour modifier la configuration du sonar en temps réel.
+        Callback du service pour modifier la configuration du sonar à chaud.
         
-        Valeurs spéciales:
-        - range = 0.0 -> ne pas modifier
-        - gain_percent = -1 -> ne pas modifier
-        - master_mode = -1 -> ne pas modifier
-        - ping_rate = -1 -> ne pas modifier
+        Permet de reconfigurer le sonar sans redémarrer le nœud via:
+            ros2 service call /docking/sonar/configure docking_msgs/srv/ConfigureSonar
+        
+        CONVENTION DES VALEURS SPÉCIALES:
+        ===================================
+        - range = 0.0       → ne pas modifier
+        - gain_percent = -1 → ne pas modifier
+        - master_mode = -1  → ne pas modifier
+        - ping_rate = -1    → ne pas modifier
+        
+        Args:
+            request: Requête ConfigureSonar avec les nouveaux paramètres
+            response: Réponse avec succès/échec et configuration actuelle
+            
+        Returns:
+            ConfigureSonar.Response avec l'état de la configuration
         """
         if self._sonar is None:
             response.success = False
@@ -216,8 +307,33 @@ class SonarNode(Node):
 
         return response
 
-    # ---------- Publication ----------
+    # ===================================================================
+    # PUBLICATION DES FRAMES SONAR
+    # ===================================================================
+    
     def _publish_frame(self):
+        """
+        Convertit les données SDK en message Frame et publie sur /docking/sonar/raw.
+        
+        PIPELINE DE TRAITEMENT:
+        ========================
+        1. Récupération thread-safe des données du dernier ping
+        2. Calcul des résolutions (distance et azimut)
+        3. Application du masquage des bords (artefacts)
+        4. Transformation T1: Transpose pour format bearing-major
+        5. Publication du message Frame
+        
+        TRANSFORMATION T1 (CRITIQUE):
+        ==============================
+        Les données SDK sont en format (n_range, n_bearing) - range-major.
+        Le message Frame attend un format (n_bearing, n_range) - bearing-major.
+        
+        On applique une transposition (.T) puis un aplatissement (.ravel())
+        en ordre row-major (C-order) pour obtenir:
+            intensities[i * n_range + j] = pixel(bearing_i, range_j)
+        
+        Voir COORDINATE_TRANSFORMS.md pour plus de détails.
+        """
         with self._lock:
             if self._last_ping_data is None or self._last_bearings_deg is None or self._last_range_m is None:
                 return
@@ -227,17 +343,17 @@ class SonarNode(Node):
             bearings_deg = self._last_bearings_deg
             range_m = self._last_range_m
 
-        # Résolutions estimées
-        # distance: supposée linéaire entre [0, range_m] sur n_range bins
+        # --- Calcul des résolutions ---
+        # Distance: distribution linéaire entre [0, range_m] sur n_range bins
         range_resolution = range_m / max(n_range, 1)
 
-        # bearing: conversion degrés -> radians, résolution moyenne
+        # Azimut: conversion degrés → radians, résolution moyenne
         if len(bearings_deg) >= 2:
             bearing_resolution = abs((bearings_deg[-1] - bearings_deg[0]) / max(n_bearing - 1, 1)) * math.pi / 180.0
         else:
             bearing_resolution = 0.0
 
-        # Construction du message Frame
+        # --- Construction du message Frame ---
         msg = Frame()
         msg.header.stamp = self.get_clock().now().to_msg()
         msg.header.frame_id = self.get_parameter('frame_id').get_parameter_value().string_value
@@ -249,31 +365,19 @@ class SonarNode(Node):
         msg.min_range = 0.0
         msg.max_range = float(range_m)
 
-        # TRANSFORMATION T1 - Transpose et aplatissement
-        # ================================================
-        # Voir COORDINATE_TRANSFORMS.md pour les détails complets.
-        #
-        # Données SDK Oculus: work[range_idx][bearing_idx] - shape (n_range, n_bearing)
-        # Format message Frame: intensities[bearing_idx][range_idx] - bearing-major flat
-        #
-        # La transpose (.T) convertit (n_range, n_bearing) → (n_bearing, n_range)
-        # puis .ravel() aplatit en ordre row-major (C-order) pour obtenir:
-        #   intensities[i * n_range + j] = pixel(bearing_i, range_j)
-        #
-        # Ce format permet aux noeuds de traitement de reconstruire l'image avec:
-        #   img = intensities.reshape((bearing_count, range_count))
+        # --- Transformation T1: Transpose + masquage + aplatissement ---
         try:
             import numpy as np
             work = np.array(data, copy=True)
 
-            # Masquage manuel (paramètres)
+            # Masquage manuel des colonnes de bord (paramètres)
             ml = int(self.get_parameter('mask_left_bearings').get_parameter_value().integer_value)
             mr = int(self.get_parameter('mask_right_bearings').get_parameter_value().integer_value)
 
-            # Détection auto d'une bande anormalement forte sur les bords
+            # Détection automatique des bandes anormalement intenses sur les bords
+            # Critère: colonne de bord > seuil × médiane des colonnes internes
             if self.get_parameter('edge_mask_auto').get_parameter_value().bool_value and work.shape[1] >= 3:
                 col_means = work.mean(axis=0)
-                # médiane des colonnes internes
                 med = float(np.median(col_means[1:-1])) if work.shape[1] > 2 else float(np.median(col_means))
                 thr = float(self.get_parameter('edge_mask_threshold').get_parameter_value().double_value)
                 if med > 0:
@@ -282,6 +386,7 @@ class SonarNode(Node):
                     if col_means[-1] > thr * med:
                         mr = max(mr, 1)
 
+            # Application du masquage (mise à zéro des colonnes de bord)
             if ml > 0:
                 ml = min(ml, work.shape[1])
                 work[:, :ml] = 0.0
@@ -289,11 +394,12 @@ class SonarNode(Node):
                 mr = min(mr, work.shape[1])
                 work[:, -mr:] = 0.0
 
-            # T1: Transpose + flatten pour format bearing-major
+            # T1: Transpose (range,bearing) → (bearing,range) puis flatten
+            # NOTE CRITIQUE: .T pour transposer, .ravel() pour aplatir en C-order
             intensities = np.clip(work, 0, 255).astype(np.uint8).T.ravel()
             msg.intensities = intensities.tolist()
         except Exception:
-            # fallback Python pur
+            # Fallback Python pur en cas d'échec NumPy
             flat = []
             for j in range(n_bearing):
                 for i in range(n_range):
@@ -302,9 +408,8 @@ class SonarNode(Node):
                     flat.append(v)
             msg.intensities = flat
 
-        # Métadonnées additionnelles (si dispo)
-        # Vitesse du son non fournie par le script -> laisser à 0.0 (ou param si souhaité)
-        msg.sound_speed = 0.0
+        # --- Métadonnées acoustiques ---
+        msg.sound_speed = 0.0  # Non fourni par le SDK, laisser à 0
         msg.gain = int(self.get_parameter('gain_percent').get_parameter_value().integer_value)
 
         self.publisher_.publish(msg)

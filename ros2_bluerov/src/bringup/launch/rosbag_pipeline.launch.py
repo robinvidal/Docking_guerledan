@@ -43,15 +43,9 @@ def generate_launch_description():
         'tracking_params.yaml'
     )
 
-    localisation_config = os.path.join(
-        get_package_share_directory('localisation'),
-        'config',
-        'localisation_params.yaml'
-    )
-
     # ==== Rosbag play ====
     rosbag_play = ExecuteProcess(
-        cmd=['ros2', 'bag', 'play', LaunchConfiguration('bag_path'), '--loop', '--topics', '/docking/sonar/raw'],
+        cmd=['ros2', 'bag', 'play', LaunchConfiguration('bag_path'), '--loop', '--topics', '/docking/sonar/raw', '/inky/mavros/global_position/compass_hdg'],
         output='screen'
     )
 
@@ -89,16 +83,6 @@ def generate_launch_description():
         parameters=[tracking_config],
         output='screen'
     )
-
-    localisation = Node(
-        package='localisation',
-        executable='localisation_node',
-        name='localisation_node',
-        parameters=[localisation_config],
-        output='screen'
-    )
-
-
 
     sonar_viewer = Node(
         package='affichage',

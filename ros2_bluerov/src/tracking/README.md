@@ -1,83 +1,64 @@
 # Tracking Package
 
-Package de détection et suivi des bords de la cage dans les images sonar.
+Package ROS2 pour la détection et le suivi de la cage d'amarrage dans les images sonar. Propose deux approches : détection géométrique (Hough) et tracking visuel (CSRT).
 
 ## Description
 
-Ce package détecte les 2 montants verticaux de la cage d'amarrage à partir des frames sonar filtrées. Il utilise une approche par projection angulaire et détection de pics pour identifier les bords.
+- **`hough_lines_node`** : Détecte les lignes dans l'image sonar via transformée de Hough, identifie une forme en U (cage), et publie sa pose filtrée.
 
-## Nœuds
+- **`csrt_tracker_node`** : Tracker visuel OpenCV CSRT. Suit une région d'intérêt (bbox) sélectionnée manuellement via l'interface graphique (`affichage`) ou détectée automatiquement.
 
-### `tracking_node`
+## Topics
 
-Détecte les bords de la cage dans les frames sonar et publie leurs positions polaires.
+| Topic | Type | Direction | Description |
+|-------|------|-----------|-------------|
+| `/docking/sonar/cartesian_filtered` | `FrameCartesian` | Subscription | Image sonar cartésienne filtrée (entrée) |
+| `/docking/tracking/detected_lines` | `DetectedLines` | Publication | Lignes détectées par Hough |
+| `/docking/tracking/cage_pose` | `PoseStamped` | Publication | Pose de la cage (Hough) |
+| `/docking/tracking/tracked_object` | `TrackedObject` | Publication | Position trackée (CSRT) |
+| `/docking/sonar/bbox_selection` | `BBoxSelection` | Subscription | Bbox sélectionnée via interface `affichage` |
+| `/docking/tracking/trigger_auto_detect` | `Bool` | Subscription | Déclenche la recherche auto |
+| `/mavros/global_position/compass_hdg` | `Float32` | Subscription | Cap robot pour correction |
 
-**Topics souscrits:**
-- `/docking/sonar/filtered` (`docking_msgs/Frame`) - Frames sonar filtrées
+## Détails techniques
 
-**Topics publiés:**
-- `/docking/tracking/borders` (`docking_msgs/Borders`) - Bords détectés avec positions et confidences
+> Pour plus d'explications, voir les commentaires dans le code source.  
+> Pour la configuration des paramètres, voir [tracking_params.yaml](config/tracking_params.yaml).
 
-**Paramètres:**
-- `intensity_threshold` (int, défaut: 150) - Seuil d'intensité pour détection de pics
-- `min_confidence` (float, défaut: 0.7) - Confiance minimale pour valider la détection
-- `expected_cage_width` (float, défaut: 2.0) - Largeur attendue de la cage (m)
-- `search_range_min` (float, défaut: 2.0) - Distance minimale de recherche (m)
-- `search_range_max` (float, défaut: 20.0) - Distance maximale de recherche (m)
+### Sélection manuelle de la bbox
 
-## Algorithme de détection
+La sélection manuelle de la bounding box s'effectue via l'interface graphique du package `affichage` :
+1. Lancez le viewer : `ros2 run affichage main`
+2. Dessinez un rectangle avec la souris autour de la cage sur l'image cartésienne
+3. La bbox est automatiquement publiée sur `/docking/sonar/bbox_selection`
+4. Le `csrt_tracker_node` reçoit cette bbox et initialise le tracking
 
-1. **Limitation de zone** - Restriction aux distances [search_range_min, search_range_max]
-2. **Projection angulaire** - Somme des intensités sur les ranges pour chaque bearing
-3. **Détection de pics** - Identification des maxima locaux dépassant le seuil
-2. **Sélection des 2 montants** - Tri par intensité et sélection des 2 pics les plus forts
-5. **Estimation de distance** - Pour chaque bearing, détection du pic radial
-6. **Calcul de confiance** - Basé sur l'intensité normalisée de chaque montant
-7. **Validation géométrique** - Vérification cohérence avec largeur attendue
+### Détection de la forme en U (cage)
 
-## Message de sortie
+L'algorithme `detect_u_shape` cherche une cage parmi les lignes détectées :
 
-Le message `Borders` contient:
-- **ranges[]** - Distances des 2 montants (m)
-- **bearings[]** - Angles des 2 montants (rad)
-- **confidences[]** - Confiance de détection pour chaque montant [0-1]
-- **is_valid** - Validité globale de la détection (booléen)
-- **cage_width** - Largeur estimée de la cage (m)
-- **cage_depth** - Distance moyenne de la cage (m)
+1. **Triplet de lignes** : Teste toutes les combinaisons de 3 lignes (base + 2 bras)
+2. **Perpendicularité** : Vérifie que les bras sont perpendiculaires à la base (tolérance `perp_tol`)
+3. **Écartement** : Vérifie que la distance entre les milieux des bras ≈ `cage_width` (tolérance `dist_tol`)
+4. **Connexion** : Vérifie que les extrémités des bras sont proches de la base (tolérance `conn_tol`)
+5. **Score** : Garde le triplet avec la plus grande somme de longueurs
+6. **Pose** : Calcule le barycentre des 6 points et l'angle vers le centre de la base
 
-## Lancement
+### Fusion des lignes similaires
 
-```bash
-# Tracking seul
-ros2 run tracking tracking_node --ros-args --params-file config/tracking_params.yaml
+L'algorithme `merge_similar_lines` évite les doublons :
 
-# Avec le pipeline complet
-ros2 launch bringup mock_pipeline.launch.py
-```
+1. **Tri** : Les lignes sont triées par longueur décroissante (priorité aux grandes)
+2. **Clustering** : Pour chaque ligne, on fusionne celles ayant :
+   - `|Δρ| < merge_rho_tolerance` (distance à l'origine similaire)
+   - `|Δθ| < merge_theta_tolerance` (orientation similaire)
+3. **Moyenne** : Le cluster fusionné a pour extrémités la moyenne des points
 
-## Configuration
+### Filtrage anti-saut (lissage temporel)
 
-Fichier: `config/tracking_params.yaml`
+Évite les sauts brusques de position/orientation :
 
-```yaml
-tracking_node:
-  ros__parameters:
-    intensity_threshold: 150
-    min_confidence: 0.7
-    expected_cage_width: 2.0
-    search_range_min: 2.0
-    search_range_max: 20.0
-```
-
-## Performance
-
-- Fréquence: ~10 Hz (synchronisé avec sonar)
-- Robustesse: Détection stable jusqu'à 15m en conditions normales
-- Faux positifs: Rares grâce au filtrage par largeur attendue
-
-## TODO
-
-- [ ] Filtrage temporel (Kalman) pour lisser les détections
-- [ ] Sélection initiale par opérateur (région d'intérêt)
-- [ ] Détection multi-hypothèses pour environnements encombrés
-- [ ] Métriques de qualité de tracking
+1. **Fenêtre glissante** : Historique des N dernières détections
+2. **Détection outlier** : Si `|Δangle| > outlier_threshold_deg`, la mesure est rejetée
+3. **Force-accept** : Après `max_consecutive_outliers` rejets, on accepte quand même (évite blocage)
+4. **Moyenne vectorielle** : L'angle moyen est calculé via `atan2(Σsin, Σcos)` pour gérer le wrap-around ±π

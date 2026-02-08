@@ -1,7 +1,0 @@
-# Paramètres de localisation
-
-localisation_node:
-  ros__parameters:
-    cage_width: 2.0              # Largeur cage (m)
-    cage_depth: 2.0              # Profondeur cage (m)
-    min_borders_confidence: 0.7  # Confiance minimale bords pour pose valide

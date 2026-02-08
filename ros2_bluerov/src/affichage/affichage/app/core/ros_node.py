@@ -1,8 +1,7 @@
-import numpy as np
 import rclpy
 from rclpy.node import Node
 from rcl_interfaces.msg import ParameterType
-from docking_msgs.msg import Frame, FrameCartesian, DetectedLines, ClickPosition, BBoxSelection, PoseRelative, State, TrackedObject, RotatedBBoxInit
+from docking_msgs.msg import Frame, FrameCartesian, DetectedLines, ClickPosition, BBoxSelection, TrackedObject, RotatedBBoxInit
 from docking_msgs.srv import ConfigureSonar
 from geometry_msgs.msg import PoseStamped
 from std_msgs.msg import Bool
@@ -15,15 +14,16 @@ class SonarViewerNode(Node):
         super().__init__('sonar_viewer')
         self.signals = signals
 
+        # Subscriptions pour les données sonar
         self.raw_sub = self.create_subscription(Frame, '/docking/sonar/raw', self.raw_callback, 10)
         self.cartesian_filtered_sub = self.create_subscription(FrameCartesian, '/docking/sonar/cartesian_filtered', self.cartesian_filtered_callback, 10)
+        
+        # Subscriptions pour le tracking
         self.detected_lines_sub = self.create_subscription(DetectedLines, '/docking/tracking/detected_lines', self.detected_lines_callback, 10)
         self.tracked_object_sub = self.create_subscription(TrackedObject, '/docking/tracking/tracked_object', self.tracked_object_callback, 10)
         self.cage_pose_sub = self.create_subscription(PoseStamped, '/docking/tracking/cage_pose', self.cage_pose_callback, 10)
-        self.pose_sub = self.create_subscription(PoseRelative, '/docking/localisation/pose', self.pose_callback, 10)
-        self.state_sub = self.create_subscription(State, '/docking/mission/state', self.state_callback, 10)
 
-        self.abort_pub = self.create_publisher(Bool, '/docking/mission/abort', 10)
+        # Publishers
         self.click_pub = self.create_publisher(ClickPosition, '/docking/sonar/click_position', 10)
         self.bbox_pub = self.create_publisher(BBoxSelection, '/docking/sonar/bbox_selection', 10)
         self.rotated_bbox_pub = self.create_publisher(RotatedBBoxInit, '/docking/sonar/rotated_bbox_init', 10)
@@ -35,53 +35,8 @@ class SonarViewerNode(Node):
             self.auto_detect_status_callback, 10
         )
 
-        self.current_pose = None
-        self.current_state = None
-
         self.get_logger().info('Sonar Viewer démarré')
 
-    def set_tracking_parameter(self, param_name, value):
-        if not hasattr(self, 'tracker_param_client') or self.tracker_param_client is None:
-            from rcl_interfaces.srv import SetParameters
-
-            self.tracker_param_client = self.create_client(SetParameters, '/blob_tracker_node/set_parameters')
-
-        if isinstance(value, bool):
-            param_type = ParameterType.PARAMETER_BOOL
-        elif isinstance(value, int):
-            param_type = ParameterType.PARAMETER_INTEGER
-        elif isinstance(value, float):
-            param_type = ParameterType.PARAMETER_DOUBLE
-        else:
-            self.get_logger().error(f'Type de paramètre non supporté: {type(value)}')
-            return False
-
-        from rcl_interfaces.srv import SetParameters
-        from rcl_interfaces.msg import Parameter as ParameterMsg, ParameterValue
-
-        request = SetParameters.Request()
-        param = ParameterMsg()
-        param.name = param_name
-        param.value = ParameterValue()
-        param.value.type = param_type
-
-        if param_type == ParameterType.PARAMETER_BOOL:
-            param.value.bool_value = value
-        elif param_type == ParameterType.PARAMETER_INTEGER:
-            param.value.integer_value = value
-        elif param_type == ParameterType.PARAMETER_DOUBLE:
-            param.value.double_value = value
-
-        request.parameters = [param]
-
-        if self.tracker_param_client.service_is_ready():
-            self.tracker_param_client.call_async(request)
-            self.get_logger().debug(f'Paramètre tracker.{param_name} = {value}')
-            return True
-
-        self.get_logger().warn('Service de paramètres blob_tracker_node non disponible')
-        return False
-    
     def set_traitement_unified_parameter(self, param_name, value):
         """Change un paramètre sur le node traitement_unified_node."""
         if not hasattr(self, 'traitement_unified_param_client') or self.traitement_unified_param_client is None:
@@ -181,20 +136,6 @@ class SonarViewerNode(Node):
 
     def tracked_object_callback(self, msg):
         self.signals.new_tracked_object.emit(msg)
-
-    def pose_callback(self, msg):
-        self.current_pose = msg
-        self.signals.new_pose.emit(msg)
-
-    def state_callback(self, msg):
-        self.current_state = msg
-        self.signals.new_state.emit(msg)
-
-    def send_abort(self):
-        msg = Bool()
-        msg.data = True
-        self.abort_pub.publish(msg)
-        self.get_logger().warn('Commande ABORT envoyée')
     
     def publish_click_position(self, x_m: float, y_m: float):
         """Publie la position d'un clic souris sur le sonar."""

@@ -1,12 +1,7 @@
 """
-Launch file pour démarrer automatiquement le pipeline utilisateur:
+Launch file pour démarrer le pipeline de test avec le mock sonar:
 - sonar_mock
 - sonar_viewer
-- traitement_polar_node (avec params) - filtrage polaire
-- traitement_cartesian_node (avec params) - filtrage cartésien + filtre spatial
-- csrt_tracker_node (avec params)
-- hough_lines_node (détection de lignes)
-- localisation
 """
 
 from launch import LaunchDescription
@@ -24,84 +19,12 @@ def generate_launch_description():
         'sonar_params.yaml'
     )
 
-    traitement_config = os.path.join(
-        get_package_share_directory('traitement'),
-        'config',
-        'traitement_params.yaml'
-    )
-
-    tracking_config = os.path.join(
-        get_package_share_directory('tracking'),
-        'config',
-        'tracking_params.yaml'
-    )
-
-    localisation_config = os.path.join(
-        get_package_share_directory('localisation'),
-        'config',
-        'localisation_params.yaml'
-    )
-
     # Nodes
     sonar_mock = Node(
         package='sonar',
         executable='sonar_mock',
         name='sonar_mock',
         parameters=[sonar_config],
-        output='screen'
-    )
-
-    # Traitement polaire (filtre les données brutes)
-    traitement_polar = Node(
-        package='traitement',
-        executable='traitement_polar_node',
-        name='traitement_polar_node',
-        parameters=[traitement_config],
-        output='screen'
-    )
-    
-    # Traitement cartésien (conversion + filtre spatial + morphologie)
-    traitement_cartesian = Node(
-        package='traitement',
-        executable='traitement_cartesian_node',
-        name='traitement_cartesian_node',
-        parameters=[traitement_config],
-        output='screen'
-    )
-
-    # Option 1: Blob tracker (ancien système)
-    blob_tracker = Node(
-        package='tracking',
-        executable='blob_tracker_node',
-        name='blob_tracker_node',
-        parameters=[tracking_config],
-        output='screen'
-    )
-
-    # Option 2: CSRT tracker avec sélection manuelle
-    csrt_tracker = Node(
-        package='tracking',
-        executable='csrt_tracker_node',
-        name='csrt_tracker_node',
-        parameters=[{
-            'enable_tracking': True,
-            'selection_mode': 'manual',
-            'use_hog': True,
-            'use_gray': True,
-            'use_color_names': False,
-            'padding': 3.0,
-            'filter_lr': 0.02,
-            'psr_threshold': 0.035,
-        }],
-        output='screen'
-    )
-    
-    # Détection de lignes par transformée de Hough
-    hough_lines = Node(
-        package='tracking',
-        executable='hough_lines_node',
-        name='hough_lines_node',
-        parameters=[tracking_config],
         output='screen'
     )
 
@@ -112,23 +35,9 @@ def generate_launch_description():
         output='screen'
     )
 
-    localisation = Node(
-        package='localisation',
-        executable='localisation_node',
-        name='localisation_node',
-        parameters=[localisation_config],
-        output='screen'
-    )
-
     # NOTE: Décommenter blob_tracker OU csrt_tracker selon besoin
     # Sélection bbox: Ctrl+Clic dans Sonar Viewer (image cartésienne)
     return LaunchDescription([
         sonar_mock,
-        traitement_polar,
-        traitement_cartesian,
-        # blob_tracker,        # Ancien système (décommenter si besoin)
-        csrt_tracker,          # Nouveau système CSRT
-        hough_lines,           # Détection de lignes Hough
-        sonar_viewer,
-        localisation,
+        sonar_viewer
     ])

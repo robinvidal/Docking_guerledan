@@ -31,12 +31,6 @@ def generate_launch_description():
         'tracking_params.yaml'
     )
 
-    localisation_config = os.path.join(
-        get_package_share_directory('localisation'),
-        'config',
-        'localisation_params.yaml'
-    )
-
     # ==== Sonar pipeline nodes ====
     sonar_node = Node(
         package='sonar',
