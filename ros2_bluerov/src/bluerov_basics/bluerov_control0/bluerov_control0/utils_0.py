@@ -152,7 +152,7 @@ class ROV(Node):
         
         # Données du tracker - Point cible unique
         self.target_range = 0.0    # Distance à la cible (m)
-        self.target_bearing = np.deg2rad(240.0)  # Bearing de la cible (rad)
+        self.target_bearing = 0.0  # Bearing de la cible (rad)
         self.target_visible = False
         
         # Instanciation du contrôleur simple (un seul point)
@@ -164,7 +164,7 @@ class ROV(Node):
         # Angle d'orientation de la cage (valeur fixe, à ajuster selon la cage)
         # Convention: angle en radians, repère monde mathématique (0° = Est, 90° = Nord)
         # Exemple: np.pi/4 = 45° = cage orientée vers le Nord-Est
-        self.cage_angle = np.pi / 4  # TODO: Ajuster selon l'orientation réelle de la cage
+        self.cage_angle = np.deg2rad(30.0)  # TODO: Ajuster selon l'orientation réelle de la cage
         
         # Instanciation du contrôleur d'approche orientée
         self.oriented_controller = OrientedApproachController(

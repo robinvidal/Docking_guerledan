@@ -109,7 +109,7 @@ class OrientedApproachController:
     - approach_angle_error: différence entre position angulaire actuelle et cible autour de la cage
     """
     
-    def __init__(self, stop_distance=0.5, orbit_distance=2.5, angle_tolerance_deg=5.0):
+    def __init__(self, stop_distance=0.2, orbit_distance=2.5, angle_tolerance_deg=5.0):
         """
         Args:
             stop_distance: Distance d'arrêt finale à la cible (m)
@@ -170,7 +170,6 @@ class OrientedApproachController:
             self.state = "idle"
             return 0.0, 0.0, 0.0
         
-        self.final_flag = False
         # Vérifier si on est arrivé (distance finale)
         if range_m < self.stop_distance:
             self.state = "arrived"
