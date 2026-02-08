@@ -1,36 +1,28 @@
 # Affichage Package
 
-Package de visualisation en temps réel pour le système de docking.
+Interface graphique PyQt5 pour visualiser les données sonar et contrôler le tracking.
+
+![interface](../../../docs/images/service.png)
 
 ## Description
 
-Ce package fournira une interface de visualisation en temps réel pour:
-- Images sonar brutes et filtrées
-- Overlay des détections (bords de cage)
-- Pose estimée du ROV par rapport à la cage
-- État de la mission
-- Commandes de contrôle
+- **`sonar_viewer`** : Application GUI temps réel affichant les images sonar (brutes et cartésiennes), les lignes détectées, la bbox trackée et la pose de la cage.
 
-## Fonctionnalités prévues
+## Topics
 
-### Visualisation sonar
-# Affichage
+| Topic | Type | Direction | Description |
+|-------|------|-----------|-------------|
+| `/docking/sonar/raw` | `Frame` | Subscription | Image sonar brute (polaire) |
+| `/docking/sonar/cartesian_filtered` | `FrameCartesian` | Subscription | Image sonar cartésienne filtrée |
+| `/docking/tracking/detected_lines` | `DetectedLines` | Subscription | Lignes détectées (Hough) |
+| `/docking/tracking/tracked_object` | `TrackedObject` | Subscription | Position trackée (CSRT) |
+| `/docking/tracking/cage_pose` | `PoseStamped` | Subscription | Pose de la cage |
+| `/docking/sonar/bbox_selection` | `BBoxSelection` | Publication | Bbox sélectionnée par l'utilisateur |
+| `/docking/tracking/trigger_auto_detect` | `Bool` | Publication | Déclenche la recherche auto |
 
-Interface PyQt5 qui se connecte aux topics ROS2 du ROV/sonar, affiche les vues (brut, filtré, comparaison) et l'état, et permet de modifier dynamiquement les paramètres ROS.
+## Fonctionnalités
 
-## Usage
-- Se connecte aux topics sonar/pose/état pour afficher brut, filtré, comparaison, état mission et graphes.
-- Permet d'ajuster les paramètres ROS en direct via l'UI.
-
-## Lancement
-```bash
-cd ~/Desktop/Docking_guerledan/ros2_bluerov
-source install/setup.bash
-ros2 run affichage sonar_viewer
-```
-
-## Dépendances
-- PyQt5
-- pyqtgraph
-- docking_msgs
-
+- **Vues** : Brut, Cartésien filtré, Comparaison côte à côte
+- **Sélection bbox** : Clic + drag pour dessiner une zone à tracker
+- **Contrôles tracker** : Boutons pour CSRT manuel et auto-tracking
+- **Configuration sonar** : Réglage portée, gain, mode en temps réel

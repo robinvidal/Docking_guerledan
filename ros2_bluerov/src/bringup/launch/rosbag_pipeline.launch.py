@@ -91,7 +91,6 @@ def generate_launch_description():
         output='screen'
     )
 
-    # NOTE: Sélection bbox via Ctrl+Clic dans Sonar Viewer
     return LaunchDescription([
         bag_path_arg,
         rosbag_play,

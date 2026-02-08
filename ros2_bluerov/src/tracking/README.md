@@ -6,7 +6,11 @@ Package ROS2 pour la détection et le suivi de la cage d'amarrage dans les image
 
 - **`hough_lines_node`** : Détecte les lignes dans l'image sonar via transformée de Hough, identifie une forme en U (cage), et publie sa pose filtrée.
 
+![image_hough](../../../docs/images/binarisation.png)
+
 - **`csrt_tracker_node`** : Tracker visuel OpenCV CSRT. Suit une région d'intérêt (bbox) sélectionnée manuellement via l'interface graphique (`affichage`) ou détectée automatiquement.
+
+[image_csrt](../../../docs/images/tracking.png)
 
 ## Topics
 

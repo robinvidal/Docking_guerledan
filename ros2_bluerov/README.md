@@ -2,6 +2,10 @@
 
 Workspace ROS2 pour le docking autonome du BlueROV2 sur une cage aquacole. Ce projet utilise un sonar Oculus M750d pour détecter et suivre la cage, permettant un amarrage précis.
 
+![image_bluerov](../docs/images/bluerov_low.png)
+
+![image_sonar](../docs/images/service.png)
+
 ## Pipeline
 
 Le système fonctionne en 4 étapes séquentielles :

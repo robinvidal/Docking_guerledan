@@ -2,12 +2,17 @@
 
 Package ROS2 pour l'acquisition et la simulation de données sonar Oculus M750d, utilisé pour la détection de cage lors des opérations de docking.
 
+![image_oculus](../../../docs/images/OCULUS-M750D.png)
+
 ## Description
 
 - **`sonar_node`** : Driver pour le sonar Oculus M750d réel. Interface avec le SDK [oculus_python](https://github.com/ENSTABretagneRobotics/oculus_driver/tree/v1.2.1/python) et publie les frames brutes.
 
+![image_sonar](../../../docs/images/sonar_scan.png)
+
 - **`sonar_mock`** : Simulateur de sonar pour développement sans matériel et sans rosbag. Génère des frames synthétiques avec une cage virtuelle réagissant aux commandes de vitesse. On conseille fortement d'utiliser des rosbag pour les tests de la pipeline de traitement, mais ce module peut être utile si aucun rosbag n'a été enregistré.
 
+![image_mock](../../../docs/images/mock_sonar.png)
 ## Topics publiés
 
 | Topic | Type | Nœud(s) | Description |

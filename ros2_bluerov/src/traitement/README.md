@@ -2,6 +2,8 @@
 
 Package ROS2 de traitement d'image pour les données sonar. Applique une pipeline de filtrage en deux étapes (polaire puis cartésien) pour améliorer la détection des structures de la cage.
 
+![image_pipeline](../../../docs/images/traitement_sonar.png)
+
 ## Description
 
 - **`traitement_unified_node`** : Nœud unique gérant toute la pipeline de traitement. Reçoit les frames polaires brutes, applique les filtres configurés, et publie les résultats en formats polaire et cartésien.
