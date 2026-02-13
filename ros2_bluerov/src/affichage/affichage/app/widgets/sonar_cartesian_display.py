@@ -1,3 +1,30 @@
+# =============================================================================
+# SONAR_CARTESIAN_DISPLAY.PY - Affichage du sonar cartésien filtré
+# =============================================================================
+#
+# DIFFÉRENCE AVEC SONAR_DISPLAY.PY :
+# -----------------------------------
+# - sonar_display.py : Reçoit des données POLAIRES et les convertit
+# - CE FICHIER : Reçoit des données DÉJÀ CARTÉSIENNES (pré-traitées)
+#
+# Le traitement (conversion + filtres) est fait par un autre nœud ROS2,
+# donc ici on affiche directement l'image reçue.
+#
+# FONCTIONNALITÉS SUPPLÉMENTAIRES :
+# ----------------------------------
+# 1. Affichage des lignes détectées (Hough Lines)
+# 2. Affichage du tracker (bounding box CSRT)
+# 3. Affichage de la pose de la cage (centre + orientation)
+# 4. Sélection de bbox par l'utilisateur (pour initialiser le tracker)
+# 5. Gestion des clics souris
+#
+# SIGNAUX PyQt PERSONNALISÉS :
+# ----------------------------
+# Ce widget émet un signal quand l'utilisateur sélectionne une zone :
+#   bbox_selected = pyqtSignal(int, int, int, int)  # x, y, width, height
+#
+# =============================================================================
+
 """
 Widget d'affichage pour données cartésiennes (FrameCartesian).
 Affichage simple et direct de l'image cartésienne.
@@ -9,56 +36,107 @@ from PyQt5.QtCore import Qt, QRectF, pyqtSignal, QTimer
 
 
 class SonarCartesianImageWidget(pg.PlotWidget):
-    """Vue cartésienne pour FrameCartesian avec affichage image direct."""
+    """
+    Widget d'affichage pour les images cartésiennes du sonar.
     
-    # Signal émis lors de la sélection d'une bbox (x, y, width, height en pixels)
+    Hérite de pg.PlotWidget (pyqtgraph) pour avoir un graphique
+    avec zoom, pan, axes, etc.
+    
+    Ce widget gère aussi l'interaction utilisateur :
+    - Clic simple : affiche un marqueur temporaire
+    - Mode sélection : permet de dessiner une bbox pour le tracker
+    """
+    
+    # =========================================================================
+    # SIGNAL PERSONNALISÉ
+    # =========================================================================
+    # On déclare notre propre signal pour communiquer avec l'extérieur.
+    # Quand l'utilisateur sélectionne une zone, ce signal est émis
+    # avec les coordonnées de la bounding box (en pixels).
+    #
+    # pyqtSignal(int, int, int, int) = 4 entiers: x, y, width, height
+    # =========================================================================
     bbox_selected = pyqtSignal(int, int, int, int)
 
     def __init__(self, title="Sonar Cartésien"):
+        """
+        Initialise le widget d'affichage cartésien.
+        
+        STRUCTURE :
+        On crée beaucoup d'"items" graphiques (lignes, marqueurs, rectangles)
+        qui seront affichés ou cachés selon les données reçues.
+        
+        ZVALUE :
+        setZValue(n) définit l'ordre d'empilement (comme z-index en CSS).
+        Plus la valeur est haute, plus l'élément est "au-dessus".
+        """
         super().__init__()
+        
+        # Configuration de base du graphique
         self.setTitle(title)
-        self.setLabel('bottom', 'X (latéral, m)', units='m')
-        self.setLabel('left', 'Y (frontal, m)', units='m')
-        self.setAspectLocked(True)
+        self.setLabel('bottom', 'X (latéral, m)', units='m')  # Axe horizontal
+        self.setLabel('left', 'Y (frontal, m)', units='m')    # Axe vertical
+        self.setAspectLocked(True)  # Ratio 1:1 (pas de déformation)
 
-        self.image_item = pg.ImageItem()
-        self.addItem(self.image_item)
+        # =====================================================================
+        # IMAGE PRINCIPALE - L'image sonar elle-même
+        # =====================================================================
+        self.image_item = pg.ImageItem()  # Item pour afficher des images 2D
+        self.addItem(self.image_item)     # Ajoute au graphique
 
-        self.center_line = pg.PlotCurveItem(pen=pg.mkPen('w', width=1, style=Qt.DashLine))
+        # =====================================================================
+        # LIGNES DE RÉFÉRENCE
+        # =====================================================================
+        
+        # Ligne centrale (axe Y, vers l'avant)
+        # pg.mkPen() crée un "stylo" avec couleur, épaisseur, style
+        self.center_line = pg.PlotCurveItem(pen=pg.mkPen('w', width=0.5, style=Qt.DashLine))
         self.addItem(self.center_line)
 
-        # FOV boundaries
-        self.fov_left = pg.PlotCurveItem(pen=pg.mkPen('c', width=1, style=Qt.DashLine))
-        self.fov_right = pg.PlotCurveItem(pen=pg.mkPen('c', width=1, style=Qt.DashLine))
+        # Limites du champ de vision (FOV) - lignes dorées pointillées
+        self.fov_left = pg.PlotCurveItem(pen=pg.mkPen('w', width=1, style=Qt.DashLine))
+        self.fov_right = pg.PlotCurveItem(pen=pg.mkPen('w', width=1, style=Qt.DashLine))
         self.addItem(self.fov_left)
         self.addItem(self.fov_right)
 
+        # Marqueur de position du ROV (triangle blanc en (0,0))
         self.rov_marker = pg.ScatterPlotItem(
-            pos=[(0, 0)], size=20, symbol='t', 
-            pen=pg.mkPen('g', width=2), brush=pg.mkBrush(0, 255, 0, 100)
+            pos=[(0, 0)],        # Position
+            size=20,              # Taille en pixels
+            symbol='t',           # 't' = triangle
+            pen=pg.mkPen('white', width=2),  # Contour blanc
+            brush=pg.mkBrush(255, 255, 255, 100)  # Remplissage blanc semi-transparent
         )
         self.addItem(self.rov_marker)
 
-        # Lignes détectées par Hough
-        self.hough_lines = []  # Liste de PlotCurveItem
+        # =====================================================================
+        # LIGNES HOUGH - Lignes détectées par l'algorithme de Hough
+        # =====================================================================
+        self.hough_lines = []  # Liste dynamique de PlotCurveItem
         
-        # Bounding box du tracker CSRT (rectangle)
+        # =====================================================================
+        # TRACKER CSRT - Affichage de la bounding box du tracker
+        # =====================================================================
+        # Le tracker CSRT (un autre nœud ROS2) suit la cage et envoie
+        # sa position. On l'affiche ici avec un rectangle vert (lime).
+        
+        # Rectangle de la bounding box
         self.tracker_bbox = pg.PlotCurveItem(
-            pen=pg.mkPen('lime', width=3, style=Qt.SolidLine)
+            pen=pg.mkPen('lime', width=3, style=Qt.SolidLine)  # Vert lime, trait plein
         )
-        self.tracker_bbox.setZValue(90)
+        self.tracker_bbox.setZValue(90)  # Au-dessus de l'image, sous les contrôles
         self.addItem(self.tracker_bbox)
-        self.tracker_bbox.hide()
+        self.tracker_bbox.hide()  # Caché par défaut (affiché quand tracking actif)
         
-        # Côté d'entrée du tracker (en rouge/orange)
+        # Côté d'entrée de la cage (la partie ouverte du U)
         self.tracker_entry_side = pg.PlotCurveItem(
-            pen=pg.mkPen('orange', width=5, style=Qt.SolidLine)
+            pen=pg.mkPen('orange', width=5, style=Qt.SolidLine)  # Orange épais
         )
-        self.tracker_entry_side.setZValue(95)  # Au dessus de la bbox
+        self.tracker_entry_side.setZValue(95)  # Au-dessus de la bbox
         self.addItem(self.tracker_entry_side)
         self.tracker_entry_side.hide()
         
-        # Centre du tracker (croix)
+        # Centre du tracker (croix +)
         self.tracker_center = pg.ScatterPlotItem(
             size=15, symbol='+', pen=pg.mkPen('lime', width=2), brush=None
         )
@@ -66,56 +144,48 @@ class SonarCartesianImageWidget(pg.PlotWidget):
         self.addItem(self.tracker_center)
         self.tracker_center.hide()
         
-        # Texte de confiance du tracker
+        # Texte affichant l'angle de rotation
         self.tracker_text = pg.TextItem(text='', color='lime', anchor=(0, 1))
         self.tracker_text.setZValue(92)
         self.addItem(self.tracker_text)
         self.tracker_text.hide()
         
-        # Stocker la résolution pour la conversion
-        self.current_resolution = 0.01  # Valeur par défaut
+        # Résolution pour conversion mètres <-> pixels
+        self.current_resolution = 0.01  # m/pixel
         
-        # Marker de clic (point rouge temporaire)
-        self.click_marker = pg.ScatterPlotItem(
-            size=20, pen=pg.mkPen('r', width=2), brush=pg.mkBrush(255, 0, 0, 200)
-        )
-        self.click_marker.setZValue(100)  # Au dessus de tout
-        self.addItem(self.click_marker)
-        self.click_marker.hide()
         
-        # Bounding box de clic (rectangle rouge temporaire, taille de la cage estimée)
-        self.click_bbox = pg.PlotCurveItem(
-            pen=pg.mkPen('r', width=2, style=Qt.SolidLine)
-        )
-        self.click_bbox.setZValue(99)
-        self.addItem(self.click_bbox)
-        self.click_bbox.hide()
+        # =====================================================================
+        # MODE SÉLECTION DE BBOX - Pour initialiser le tracker manuellement
+        # =====================================================================
+        # L'utilisateur peut activer ce mode via un bouton dans l'interface.
+        # Une fois activé :
+        # 1. L'image se met en pause
+        # 2. L'utilisateur dessine un rectangle avec la souris
+        # 3. Les coordonnées sont envoyées au tracker via un signal
         
-        # Dimensions estimées de la cage (mètres) - synchronisé avec tracking_params.yaml
-        self.cage_width = 0.9
-        self.cage_height = 0.5
+        self.bbox_selection_mode = False       # Mode activé ou non
+        self.bbox_start_point = None           # Point de départ du rectangle
+        self.bbox_current_point = None         # Point actuel (pendant le dessin)
         
-        # Timer pour masquer le marker après 1 seconde
-        self.click_timer = QTimer()
-        self.click_timer.setSingleShot(True)
-        self.click_timer.timeout.connect(self._hide_click_marker)
-        
-        # Mode de sélection de bbox (activé via bouton dans le panneau de contrôle)
-        self.bbox_selection_mode = False
-        self.bbox_start_point = None
-        self.bbox_current_point = None
+        # Rectangle de sélection (jaune pointillé)
         self.bbox_selection_rect = pg.PlotCurveItem(
             pen=pg.mkPen('yellow', width=3, style=Qt.DashLine)
         )
-        self.bbox_selection_rect.setZValue(101)
+        self.bbox_selection_rect.setZValue(101)  # Tout en haut
         self.addItem(self.bbox_selection_rect)
         self.bbox_selection_rect.hide()
-        
-        # Pause pour la sélection
-        self.is_paused = False
-        self.paused_frame = None
+    
 
-        # Centre du U détecté et orientation
+        # =====================================================================
+        # CENTRE DU U DÉTECTÉ - Position et orientation de la cage
+        # =====================================================================
+        # Quand l'algorithme de détection trouve la cage en U,
+        # il envoie sa position (x, y) et son orientation (quaternion).
+        # On affiche :
+        # 1. Une croix X au centre
+        # 2. Une flèche montrant l'orientation (direction d'entrée)
+        
+        # Croix au centre du U (magenta)
         self.u_center = pg.ScatterPlotItem(
             size=18, symbol='x', pen=pg.mkPen('magenta', width=2), brush=None
         )
@@ -123,6 +193,7 @@ class SonarCartesianImageWidget(pg.PlotWidget):
         self.addItem(self.u_center)
         self.u_center.hide()
 
+        # Ligne d'orientation (du centre vers l'avant)
         self.u_orientation_line = pg.PlotCurveItem(
             pen=pg.mkPen('magenta', width=3, style=Qt.SolidLine)
         )
@@ -130,6 +201,7 @@ class SonarCartesianImageWidget(pg.PlotWidget):
         self.addItem(self.u_orientation_line)
         self.u_orientation_line.hide()
 
+        # Tête de flèche (triangle au bout de la ligne)
         self.u_orientation_head = pg.PlotCurveItem(
             pen=pg.mkPen('magenta', width=3, style=Qt.SolidLine)
         )
@@ -137,53 +209,91 @@ class SonarCartesianImageWidget(pg.PlotWidget):
         self.addItem(self.u_orientation_head)
         self.u_orientation_head.hide()
         
-        # Stocker les dimensions de l'image pour conversion pixels
-        self.image_width = 0
-        self.image_height = 0
-        self.origin_x = 0
+        # Variables pour la conversion pixel <-> mètre
+        self.image_width = 0    # Largeur de l'image en pixels
+        self.image_height = 0   # Hauteur de l'image en pixels
+        self.origin_x = 0       # Colonne correspondant à X=0
         
-        # Activer les événements de clic et drag
+        # =====================================================================
+        # CONNEXION DES ÉVÉNEMENTS SOURIS
+        # =====================================================================
+        # pyqtgraph a ses propres signaux pour les événements souris.
+        # On se connecte à la "scene" (la zone de dessin) pour écouter.
+        # 
+        # sigMouseClicked : émis quand l'utilisateur clique
+        # sigMouseMoved : émis quand la souris bouge
         self.scene().sigMouseClicked.connect(self._on_mouse_clicked)
         self.scene().sigMouseMoved.connect(self._on_mouse_moved)
         
+        # Affiche une grille en arrière-plan
         self.showGrid(x=True, y=True, alpha=0.3)
 
-        # Colormap personnalisée (style sonar)
+        # =====================================================================
+        # COLORMAP PERSONNALISÉE - Style sonar (tons chauds)
+        # =====================================================================
+        # Même principe que dans sonar_display.py :
+        # On convertit les intensités [0-255] en couleurs pour le rendu visuel
         positions = [0.0, 0.25, 0.5, 0.75, 1.0]
         colors = [
-            (15, 10, 5),
-            (80, 60, 20),
-            (180, 140, 50),
-            (230, 190, 80),
-            (255, 230, 140),
+            (0, 0, 0),       # Sombre (faible écho)
+            (80, 60, 20),      # Brun
+            (180, 140, 50),    # Orange
+            (230, 190, 80),    # Jaune-orange  
+            (255, 230, 140),   # Jaune clair (fort écho)
         ]
         self.custom_colormap = pg.ColorMap(positions, colors)
         self._lut_positions = np.array(positions)
-        self._lut_colors = np.array(colors, dtype=np.float32) / 255.0
+        self._lut_colors = np.array(colors, dtype=np.float32) / 255.0  # Normalise à [0,1]
 
     def update_cartesian_frame(self, frame_msg):
-        """Met à jour l'affichage avec un message FrameCartesian."""
-        # Si en pause, ne pas mettre à jour
-        if self.is_paused:
-            return
+        """
+        Met à jour l'affichage avec une nouvelle image cartésienne.
         
-        # Stocker les dimensions pour la conversion
+        DIFFÉRENCE avec sonar_display.py :
+        Ici, l'image est DÉJÀ en coordonnées cartésiennes !
+        Pas besoin de conversion polaire → cartésien.
+        
+        PROCESSUS :
+        1. Vérifier si on est en pause
+        2. Reconstruire l'image 2D depuis les données plates
+        3. Appliquer la colormap
+        4. Rotation pour pyqtgraph
+        5. Positionner l'image dans le repère métrique
+        
+        Args:
+            frame_msg: Message ROS2 de type FrameCartesian contenant:
+                - intensities: liste 1D des pixels
+                - width, height: dimensions de l'image
+                - resolution: mètres par pixel
+                - min_range, max_range: portée en mètres
+        """
+        # Stocker les dimensions pour la conversion pixel <-> mètre
+        # (utilisé quand l'utilisateur sélectionne une zone)
         self.image_width = frame_msg.width
         self.image_height = frame_msg.height
-        self.origin_x = frame_msg.origin_x
-        self.current_resolution = frame_msg.resolution
+        self.origin_x = frame_msg.origin_x  # Colonne correspondant à X=0
+        self.current_resolution = frame_msg.resolution  # mètres/pixel
         
-        # Reconstruction de l'image cartésienne
+        # =====================================================================
+        # RECONSTRUCTION DE L'IMAGE 2D
+        # =====================================================================
+        # Les données arrivent en 1D (liste plate), on les reshape en 2D
         img = np.array(frame_msg.intensities, dtype=np.uint8).reshape(
             (frame_msg.height, frame_msg.width)
         )
         
-        # Application du colormap
+        # =====================================================================
+        # APPLICATION DE LA COLORMAP
+        # =====================================================================
+        # Normalise [0-255] → [0-1]
         v = np.clip(img / 255.0, 0.0, 1.0)
+        
+        # Interpole pour chaque canal RGB
         r_chan = np.interp(v, self._lut_positions, self._lut_colors[:, 0])
         g_chan = np.interp(v, self._lut_positions, self._lut_colors[:, 1])
         b_chan = np.interp(v, self._lut_positions, self._lut_colors[:, 2])
         
+        # Empile en image RGB
         rgb = np.stack((r_chan, g_chan, b_chan), axis=-1)
         rgb_uint8 = (rgb * 255).astype(np.uint8)
         
@@ -245,44 +355,89 @@ class SonarCartesianImageWidget(pg.PlotWidget):
         self.center_line.setData([0, 0], [0, max_r])
     
     def update_detected_lines(self, lines_msg):
-        """Met à jour l'affichage des lignes détectées par Hough."""
-        # Nettoyer les anciennes lignes
-        for line_item in self.hough_lines:
-            self.removeItem(line_item)
-        self.hough_lines.clear()
+        """
+        Met à jour l'affichage des lignes détectées par l'algorithme de Hough.
         
+        LIGNES HOUGH :
+        L'algorithme de Hough détecte des lignes droites dans l'image.
+        Utilisé ici pour détecter les bords de la cage en U.
+        
+        GESTION DYNAMIQUE :
+        Contrairement aux autres items (créés une fois dans __init__),
+        les lignes Hough sont dynamiques : leur nombre change à chaque frame.
+        On doit donc supprimer les anciennes et recréer les nouvelles.
+        
+        Args:
+            lines_msg: Message contenant les lignes détectées
+                - num_lines: nombre de lignes
+                - x1_points, y1_points: points de départ
+                - x2_points, y2_points: points d'arrivée
+                - confidences: scores de confiance [0-1]
+        """
+        # =====================================================================
+        # NETTOYAGE DES ANCIENNES LIGNES
+        # =====================================================================
+        for line_item in self.hough_lines:
+            self.removeItem(line_item)  # Supprime du graphique
+        self.hough_lines.clear()  # Vide la liste
+        
+        # Vérifie si on a des lignes valides
         if not lines_msg or not lines_msg.is_valid or lines_msg.num_lines == 0:
             return
         
-        # Afficher chaque ligne
+        # =====================================================================
+        # DESSIN DES NOUVELLES LIGNES
+        # =====================================================================
         for i in range(lines_msg.num_lines):
+            # Coordonnées des extrémités de la ligne (en mètres)
             x1 = lines_msg.x1_points[i]
             y1 = lines_msg.y1_points[i]
             x2 = lines_msg.x2_points[i]
             y2 = lines_msg.y2_points[i]
-            confidence = lines_msg.confidences[i]
+            confidence = lines_msg.confidences[i]  # Score [0-1]
             
-            # Couleur en fonction de la confiance (vert = haute confiance, jaune = faible)
-            # RGB: vert (0, 255, 0) -> jaune (255, 255, 0)
-            red = int(255 * (1.0 - confidence))
-            green = 255
+            # ================================================================
+            # COULEUR EN FONCTION DE LA CONFIANCE
+            # ================================================================
+            # Haute confiance = vert, Basse confiance = jaune
+            # On interpole entre jaune (255, 255, 0) et vert (0, 255, 0)
+            red = int(255 * (1.0 - confidence))  # Rouge diminue avec confiance
+            green = 255  # Toujours vert maximum
             blue = 0
             
+            # Crée un item ligne avec la couleur calculée
             line_item = pg.PlotCurveItem(
                 pen=pg.mkPen((red, green, blue), width=2, style=Qt.SolidLine)
             )
-            line_item.setData([x1, x2], [y1, y2])
-            self.addItem(line_item)
-            self.hough_lines.append(line_item)
+            line_item.setData([x1, x2], [y1, y2])  # Définit les points
+            self.addItem(line_item)                 # Ajoute au graphique
+            self.hough_lines.append(line_item)      # Garde en mémoire pour suppression
 
     def update_cage_pose(self, pose_msg):
-        """Met à jour l'affichage du centre du U et de son orientation (PoseStamped)."""
+        """
+        Met à jour l'affichage de la pose de la cage (centre + orientation).
+        
+        POSE = Position + Orientation
+        - Position : coordonnées (x, y) du centre de la cage
+        - Orientation : quaternion (qx, qy, qz, qw) → on extrait le yaw (rotation Z)
+        
+        QUATERNION :
+        C'est une représentation mathématique des rotations en 3D.
+        Pour notre cas 2D, on a juste besoin du "yaw" (rotation autour de Z).
+        
+        Args:
+            pose_msg: Message ROS2 de type PoseStamped
+                - pose.position.x, y : centre de la cage
+                - pose.orientation.x, y, z, w : quaternion
+        """
+        # Si pas de message, cache les éléments
         if pose_msg is None:
             self.u_center.hide()
             self.u_orientation_line.hide()
             self.u_orientation_head.hide()
             return
 
+        # Extraction des données du message
         try:
             x = float(pose_msg.pose.position.x)
             y = float(pose_msg.pose.position.y)
@@ -293,202 +448,282 @@ class SonarCartesianImageWidget(pg.PlotWidget):
         except Exception:
             return
 
-        # Calcul du yaw à partir du quaternion
-        # yaw (z) = atan2(2*(w*z + x*y), 1 - 2*(y*y + z*z))
+        # =====================================================================
+        # CONVERSION QUATERNION → YAW (angle en radians)
+        # =====================================================================
+        # Formule classique pour extraire le yaw d'un quaternion
         yaw = np.arctan2(2.0 * (qw * qz + qx * qy), 1.0 - 2.0 * (qy * qy + qz * qz))
 
-        # Afficher le centre
+        # Affiche le centre (croix X)
         self.u_center.setData(pos=[(x, y)])
         self.u_center.show()
 
-        # Ligne d'orientation
-        L = max(0.2, min(0.8, self.cage_width))  # longueur de la flèche en m
+        # =====================================================================
+        # DESSIN DE LA FLÈCHE D'ORIENTATION
+        # =====================================================================
+        # La flèche pointe dans la direction d'entrée de la cage
+        
+        # Longueur de la flèche (proportionnelle à la cage)
+        L = 0.8
+        
+        # Point d'arrivée de la flèche
+        # ex = x + L * cos(yaw), ey = y + L * sin(yaw)
         ex = x + L * np.cos(yaw)
         ey = y + L * np.sin(yaw)
+        
+        # Trace la ligne du centre vers l'extrémité
         self.u_orientation_line.setData([x, ex], [y, ey])
         self.u_orientation_line.show()
 
-        # Tête de flèche (triangle)
-        head_len = 0.08
-        head_w = 0.06
-        # vecteur direction
+        # =====================================================================
+        # TÊTE DE FLÈCHE (triangle)
+        # =====================================================================
+        head_len = 0.08   # Longueur de la pointe
+        head_w = 0.06     # Largeur de la base du triangle
+        
+        # Vecteur direction unitaire
         dx = np.cos(yaw)
         dy = np.sin(yaw)
-        # point base de la tête
+        
+        # Point de base de la tête (reculé de head_len)
         bx = ex - head_len * dx
         by = ey - head_len * dy
-        # perpendiculaire
+        
+        # Vecteur perpendiculaire (pour les côtés du triangle)
         px = -dy
         py = dx
+        
+        # Coins gauche et droit du triangle
         left_x = bx + (head_w / 2.0) * px
         left_y = by + (head_w / 2.0) * py
         right_x = bx - (head_w / 2.0) * px
         right_y = by - (head_w / 2.0) * py
 
+        # Dessine le triangle (fermé)
         tx = [ex, left_x, right_x, ex]
         ty = [ey, left_y, right_y, ey]
         self.u_orientation_head.setData(tx, ty)
         self.u_orientation_head.show()
     
     def _on_mouse_clicked(self, event):
-        """Gère les clics souris pour sélection de bbox ou clic simple."""
+        """
+        Gère les clics souris sur le graphique.
+        
+        DEUX MODES :
+        1. Mode sélection bbox : l'utilisateur dessine un rectangle
+        2. Mode normal : affiche un marqueur temporaire
+        
+        CONVERSION DE COORDONNÉES :
+        La souris est en coordonnées "scene" (pixels écran).
+        On doit convertir en coordonnées "view" (mètres dans le graphique).
+        
+        Args:
+            event: Événement de clic pyqtgraph
+        """
+        # Ignore les clics autres que le bouton gauche
         if event.button() != Qt.LeftButton:
             return
         
+        # =====================================================================
+        # CONVERSION COORDONNÉES SCENE → VIEW
+        # =====================================================================
+        # scenePos() = position en pixels sur l'écran
+        # mapSceneToView() = convertit en coordonnées du graphique (mètres)
         pos = event.scenePos()
         mouse_point = self.plotItem.vb.mapSceneToView(pos)
-        x_m = mouse_point.x()
-        y_m = mouse_point.y()
+        x_m = mouse_point.x()  # Coordonnée X en mètres
+        y_m = mouse_point.y()  # Coordonnée Y en mètres
         
-        # Mode sélection de bbox activé par le bouton
+        # =====================================================================
+        # MODE SÉLECTION BBOX
+        # =====================================================================
         if self.bbox_selection_mode:
             if self.bbox_start_point is None:
-                # Début de la sélection
+                # PREMIER CLIC : début du rectangle
                 self.bbox_start_point = (x_m, y_m)
                 self.bbox_current_point = (x_m, y_m)
                 self.bbox_selection_rect.show()
                 self._update_bbox_selection_display()
             else:
-                # Fin de la sélection
+                # DEUXIÈME CLIC : fin du rectangle
                 self.bbox_current_point = (x_m, y_m)
-                self._finalize_bbox_selection()
-                # Désactiver le mode et reprendre
-                self.set_bbox_selection_mode(False)
+                self._finalize_bbox_selection()  # Émet le signal
+                self.set_bbox_selection_mode(False)  # Désactive le mode
             return
-        
-        # Clic normal (sans mode sélection) - affichage visuel temporaire
-        # Afficher le marker (point rouge)
-        self.click_marker.setData(pos=[(x_m, y_m)])
-        self.click_marker.show()
-        
-        # Afficher la bounding box rouge (taille cage estimée)
-        half_w = self.cage_width / 2.0
-        half_h = self.cage_height / 2.0
-        x_coords = [x_m - half_w, x_m + half_w, x_m + half_w, x_m - half_w, x_m - half_w]
-        y_coords = [y_m - half_h, y_m - half_h, y_m + half_h, y_m + half_h, y_m - half_h]
-        self.click_bbox.setData(x_coords, y_coords)
-        self.click_bbox.show()
-        
-        # Démarrer le timer pour masquer après 1 seconde
-        self.click_timer.start(1000)
 
-    def _hide_click_marker(self):
-        """Masque le marker et la bbox de clic."""
-        self.click_marker.hide()
-        self.click_bbox.hide()
     
     def _on_mouse_moved(self, pos):
-        """Gère le mouvement de la souris pendant la sélection de bbox."""
+        """
+        Gère le mouvement de la souris pendant la sélection de bbox.
+        
+        Permet de voir le rectangle se dessiner en temps réel
+        pendant que l'utilisateur déplace la souris.
+        
+        Args:
+            pos: Position de la souris (coordonnées scene)
+        """
+        # Ignore si pas en mode sélection ou si pas encore commencé
         if not self.bbox_selection_mode or self.bbox_start_point is None:
             return
         
+        # Convertit en coordonnées du graphique
         mouse_point = self.plotItem.vb.mapSceneToView(pos)
         x_m = mouse_point.x()
         y_m = mouse_point.y()
         
+        # Met à jour le point courant et redessine
         self.bbox_current_point = (x_m, y_m)
         self._update_bbox_selection_display()
     
     def set_bbox_selection_mode(self, enabled):
-        """Active ou désactive le mode sélection de bbox."""
+        """
+        Active ou désactive le mode sélection de bounding box.
+        
+        QUAND ACTIVÉ :
+        - L'image se met en pause (pour sélectionner sur une frame fixe)
+        - Le curseur change (pas implémenté ici mais possible)
+        - Le prochain clic démarre la sélection
+        
+        QUAND DÉSACTIVÉ :
+        - L'image reprend sa mise à jour normale
+        - Les éléments de sélection sont cachés
+        
+        Args:
+            enabled: True pour activer, False pour désactiver
+        """
         self.bbox_selection_mode = enabled
         
         if enabled:
-            # Pause et préparer la sélection
-            self.is_paused = True
-            self.bbox_start_point = None
+            # Pause et prépare la sélection
+            self.is_paused = True           # Arrête les mises à jour
+            self.bbox_start_point = None    # Réinitialise
             self.bbox_current_point = None
         else:
-            # Reprendre et nettoyer
-            self.is_paused = False
-            self.bbox_start_point = None
+            # Désactive et nettoie
+            self.is_paused = False           # Reprend les mises à jour
+            self.bbox_start_point = None     # Réinitialise
             self.bbox_current_point = None
-            self.bbox_selection_rect.hide()
+            self.bbox_selection_rect.hide()  # Cache le rectangle jaune
     
     def _update_bbox_selection_display(self):
-        """Met à jour l'affichage du rectangle de sélection."""
+        """
+        Met à jour l'affichage du rectangle de sélection jaune.
+        
+        Appelée pendant le mouvement de la souris pour montrer
+        le rectangle en cours de dessin.
+        """
         if self.bbox_start_point is None or self.bbox_current_point is None:
             return
         
+        # Récupère les deux coins
         x1, y1 = self.bbox_start_point
         x2, y2 = self.bbox_current_point
         
-        # Dessiner le rectangle
+        # Dessine le rectangle (5 points pour fermer)
         x_coords = [x1, x2, x2, x1, x1]
         y_coords = [y1, y1, y2, y2, y1]
         self.bbox_selection_rect.setData(x_coords, y_coords)
     
     def _finalize_bbox_selection(self):
-        """Finalise la sélection et émet le signal avec bbox en pixels."""
+        """
+        Finalise la sélection et émet le signal avec les coordonnées en pixels.
+        
+        CONVERSION MÈTRES → PIXELS :
+        Le rectangle est dessiné en mètres (repère PyQtGraph),
+        mais le tracker travaille en pixels (repère image).
+        On doit donc convertir les coordonnées.
+        
+        FORMULES :
+        - x_px = origin_x - (x_m / resolution)  ← X est INVERSÉ
+        - y_px = y_m / resolution
+        """
         if self.bbox_start_point is None or self.bbox_current_point is None:
             return
         
+        # Coordonnées en mètres
         x1_m, y1_m = self.bbox_start_point
         x2_m, y2_m = self.bbox_current_point
         
-        # Conversion mètres → pixels
-        # ==========================
-        # Le rectangle pointillé est dessiné dans le repère PyQtGraph (mètres) :
-        #   - X: de -max_range à +max_range (gauche à droite)
-        #   - Y: de 0 à max_range (bas=ROV vers haut=avant)
+        # =====================================================================
+        # CONVERSION MÈTRES → PIXELS
+        # =====================================================================
+        # Le repère image est différent du repère PyQtGraph :
+        # - Image : origine en haut-gauche, Y vers le bas
+        # - PyQtGraph : origine au ROV, Y vers l'avant
         #
-        # L'image envoyée au tracker est AVANT rot90, shape (height, width) :
-        #   - Ligne 0 = Y proche du ROV (Y=0 en mètres)
-        #   - Ligne max = Y loin du ROV (Y=max_range en mètres)
-        #   - Colonne 0 = X gauche (X=-max_range en mètres)
-        #   - origin_x = colonne centrale (X=0 en mètres)
-        #
-        # Formules de conversion (repère PyQtGraph → pixels image AVANT rot90) :
-        #   x_px = origin_x - (x_m / resolution)  ← X INVERSÉ
-        #   y_px = y_m / resolution
+        # origin_x = colonne centrale (où X=0 en mètres)
+        # resolution = mètres par pixel
         
         x1_px = int(self.origin_x - (x1_m / self.current_resolution))
         y1_px = int(y1_m / self.current_resolution)
         x2_px = int(self.origin_x - (x2_m / self.current_resolution))
         y2_px = int(y2_m / self.current_resolution)
         
-        # Normaliser (x, y = coin supérieur gauche dans le repère image)
+        # Normalise : bbox = (x, y, width, height) avec x,y = coin supérieur gauche
         bbox_x = min(x1_px, x2_px)
         bbox_y = min(y1_px, y2_px)
         bbox_w = abs(x2_px - x1_px)
         bbox_h = abs(y2_px - y1_px)
         
-        # Émettre le signal
+        # =====================================================================
+        # ÉMISSION DU SIGNAL
+        # =====================================================================
+        # Le signal bbox_selected transporte les 4 entiers vers le slot connecté
+        # (dans main_window.py → on_bbox_selected → ros_node.publish_bbox_selection)
         self.bbox_selected.emit(bbox_x, bbox_y, bbox_w, bbox_h)
         
-        # Réinitialiser
+        # Réinitialise pour la prochaine sélection
         self.bbox_start_point = None
         self.bbox_current_point = None
     
-    def set_cage_dimensions(self, width_m: float, height_m: float):
-        """Met à jour les dimensions estimées de la cage (en mètres)."""
-        self.cage_width = width_m
-        self.cage_height = height_m
 
     def update_tracked_object(self, tracked_msg):
-        """Met à jour l'affichage de la bounding box du tracker (orientée si angle présent)."""
+        """
+        Met à jour l'affichage de la bounding box du tracker CSRT.
+        
+        LE TRACKER CSRT :
+        C'est un algorithme de suivi d'objet (OpenCV).
+        Une fois initialisé avec une bbox, il suit l'objet frame par frame.
+        
+        BBOX ORIENTÉE :
+        Si l'objet est tourné, on dessine un rectangle orienté
+        (pas aligné avec les axes). Cela nécessite de calculer
+        les 4 coins avec une rotation.
+        
+        Args:
+            tracked_msg: Message contenant:
+                - is_tracking: True si le tracker est actif
+                - center_x, center_y: centre en mètres
+                - width, height: dimensions en mètres
+                - angle: rotation en radians
+                - entry_p1_x/y, entry_p2_x/y: côté d'entrée
+        """
+        # Si pas de tracking, cache tout
         if not tracked_msg.is_tracking or not tracked_msg.is_initialized:
-            # Masquer la bounding box si pas de tracking
             self.tracker_bbox.hide()
             self.tracker_entry_side.hide()
             self.tracker_center.hide()
             self.tracker_text.hide()
             return
         
-        # Position du centre en mètres
-        cx = tracked_msg.center_x
-        cy = tracked_msg.center_y
-        
-        # Dimensions en mètres
+        # Position et dimensions
+        cx = tracked_msg.center_x  # Centre X en mètres
+        cy = tracked_msg.center_y  # Centre Y en mètres
         half_w = tracked_msg.width / 2.0
         half_h = tracked_msg.height / 2.0
+        angle = tracked_msg.angle  # Angle en radians
         
-        # Angle de rotation (en radians)
-        angle = tracked_msg.angle
-        
-        if abs(angle) > 0.01:  # Si angle significatif, dessiner bbox orientée
-            # Calculer les 4 coins du rectangle orienté
-            # Coins dans le repère local (non tourné)
+        # =====================================================================
+        # DESSIN DE LA BBOX (orientée si angle != 0)
+        # =====================================================================
+        if abs(angle) > 0.01:  # Si angle significatif (> ~0.5°)
+            # =================================================================
+            # CALCUL DES 4 COINS DU RECTANGLE ORIENTÉ
+            # =================================================================
+            # On définit les coins dans le repère LOCAL (centré, non tourné),
+            # puis on applique une rotation, puis on translate au centre.
+            
+            # Coins dans le repère local (origine au centre)
             corners_local = np.array([
                 [-half_w, -half_h],  # Coin inférieur gauche
                 [+half_w, -half_h],  # Coin inférieur droit
@@ -496,7 +731,7 @@ class SonarCartesianImageWidget(pg.PlotWidget):
                 [-half_w, +half_h],  # Coin supérieur gauche
             ])
             
-            # Matrice de rotation
+            # Matrice de rotation 2D
             cos_a = np.cos(angle)
             sin_a = np.sin(angle)
             rot_matrix = np.array([
@@ -504,20 +739,20 @@ class SonarCartesianImageWidget(pg.PlotWidget):
                 [sin_a,  cos_a]
             ])
             
-            # Appliquer la rotation
+            # Applique la rotation : corners_rotated = corners_local @ R^T
             corners_rotated = corners_local @ rot_matrix.T
             
-            # Translater au centre
+            # Translate au centre (en mètres)
             corners_world = corners_rotated + np.array([cx, cy])
             
-            # Fermer le rectangle
+            # Ferme le rectangle (5ème point = 1er point)
             x_coords = np.append(corners_world[:, 0], corners_world[0, 0])
             y_coords = np.append(corners_world[:, 1], corners_world[0, 1])
             
             self.tracker_bbox.setData(x_coords, y_coords)
             self.tracker_bbox.show()
             
-            # Dessiner le côté d'entrée si les points sont fournis
+            # Dessine le côté d'entrée (ouverture du U) en orange
             if abs(tracked_msg.entry_p1_x) > 0.001 or abs(tracked_msg.entry_p1_y) > 0.001:
                 entry_x = [tracked_msg.entry_p1_x, tracked_msg.entry_p2_x]
                 entry_y = [tracked_msg.entry_p1_y, tracked_msg.entry_p2_y]
@@ -526,7 +761,10 @@ class SonarCartesianImageWidget(pg.PlotWidget):
             else:
                 self.tracker_entry_side.hide()
         else:
-            # Rectangle non orienté (angle ~ 0)
+            # =================================================================
+            # RECTANGLE NON ORIENTÉ (angle ~ 0)
+            # =================================================================
+            # Plus simple : juste les 4 coins alignés avec les axes
             x_coords = [cx - half_w, cx + half_w, cx + half_w, cx - half_w, cx - half_w]
             y_coords = [cy - half_h, cy - half_h, cy + half_h, cy + half_h, cy - half_h]
             
@@ -534,15 +772,17 @@ class SonarCartesianImageWidget(pg.PlotWidget):
             self.tracker_bbox.show()
             self.tracker_entry_side.hide()
         
-        # Afficher le centre
+        # =====================================================================
+        # AFFICHAGE DU CENTRE (croix +) ET DE L'ANGLE
+        # =====================================================================
         self.tracker_center.setData(pos=[(cx, cy)])
         self.tracker_center.show()
         
-        # Afficher l'angle si non nul
+        # Affiche l'angle en degrés si non nul
         if abs(angle) > 0.01:
-            angle_deg = np.degrees(angle)
+            angle_deg = np.degrees(angle)  # Convertit radians → degrés
             self.tracker_text.setText(f'θ = {angle_deg:.1f}°')
-            self.tracker_text.setPos(cx, cy + half_h + 0.2)
+            self.tracker_text.setPos(cx, cy + half_h + 0.2)  # Au-dessus de la bbox
             self.tracker_text.show()
         else:
             self.tracker_text.hide()
