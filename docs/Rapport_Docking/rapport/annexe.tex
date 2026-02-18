@@ -2,41 +2,84 @@
 \renewcommand{\thesection}{\Alph{section}} % "Annexe A", "Annexe B", etc.
 \renewcommand{\thesubsection}{\Alph{section}.\arabic{subsection}} % "A.1", "A.2", etc.
 
-\section{Ros2\_control}
-\begin{center}
-    \includegraphics[width=1\textwidth]{images/ros2_control.png}
-\end{center}
-\begin{center}
-    \includegraphics[width=1\textwidth]{images/ros2_control_class_diagram.png}
-\end{center}
-\section{Schunk Hand}
-\label{appendix:schunk-hand}
-\subsection{Cyclic Data}
-\label{appendix:cyclic-data}
-\begin{center}
-    \includegraphics[width=1\textwidth]{images/cyclic.png}
-\end{center}
-\subsection{Acyclic Data}
-\label{appendix:acyclic-data}
-\begin{center}
-    \includegraphics[width=1\textwidth]{images/acyclic.png}
-\end{center}
-\vspace{1cm}
-\subsection{URDF}
-\label{appendix:urdf-schunk-sih}
-\begin{center}
-    \includegraphics[width=1\textwidth]{images/urdf_schunk_sih.png}
-\end{center}
-\vspace{1cm}
+\section{Guide de Contrôle du BlueROV}
+\label{appendix:controle-bluerov}
 
+Cette annexe détaille l'utilisation de la manette de contrôle du BlueROV Heavy utilisée lors des expérimentations.
 
-\label{appendix:yale_hand}
-\section{Yale OpenHand Model o}
-\subsection{Dynamixel Wizzard 2.0}
-\begin{center}
-    \includegraphics[width=1\textwidth]{images/current.png}
-\end{center}
-\vspace{1cm}
-% Add more subsections or content here
+\subsection{Configuration de la Manette}
+
+\begin{figure}[h!]
+    \centering
+    \includegraphics[width=0.6\textwidth]{images/manette.png}
+    \caption{Manette de contrôle du BlueROV}
+    \label{fig:manette_annexe}
+\end{figure}
+
+\subsection{Armement et Sécurité}
+
+Pour pouvoir commander le robot via la manette, il faut d'abord l'armer avec la touche \textbf{Start}.
+
+Il s'agit d'une sécurité qui permet aussi de désarmer le robot avec la même touche. Si une mission se déroule mal, il est donc possible de désarmer le ROV : aucune commande ne lui sera alors envoyée.
+
+\subsection{Contrôle des Lumières}
+
+Les lumières sont contrôlées par le bouton \textbf{Logitech} au centre de la manette. Initialisées à une valeur PWM de 1000, les lumières sont éteintes. Un appui sur la touche augmente la puissance de 100 jusqu'à la valeur maximale de 2000 ; un nouvel appui la ramène à 1000, éteinte.
+
+\textit{Note :} Pour pouvoir contrôler les lumières, il faut au moins avoir établi une connexion SSH entre l'ordinateur et le robot une fois, afin d'autoriser les échanges entre le Raspberry Pi (sur lequel sont connectées les lumières) et le code.
+
+\subsection{Inclinaison de la Caméra}
+
+Théoriquement, il devrait être possible de commander l'inclinaison de la caméra avec les flèches \textbf{haut / bas} à gauche de la manette, mais des problèmes électroniques nous empêchent actuellement d'utiliser cette fonctionnalité.
+
+\subsection{Contrôle Directionnel Manuel}
+
+\subsubsection{Translation}
+
+Le robot peut se déplacer en translation avec le \textbf{joystick gauche (L3)}.
+
+\subsubsection{Orientation (Cap)}
+
+L'orientation (cap) est contrôlée par le \textbf{joystick droit (R3)} de gauche à droite.
+
+\subsubsection{Profondeur}
+
+La profondeur du robot est commandée par le \textbf{joystick droit (R3)} poussé vers l'avant/arrière :
+\begin{itemize}
+    \item En le poussant vers l'avant : le ROV remonte
+    \item En le poussant vers l'arrière : le ROV descend
+\end{itemize}
+
+\subsection{Modes Automatiques (PID)}
+
+\subsubsection{Maintien de Profondeur}
+
+Un régulateur PID a été implémenté pour maintenir une profondeur donnée. Ce mode peut être activé en appuyant sur \textbf{X} : lorsqu'on navigue et que le joystick R3 vient d'être relâché, la profondeur actuelle est mémorisée et le PID stabilise le ROV à cette profondeur. Il faut environ une dizaine de secondes pour obtenir une stabilisation quasi-parfaite, l'action intégrale du PID contribuant à éliminer l'erreur résiduelle.
+
+\subsubsection{Maintien de Cap}
+
+Un second régulateur PID permet la stabilisation du cap. Il fonctionne de la même façon que l'asservissement de profondeur : lorsque le joystick responsable de l'orientation est relâché, le PID maintient le cap courant.
+
+\subsection{Résumé des Commandes}
+
+\begin{table}[h!]
+\centering
+\begin{tabular}{|l|l|}
+\hline
+\textbf{Commande} & \textbf{Action} \\
+\hline
+Start & Armement/Désarmement du ROV \\
+Logitech (centre) & Contrôle luminosité (PWM 1000--2000) \\
+Flèches haut/bas & Inclinaison caméra (non fonctionnel) \\
+Joystick gauche (L3) & Translation avant/arrière et latérale \\
+Joystick droit (R3) gauche/droite & Rotation (cap) \\
+Joystick droit (R3) avant/arrière & Profondeur (montée/descente) \\
+Bouton X & Activation maintien de profondeur (PID) \\
+Relâchement joystick orientation & Activation maintien de cap (PID) \\
+\hline
+\end{tabular}
+\caption{Récapitulatif des commandes de la manette}
+\label{tab:commandes_manette}
+\end{table}
 
 \end{appendices}
