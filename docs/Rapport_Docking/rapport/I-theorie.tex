@@ -11,7 +11,7 @@ Avant de définir les modèles, il est nécessaire d'expliciter le domaine de va
     \item \textbf{Le Véhicule :} Ce système de navigation est spécifiquement dimensionné pour des véhicules sous-marins de type ROV (ici un BlueROV Heavy) disposant d'une configuration de propulsion autorisant une manœuvrabilité holonome dans le plan horizontal. Nous postulons un découplage des dynamiques verticales, supposant une flottabilité neutre et une stabilisation de la profondeur assurée par une boucle d'asservissement. De même, une stabilité en tangage et roulis est assurée passivement par les propriétés hydrostatiques du véhicule. Le problème de contrôle est ainsi réduit à trois degrés de liberté ($x$, $y$, $\psi$). 
     \item \textbf{Le Capteur Sonar :} Le système de perception est considéré comme la seule source de vérité pour la navigation relative (pas de positionnement absolu global). Le sonar est modélisé comme un capteur fournissant une image polaire 2D de l'environnement dans le plan local du robot, à ouverture angulaire d'environ $130^{\circ}$ et renvoyant des informations en continu et en temps réel.
     \item \textbf{L'Environnement :} L'évolution du robot est restreinte à un plan horizontal à profondeur constante. La cage cible est supposée statique ou quasi-statique. Les perturbations environnementales, telles que les courants marins ou la tension du câble ombilical, sont modélisées par une force équivalente constante ou lentement variable dans le plan $(x,y)$.
-    \item \textbf{Phase finale du docking :} Nous nous concentrons sur la phase d'approche du docking. On pourra considérer que pénétrer au sein de la cage est hors de portée de ce travail, qui se concentre sur la capacité à atteindre une position d'amarrage stable à proximité immédiate de la cage. On supposera que les recherches déjà existantes sur la phase terminale (alignement et pénétration) à l'aide de capteurs visuels ou inertiels, pouvant nécessiter des QR codes, sont suffisantes pour garantir la réussite de cette dernière étape, à condition que le robot puisse se positionner correctement à l'entrée de la cage grâce au guidage sonar.
+    \item \textbf{Phase finale du docking :} Nous nous concentrons sur la phase d'approche du docking. On pourra considérer que pénétrer au sein de la cage est optionnel dans ce projet, qui se concentre sur la capacité à atteindre une position d'amarrage stable à proximité immédiate de la cage. On supposera que les recherches déjà existantes sur la phase terminale (alignement et pénétration) à l'aide de capteurs visuels ou inertiels, pouvant nécessiter des QR codes, sont suffisantes pour garantir la réussite de cette dernière étape si celle-ci n'est pas opérationnelle uniquement à l'aide du sonar. 
 \end{itemize}
 
 
@@ -157,9 +157,15 @@ Le simulateur implémente un modèle holonome à 3 degrés de liberté ($x, y, \
 \dot{y} = u \sin\theta + v \cos\theta, \quad 
 \dot{\psi} = \omega
 \]
+<<<<<<< HEAD
 où $(u, v, \omega)$ sont les vitesses avant/arrière, latérale et angulaire saturées à $\pm 0{,}5$~m/s et rad/s. Le sonar est modélisé avec un champ de vision de $\pm 45°$.
 
 Ce modèle simplifié ne prend pas en compte l'inertie du véhicule, la traînée hydrodynamique, les couplages inter-axes ni les perturbations environnementales. Ces limitations connues sont toutefois compensées lors des essais réels en bassin par l'ajustement des gains de contrôle.
+=======
+où les vitesses $(u,v,r)$ dans le référentiel corps sont directement commandées par les contrôleurs proportionnels de navigation. Les actionneurs sont saturés à des valeurs réalistes : $0{,}5$~m/s en translation avant/arrière, $0{,}3$~m/s en translation latérale, et $0{,}5$~rad/s en rotation.
+
+La cage acoustique est modélisée par deux points fixes représentant les deux extrêmités de l'entrée de la cage. Le capteur sonar est simulé géométriquement avec un champ de vision limité à $\pm 65^{\circ}$ et une portée maximale définie. Si les réflecteurs sortent du cône de détection, le contrôleur passe en état \textit{idle} (arrêt, attente de réacquisition visuelle).
+>>>>>>> 50440caef407f0e0711b3daf15e03b1f4ef21f70
 
 \subsection{Machine à États Testée}
 
@@ -274,7 +280,7 @@ Cette architecture en cascade exploite les avantages de chaque représentation :
 
 L'adoption de deux stratégies distinctes selon la distance permet d'optimiser le compromis entre robustesse de la détection (cage proche) et efficacité du suivi (cage éloignée). Le basculement entre les deux modes s'effectue via la modification de la portée maximale du sonar, paramètre exposé via l'interface ROS~2.
 
-Les paramètres des filtres sont exposés via l'interface ROS~2, permettant un réglage dynamique en fonction des conditions opérationnelles (turbidité, distance à la cible, présence d'obstacles parasites). Cette flexibilité s'est révélée essentielle lors des essais en bassin et en lac, où les conditions acoustiques varient significativement.
+Les paramètres des filtres sont exposés via l'interface ROS~2 (Section~\ref{sec:interface_ros2}), permettant un réglage dynamique en fonction des conditions opérationnelles (turbidité, distance à la cible, présence d'obstacles parasites). Cette flexibilité s'est révélée essentielle lors des essais en bassin et en lac, où les conditions acoustiques varient significativement.
 
 \subsection{Extraction des Caractéristiques et Détection de la Cage}
 
@@ -313,7 +319,9 @@ Chaque cluster est fusionné en une ligne unique dont les extrémités sont la m
 
 La cage étant de géométrie cubique avec une face ouverte, elle apparaît dans l'image sonar comme une forme en U composée de trois segments principaux : deux bras verticaux (montants latéraux) et une base (montant arrière). L'algorithme recherche exhaustivement parmi les lignes fusionnées un triplet $(L_{\text{base}}, L_{\text{bras1}}, L_{\text{bras2}})$ satisfaisant les contraintes géométriques suivantes :
 
-\paragraph{Contraintes géométriques} Les bras doivent être approximativement perpendiculaires à la base ($\epsilon_\perp = 0{,}25$ rad), leur écartement doit correspondre à la largeur connue de la cage ($w_{\text{cage}} = 0{,}82$ m $\pm$ 0,15 m), et les segments doivent être connectés (distance minimale $< 0{,}40$ m). Le triplet maximisant la somme des longueurs est retenu.
+\paragraph{Contraintes géométriques :} 
+
+Les bras doivent être approximativement perpendiculaires à la base ($\epsilon_\perp = 0{,}25$ rad), leur écartement doit correspondre à la largeur connue de la cage ($w_{\text{cage}} = 0{,}82$ m $\pm$ 0,15 m), et les segments doivent être connectés (distance minimale $< 0{,}40$ m). Le triplet maximisant la somme des longueurs est retenu.
 
 \subsubsection*{Estimation de Pose}
 

@@ -109,16 +109,18 @@ class OrientedApproachController:
     - approach_angle_error: différence entre position angulaire actuelle et cible autour de la cage
     """
     
-    def __init__(self, stop_distance=0.2, orbit_distance=2.5, angle_tolerance_deg=5.0):
+    def __init__(self, stop_distance=0.2, orbit_distance=2.5, angle_tolerance_deg=5.0, robot_id=None):
         """
         Args:
             stop_distance: Distance d'arrêt finale à la cible (m)
             orbit_distance: Distance à laquelle on commence à orbiter (m)
             angle_tolerance_deg: Tolérance angulaire pour considérer l'alignement OK (degrés)
+            robot_id: Identifiant du robot (pour les logs)
         """
         self.stop_distance = stop_distance
         self.orbit_distance = orbit_distance
         self.angle_tolerance = math.radians(angle_tolerance_deg)
+        self.robot_id = robot_id
         
         # État du contrôleur
         self.state = "idle"  # "idle", "approaching", "orbiting", "final_approach", "arrived"
@@ -199,7 +201,8 @@ class OrientedApproachController:
                 self.state = "Final_approach"
                 return self._approach_control(bearing, range_m, self.stop_distance)
             else:
-                print("Approach angle error (deg):", np.degrees(approach_angle_error))
+                robot_prefix = f"[Robot {self.robot_id}] " if self.robot_id is not None else ""
+                print(f"{robot_prefix}Approach angle error (deg): {np.degrees(approach_angle_error):.1f}")
                 self.state = "Orbiting"
                 return self._orbit_control(bearing, range_m, approach_angle_error)
     
@@ -213,7 +216,8 @@ class OrientedApproachController:
             target_distance: Distance cible à atteindre (m)
         """
         # Heading: bearing = 0
-        print("Approaching...")
+        robot_prefix = f"[Robot {self.robot_id}] " if self.robot_id is not None else ""
+        print(f"{robot_prefix}Approaching...")
         angular_speed = self.kp_heading * bearing
         
         # Forward: avancer vers target_distance
@@ -229,8 +233,8 @@ class OrientedApproachController:
         lateral_speed = np.clip(lateral_speed, -self.max_lateral_speed, self.max_lateral_speed)
         angular_speed = np.clip(angular_speed, -self.max_angular_speed, self.max_angular_speed)
 
-        print(f"forward_speed: {forward_speed:.2f}, lateral_speed: {lateral_speed:.2f}, "
-              f"angular_speed: {angular_speed:.2f}")
+        robot_prefix = f"[Robot {self.robot_id}] " if self.robot_id is not None else ""
+        print(f"{robot_prefix}Fwd={forward_speed:.2f} Lat={lateral_speed:.2f} Yaw={angular_speed:.2f}")
         
         return forward_speed, lateral_speed, angular_speed
     
@@ -241,7 +245,8 @@ class OrientedApproachController:
         - Maintenir distance = orbit_distance
         - Se déplacer latéralement pour réduire approach_angle_error
         """
-        print("Orbiting...")
+        robot_prefix = f"[Robot {self.robot_id}] " if self.robot_id is not None else ""
+        print(f"{robot_prefix}Orbiting...")
         dt = self._orbit_dt
         
         # ========== HEADING (PD): garder bearing = 0 ==========
@@ -277,9 +282,9 @@ class OrientedApproachController:
         forward_speed = np.clip(forward_speed, -self.max_forward_speed, self.max_forward_speed)
         lateral_speed = np.clip(lateral_speed, -self.max_lateral_speed, self.max_lateral_speed)
         angular_speed = np.clip(angular_speed, -self.max_angular_speed, self.max_angular_speed)
-        print(f"  forward_speed: {forward_speed:.2f} (P:{p_forward:.2f} D:{d_forward:.2f}), "
-              f"lateral_speed: {lateral_speed:.2f}, "
-              f"angular_speed: {angular_speed:.2f} (P:{p_angular:.2f} D:{d_angular:.2f})"
-              f" approach_angle_error (deg): {math.degrees(approach_angle_error):.2f}")
+        robot_prefix = f"[Robot {self.robot_id}] " if self.robot_id is not None else ""
+        print(f"{robot_prefix}  Fwd={forward_speed:.2f} (P:{p_forward:.2f} D:{d_forward:.2f}), "
+              f"Lat={lateral_speed:.2f}, Yaw={angular_speed:.2f} (P:{p_angular:.2f} D:{d_angular:.2f}), "
+              f"AngleErr={math.degrees(approach_angle_error):+.1f}°")
         
         return forward_speed, lateral_speed, angular_speed
