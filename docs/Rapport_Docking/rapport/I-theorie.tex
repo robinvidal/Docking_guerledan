@@ -9,7 +9,7 @@ Avant de définir les modèles, il est nécessaire d'expliciter le domaine de va
 
 \begin{itemize}
     \item \textbf{Le Véhicule :} Ce système de navigation est spécifiquement dimensionné pour des véhicules sous-marins de type ROV (ici un BlueROV Heavy) disposant d'une configuration de propulsion autorisant une manœuvrabilité holonome dans le plan horizontal. Nous postulons un découplage des dynamiques verticales, supposant une flottabilité neutre et une stabilisation de la profondeur assurée par une boucle d'asservissement. De même, une stabilité en tangage et roulis est assurée passivement par les propriétés hydrostatiques du véhicule. Le problème de contrôle est ainsi réduit à trois degrés de liberté ($x$, $y$, $\psi$). 
-    \item \textbf{Le Capteur Sonar :} Le système de perception est considéré comme la seule source de vérité pour la navigation relative (pas de positionnement absolu global). Le sonar est modélisé comme un capteur fournissant une image polaire 2D de l'environnement dans le plan local du robot, à ouverture angulaire d'environ $130^{\circ}$ et renvoyant des informations en continu et temps réel.
+    \item \textbf{Le Capteur Sonar :} Le système de perception est considéré comme la seule source de vérité pour la navigation relative (pas de positionnement absolu global). Le sonar est modélisé comme un capteur fournissant une image polaire 2D de l'environnement dans le plan local du robot, à ouverture angulaire d'environ $130^{\circ}$ et renvoyant des informations en continu et en temps réel.
     \item \textbf{L'Environnement :} L'évolution du robot est restreinte à un plan horizontal à profondeur constante. La cage cible est supposée statique ou quasi-statique. Les perturbations environnementales, telles que les courants marins ou la tension du câble ombilical, sont modélisées par une force équivalente constante ou lentement variable dans le plan $(x,y)$.
     \item \textbf{Phase finale du docking :} Nous nous concentrons sur la phase d'approche du docking. On pourra considérer que pénétrer au sein de la cage est hors de portée de ce travail, qui se concentre sur la capacité à atteindre une position d'amarrage stable à proximité immédiate de la cage. On supposera que les recherches déjà existantes sur la phase terminale (alignement et pénétration) à l'aide de capteurs visuels ou inertiels, pouvant nécessiter des QR codes, sont suffisantes pour garantir la réussite de cette dernière étape, à condition que le robot puisse se positionner correctement à l'entrée de la cage grâce au guidage sonar.
 \end{itemize}
@@ -26,6 +26,15 @@ L'architecture de contrôle développée repose sur une stratégie réactive pri
 Le SinglePointController est conçu pour rejoindre la cage, connaissant sa distance et son orientation. L'état de la mission est géré par une machine à trois états : \textit{idle} (cible non visible), \textit{tracking} (navigation active), et \textit{arrived} (distance cible atteinte).
 
 Le BlueROV permet de commander indépendamment les trois degrés de liberté suivants : translation avant/arrière, translation latérale et rotation. Nous avons donc 3 contrôles, permettant de rejoindre la cible en agissant sur ces trois degrés de liberté simultanément.
+
+La figure suivante illustre la géométrie du problème de contrôle, avec r, la distance à la cage et $\theta$ l'angle entre le cap du robot et la direction de la cage.
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.3\textwidth]{images/bearing.png}
+    \caption{Géométrie du problème de contrôle pour rejoindre la cage}
+    \label{fig:control_geometry}
+\end{figure}
 
 \subsubsection*{Contrôle du cap (Heading)}
 
@@ -137,66 +146,45 @@ e_{\psi} = \psi_{\text{consigne}} - \psi_{\text{mesuré}}
 
 \section{Simulation et Validation Numérique}
 
-Avant le déploiement expérimental en bassin, les lois de commande ont été validées dans un environnement de simulation. Cette étape est cruciale pour vérifier la convergence des algorithmes de guidage et la robustesse de la machine à états sans mettre en péril le matériel onéreux.
+Avant le déploiement expérimental, les lois de commande ont été validées dans un simulateur Python développé spécifiquement (\texttt{test\_simu\_oriented.py}). Cette étape permet de vérifier la convergence des algorithmes et la robustesse de la machine à états sans risque matériel. Le même contrôleur \texttt{OrientedApproachController} est utilisé en simulation et sur le robot réel, seuls les gains sont ajustés selon les conditions.
 
-\subsection{Modèle de Simulation}
+\subsection{Modèle Cinématique Simplifié}
 
-Le simulateur implémente un modèle cinématique holonome à 3 degrés de liberté ($x, y, \psi$) dans le plan horizontal :
+Le simulateur implémente un modèle holonome à 3 degrés de liberté ($x, y, \psi$) à 20~Hz :
 \[
-\dot{x} = u, \qquad 
-\dot{y} = v, \qquad 
-\dot{\psi} = r,
+\dot{x} = u \cos\theta - v \sin\theta, \quad 
+\dot{y} = u \sin\theta + v \cos\theta, \quad 
+\dot{\psi} = \omega
 \]
-où les vitesses $(u,v,r)$ dans le référentiel corps sont directement commandées par les contrôleurs proportionnels de navigation (Section 2.1). Les actionneurs sont saturés à des valeurs réalistes : $0{,}5$~m/s en translation avant/arrière, $0{,}3$~m/s en translation latérale, et $0{,}5$~rad/s en rotation.
+où $(u, v, \omega)$ sont les vitesses avant/arrière, latérale et angulaire saturées à $\pm 0{,}5$~m/s et rad/s. Le sonar est modélisé avec un champ de vision de $\pm 45°$.
 
-La cage acoustique est modélisée par deux points fixes représentant les réflecteurs. Le capteur sonar est simulé géométriquement avec un champ de vision limité à $\pm 65^{\circ}$ et une portée maximale définie. Si les réflecteurs sortent du cône de détection, le contrôleur passe en état \textit{idle} (arrêt, attente de réacquisition visuelle).
+Ce modèle simplifié ne prend pas en compte l'inertie du véhicule, la traînée hydrodynamique, les couplages inter-axes ni les perturbations environnementales. Ces limitations connues sont toutefois compensées lors des essais réels en bassin par l'ajustement des gains de contrôle.
 
-\subsubsection*{Justification du modèle cinématique}
+\subsection{Machine à États Testée}
 
-Ce choix de modélisation simplifié repose sur trois considérations :
-\begin{itemize}
-    \item Validation architecturale : l'objectif prioritaire est de vérifier la cohérence de la perception, de la prise de décision et du guidage, indépendamment des transitoires dynamiques.
-    \item Régime opérationnel : les manœuvres de docking s'effectuent à vitesse réduite ($< 0{,}5$ m/s), où les effets inertiels sont secondaires.
-    \item Rapidité d'itération : ce modèle permet des cycles de test courts pour affiner rapidement les algorithmes.
-\end{itemize}
-
-\subsubsection*{Limites identifiées et perspectives}
-
-Cette approche présente des limitations connues :
-\begin{itemize}
-    \item absence de modélisation de l'inertie, de la masse ajoutée et de la traînée hydrodynamique,
-    \item réponse instantanée aux commandes (pas de dynamique transitoire),
-    \item couplages hydrodynamiques entre axes (yaw--sway) non représentés.
-\end{itemize}
-
-Ces limitations seront compensées lors de la phase expérimentale en bassin, où le comportement réel du véhicule permettra d'affiner les gains des correcteurs. À terme, l'intégration d'un modèle dynamique complet basé sur la théorie de Fossen \cite{fossen2011_marine_craft} dans le simulateur permettra d'évaluer plus finement la robustesse du contrôle face aux perturbations hydrodynamiques (inertie, masse ajoutée, traînée non linéaire, couplages inter-axes) et aux effets environnementaux.
-
-\subsection{Scénarios de Test et Résultats}
-
-Les scénarios de test ont été conçus pour couvrir les différentes phases du docking, depuis la recherche initiale jusqu'à l'approche finale. Trois cas de figure ont été simulés :
+La simulation valide les trois phases du contrôleur \texttt{OrientedApproachController} :
 
 \begin{enumerate}
-    \item \textbf{Phase de recherche :} le véhicule est orienté de telle sorte que la cage soit initialement hors du champ de vision du sonar. Le robot doit alors pivoter sur lui-même pour localiser la cible, ce qui teste la capacité du système à basculer entre la phase de recherches et les phases citées ci-dessous.
-    \item \textbf{Phase de ralliement :} le véhicule est initialement éloigné de la cage (à 15m) et doit converger vers elle en suivant une trajectoire courbe, ce qui teste la capacité du contrôleur à gérer des erreurs de position initiales importantes. Le contrôleur n'utilise que les informations de distance et d'orientation du sonar par rapport à la cage (\textit{range et bearing}) pour ajuster sa trajectoire.
-    \item \textbf{Phase d'approche :} le véhicule démarre à une distance intermédiaire (5m) avec pour informations la distance et l'orientation de la cage, mais aussi l'orientation relative de la cage elle-même, ce qui permet d'évaluer la capacité du contrôleur à s'aligner correctement avec l'axe d'entrée de la cage.
+    \item \textbf{Approaching} ($d > 2{,}5$~m) : Approche directe vers la cage sans considération d'orientation.
+    \item \textbf{Orbiting} : Maintien à distance constante $d_{\text{orbit}}$ tout en glissant latéralement jusqu'à alignement avec l'entrée.
+    \item \textbf{Final Approach} : Approche finale rectiligne jusqu'à $d = 0{,}5$~m.
 \end{enumerate}
 
-\textbf{Critère de succès :} le véhicule doit atteindre la position cible (1~m en amont de la cage) avec une erreur inférieure à 0{,}5~m (distance d'arrêt du contrôleur) et maintenir une orientation stable alignée avec l'axe de la cage.
-\begin{figure}[htbp]
+Nous ne détaillons pas plus que ça la partie contrôle dans cette partie, car elle a déjà été vue dans la partie précédente.
+
+Quatre robots aux positions initiales variées ($\pm 3$~m latéralement, différents caps) convergent simultanément vers la cage, avant d'orbiter autour et de bien s'aligner face à son entrée, testant robustesse et répétabilité (Figure~\ref{fig:simu_control1}).
+
+\begin{figure}[h]
     \centering
-    \begin{minipage}{0.48\textwidth}
+    \begin{minipage}{0.7\textwidth}
         \centering
-        \includegraphics[width=\linewidth]{images/simu_control1.png}
+        \includegraphics[width=\linewidth]{images/simu_oriented.png}
         \caption{Début de la simulation avec les 4 robots}
         \label{fig:simu_control1}
     \end{minipage}\hfill
-    \begin{minipage}{0.48\textwidth}
-        \centering
-        \includegraphics[width=\linewidth]{images/simu_control2.png}
-        \caption{Trajectoire des robots jusqu'à l'amarrage}
-        \label{fig:simu_control2}
-    \end{minipage}
 \end{figure}
+
+Cette validation numérique a permis de vérifier la logique algorithmique, d'ajuster les gains des trois contrôleurs découplés et de déboguer le code avant déploiement. Elle a également permis de visualiser l'influence relative de chaque contrôleur selon la phase : le contrôleur avant/arrière domine en approche, le contrôleur latéral devient crucial en orbite, tandis que le cap est maintenu constant tout au long de la manœuvre.
 
 
 \section{Algorithme de Traitement d'Image Sonar}
