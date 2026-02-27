@@ -204,7 +204,26 @@ Afin de valider la robustesse du système en conditions réelles, une campagne d
 
 Les essais se sont déroulés depuis un ponton, avec la cage suspendue par bouées à une profondeur de 2~m, à proximité immédiate de la structure. L'eau du lac présentait une turbidité importante, limitant la visibilité caméra à environ 60~cm --- condition représentative des environnements portuaires où le docking acoustique trouve sa justification.
 
-Contrairement au bassin de l'ENSTA, les conditions acoustiques du lac se sont révélées nettement plus favorables. À des portées inférieures à 6~m, le niveau de bruit est suffisamment faible pour permettre le fonctionnement des algorithmes de détection automatique : la transformée de Hough et la détection de forme en U produisent des résultats exploitables, validant ainsi les choix de conception de la chaîne de traitement.
+Contrairement au bassin de l'ENSTA, les conditions acoustiques du lac se sont révélées nettement plus favorables. À des portées inférieures à 6~m, le niveau de bruit est suffisamment faible pour permettre le fonctionnement des algorithmes de détection automatique : la transformée de Hough et la détection de forme en U produisent des résultats exploitables, validant ainsi les choix de conception de la chaîne de traitement. La figure~\ref{fig:comparaison_sonar} illustre cette différence marquée entre les deux environnements.
+
+\begin{figure}[H]
+    \centering
+    \begin{subfigure}[b]{0.48\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{images/sonar_piscine.png}
+        \caption{Bassin ENSTA : bruit de réverbération important}
+        \label{fig:sonar_piscine}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.48\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{images/sonar_lac.png}
+        \caption{Lac de Guerlédan : signature de la cage nettement visible}
+        \label{fig:sonar_lac}
+    \end{subfigure}
+    \caption{Comparaison des images sonar entre le bassin (a) et le lac (b) : le milieu ouvert du lac offre un rapport signal-sur-bruit bien supérieur}
+    \label{fig:comparaison_sonar}
+\end{figure}
 
 Cependant, à des distances supérieures à 6~m, le sonar capte les échos du fond et du ponton en plus de la signature de la cage. Ce bruit additionnel s'explique par la projection 2D de l'ouverture verticale du sonar ($20^{\circ}$), qui intègre les réflexions de toutes les structures présentes dans le cône d'émission. Cette observation a motivé l'adoption des deux stratégies de traitement distinctes présentées en Partie~I (Section~1.4.2).
 
