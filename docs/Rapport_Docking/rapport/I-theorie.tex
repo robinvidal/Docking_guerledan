@@ -19,21 +19,20 @@ Avant de définir les modèles, il est nécessaire d'expliciter le domaine de va
 
 \section{Modélisation et Loi de Commande}
 
-L'architecture de contrôle développée repose sur une stratégie réactive privilégiant la perception locale par sonar. Deux contrôleurs ont été implémentés selon la complexité de la mission : un contrôleur simple pour rallier un point unique (\texttt{SinglePointController}) et un contrôleur complet pour la navigation vers la cage (\texttt{CageFollowController}).
+L'architecture de contrôle développée repose sur une stratégie réactive privilégiant la perception locale par sonar. Deux contrôleurs ont été implémentés selon la complexité de la mission. Le premier permet au ROV de rejoindre le centre de la cage sans se soucier de l'orientation de cette dernière (\texttt{SinglePointController}). Le second contrôleur (\texttt{OrientedApproachController}) permet de rejoindre la cage par son entrée. Il nécessite de connaître l'orientation de la cage.
 
-\subsection{Contrôleur Point Simple}
+\subsection{Contrôleur pour rejoindre la cage}
 
-Le contrôleur point simple est conçu pour rallier un point cible détecté dans le référentiel local du robot. L'état de la mission est géré par une machine à trois états : \textit{idle} (cible non visible), \textit{tracking} (navigation active), et \textit{arrived} (distance cible atteinte).
+Le SinglePointController est conçu pour rejoindre la cage, connaissant sa distance et son orientation. L'état de la mission est géré par une machine à trois états : \textit{idle} (cible non visible), \textit{tracking} (navigation active), et \textit{arrived} (distance cible atteinte).
 
-Le pilotage repose sur trois contrôleurs proportionnels découplés agissant simultanément :
+Le BlueROV permet de commander indépendamment les trois degrés de liberté suivants : translation avant/arrière, translation latérale et rotation. Nous avons donc 3 contrôles, permettant de rejoindre la cible en agissant sur ces trois degrés de liberté simultanément.
 
 \subsubsection*{Contrôle du cap (Heading)}
 
-Le robot s'oriente pour placer la cible droit devant ($\theta_{\text{bearing}} = 0$) :
+Le robot s'oriente pour avancer tout droit vers la cible. On cherche à avoir $\theta_{\text{bearing}}$, l'angle entre le robot et la cage, égal à zéro. La commande de rotation est proportionnelle à cette erreur d'orientation :
 \[
 \omega = K_{p,\psi} \cdot \theta_{\text{bearing}}
 \]
-avec $K_{p,\psi} = 0{,}5$ rad/s par radian d'erreur. La vitesse angulaire est saturée à $\pm 0{,}5$ rad/s.
 
 \subsubsection*{Contrôle avant/arrière (Forward)}
 
@@ -44,73 +43,72 @@ e_x = r \cos(\theta_{\text{bearing}}) - d_{\text{stop}}
 \[
 u = K_{p,x} \cdot e_x
 \]
-avec $K_{p,x} = 0{,}8$ et $d_{\text{stop}} = 1{,}0$ m. La vitesse avant est limitée à $\pm 0{,}5$ m/s.
 
 \subsubsection*{Contrôle latéral (Lateral)}
 
-L'erreur latérale est compensée proportionnellement :
+L'erreur latérale est compensée en plus de la correction en cap via une translation latérale proportionnelle à l'erreur de position latérale :
 \[
 e_y = r \sin(\theta_{\text{bearing}})
 \]
 \[
 v = K_{p,y} \cdot e_y
 \]
-avec $K_{p,y} = 0{,}5$. La vitesse latérale est bornée à $\pm 0{,}5$ m/s.
 
-Cette architecture découplée permet au robot de ``glisser'' vers sa cible en corrigeant simultanément les trois degrés de liberté, garantissant une approche fluide même depuis une position initiale décentrée.
+Cette architecture découplée permet au robot de se rapprocher de sa cible en corrigeant simultanément les trois degrés de liberté, garantissant une approche fluide.
+Nous n'avons pas ajouté de partie dérivative ou intégrale à nos contrôleurs car nous n'en avons pas ressenti le besoin lors de nos tests.
 
 \subsection{Contrôleur Cage Complet}
 
-Pour la mission de docking vers la cage, un contrôleur plus élaboré a été implémenté. Il comprend deux états principaux :
+Pour la mission de docking en rejoignant la cage par sa face d'entrée, nous avons implémenté un second contrôleur (\texttt{OrientedApproachController}). 
+
+L'état de la mission est géré par une machine à plusieurs états :
+
 \begin{itemize}
-    \item \textbf{idle} : La cage n'est pas visible. Le robot reste stationnaire (une phase de recherche rotative peut être activée manuellement).
-    \item \textbf{tracking\_and\_navigation} : La cage est détectée, un algorithme identifie les deux poteaux d'entrées renvoyant leurs positions. Le robot centre l'entrée dans son champ de vision tout en naviguant vers la position cible située 1 m en amont de la cage.
+    \item \textbf{Idle} : La cage n'est pas visible. Le robot reste stationnaire.
+    \item \textbf{Approaching} : On s'approche de la cage jusqu'à 2,5 m en utilisant le contrôleur SinglePointController, vu précédemment.
+    \item \textbf{Orbiting} : On orbite autour de la cage pour s'aligner avec l'entrée. 
+    \item \textbf{FinalApproach} : On s'approche de la cage jusqu'à 0,2 m en utilisant à nouveau le contrôleur SinglePointController.
 \end{itemize}
 
-Le contrôle est assuré par deux régulateurs indépendants :
+Nous allons détailler uniquement la partie d'orbite, qui est la partie spécifique à ce contrôleur. Les parties d'approche sont similaires au contrôleur précédent.
 
-\subsubsection*{Contrôleur de centrage (Heading)}
+\subsubsection*{Contrôleur d'orbite (Orbiting)}
 
-Le robot s'oriente pour maintenir les deux réflecteurs centrés dans le champ de vision sonar :
+Lorsque le robot atteint une distance d'orbite critique ($d_{\text{orbit}} = 2{,}5$ m), il bascule en phase de rotation autour de la cage pour s'aligner avec son entrée. Cette phase combine trois régulateurs PD/P découplés opérant simultanément.
+
+\paragraph{Contrôle du cap (Heading - P+D)}: 
+
+Pour maintenir son orientation vers la cage (bearing = 0), le robot applique un régulateur proportionnel-dérivé :
 \[
-\theta_{\text{center}} = \frac{\theta_1 + \theta_2}{2}
+\omega = K_p^{\text{orbit},\psi} \theta_{\text{bearing}} + K_d^{\text{orbit},\psi} \frac{d\theta_{\text{bearing}}}{dt}
+\]
+La dérivée du bearing est estimée par différence entre deux cycles de commande successifs.
+
+\paragraph{Contrôle de distance (Forward - P+D)}: 
+
+Le robot maintient une distance d'orbite fixe par un régulateur PD sur l'erreur de distance :
+\[
+e_r = r - d_{\text{orbit}}
 \]
 \[
-\omega = K_{p,\psi}^{\text{cage}} \cdot \theta_{\text{center}}
+u = K_p^{\text{orbit},r} e_r + K_d^{\text{orbit},r} \frac{de_r}{dt}
 \]
-avec $K_{p,\psi}^{\text{cage}} = 1{,}2$ rad/s par radian d'erreur.
 
-\subsubsection*{Contrôleur de navigation (Movement)}
+\paragraph{Commande d'orbitage (Lateral - P)}: 
 
-La cible est définie géométriquement comme un point situé à distance $d_{\text{ahead}} = 1{,}0$ m en amont du centre de la cage, dans la direction perpendiculaire à l'axe reliant les deux réflecteurs. Dans le référentiel du robot (origine au robot), les positions des réflecteurs sont :
+Le robot se déplace latéralement à vitesse constante pour orbiter autour de la cage jusqu'à avoir le cap du robot opposé à l'orientation de la cage. 
+
+Étant donné que le robot se déplace lentement, nous n'avons pas jugé nécessaire dans la pratique d'imposer une vitesse adaptative au robot pour qu'il freine lorsqu'il s'approche de l'alignement de la cage.
+
+Soit $\phi_{\text{approach}}$, la différence entre l'angle d'orientation de la cage et le cap du robot, on a alors :
 \[
-\mathbf{p}_1 = (r_1 \cos \theta_1, r_1 \sin \theta_1), \quad \mathbf{p}_2 = (r_2 \cos \theta_2, r_2 \sin \theta_2)
+v = \begin{cases}
++v_{\text{orbit}} & \text{si } \phi_{\text{approach}} < 0 \quad \text{(orbitage vers la droite)} \\
+-v_{\text{orbit}} & \text{si } \phi_{\text{approach}} > 0 \quad \text{(orbitage vers la gauche)}
+\end{cases}
 \]
 
-Le centre de la cage et le vecteur perpendiculaire normalisé sont calculés :
-\[
-\mathbf{c}_{\text{cage}} = \frac{\mathbf{p}_1 + \mathbf{p}_2}{2}, \quad \mathbf{n}_{\perp} = \frac{1}{\|\mathbf{p}_2 - \mathbf{p}_1\|} \begin{pmatrix} y_2 - y_1 \\ -(x_2 - x_1) \end{pmatrix}
-\]
-
-La position cible dans le repère robot est alors :
-\[
-\mathbf{p}_{\text{target}} = \mathbf{c}_{\text{cage}} + d_{\text{ahead}} \cdot \mathbf{n}_{\perp}
-\]
-
-Les erreurs de position (robot à l'origine de son propre repère) sont directement :
-\[
-e_x = x_{\text{target}}, \quad e_y = y_{\text{target}}
-\]
-
-Les commandes de vitesse sont proportionnelles aux erreurs :
-\[
-u = K_{p,x}^{\text{cage}} \cdot e_x, \quad v = K_{p,y}^{\text{cage}} \cdot e_y
-\]
-avec $K_{p,x}^{\text{cage}} = K_{p,y}^{\text{cage}} = 1{,}0$. Les vitesses sont saturées à $\pm 0{,}5$ m/s (avance) et $\pm 0{,}3$ m/s (latéral). La mission s'arrête lorsque $\|\mathbf{p}_{\text{target}}\| < 0{,}5$ m.
-
-\subsection{Contrôle en profondeur et cap (Couche bas niveau)}
-
-Indépendamment des contrôleurs de mission, deux régulateurs PID assurent le maintien de la profondeur et du cap lorsque ces modes sont activés par l'opérateur.
+Cette stratégie permet au robot de glisser latéralement à distance quasi-constante autour de la cage, sans la perdre de vue, afin de permettre une approche finale alignée avec l'entrée de la cage.
 
 \subsubsection*{Maintien de profondeur}
 
@@ -121,19 +119,21 @@ e_z = z_{\text{consigne}} - z_{\text{mesuré}}
 \[
 u_z = K_p^z e_z + K_i^z \int e_z \, dt + K_d^z \frac{de_z}{dt}
 \]
-avec $K_p^z = 100{,}0$, $K_i^z = 5{,}0$, $K_d^z = 10{,}0$. L'intégrateur est borné entre $-50$ et $+50$ pour éviter le windup. Cette boucle rapide découple la dynamique verticale de la navigation horizontale.
+
+Nous utilisons ce PID à la profondeur estimée au sonar de la cage pendant les missions de docking. Cela permet de bien visualiser la cage au sonar tout au long de la mission et d'approcher la cage au plus près, ce qui permettrait une potentielle dernière phase d'entrée dans la cage dans des conditions idéales.
 
 \subsubsection*{Maintien de cap}
 
-Le cap est maintenu via la boussole magnétique embarquée (MAVROS) :
+Nous avons implémenté un second PID afin de stabiliser le robot à un cap désiré.
+
+Ce contrôleur nous a permis de nous stabiliser à un cap donné lors de nos tests ou pour d'autres missions diverses.
+
 \[
-e_{\psi} = \psi_{\text{consigne}} - \psi_{\text{mesuré}} \quad (\text{différence angulaire dans } [-180°, +180°[)
+e_{\psi} = \psi_{\text{consigne}} - \psi_{\text{mesuré}} 
 \]
 \[
 \omega_z = K_p^{\psi} e_{\psi} + K_i^{\psi} \int e_{\psi} \, dt + K_d^{\psi} \frac{de_{\psi}}{dt}
 \]
-avec $K_p^{\psi} = 2{,}0$ deg/s par degré d'erreur, $K_i^{\psi} = 0{,}01$, $K_d^{\psi} = 0{,}5$. L'intégrateur est limité à $[-100, +100]$ degrés pour garantir la stabilité. La commande est convertie en PWM et bornée entre 1300 et 1700 $\mu$s.
-
 
 \section{Simulation et Validation Numérique}
 
