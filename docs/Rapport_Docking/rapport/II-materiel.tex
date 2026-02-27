@@ -141,13 +141,55 @@ Le bassin, de par sa taille limitée, présente une caractéristique intéressan
 
 \subsection{Campagne d'Essais : Lac de Guerlédan}
 
-Afin de valider la robustesse du système en conditions réelles, une campagne a été menée au lac de Guerlédan.
+Afin de valider la robustesse du système en conditions réelles, une campagne d'essais d'une semaine a été menée au lac de Guerlédan (Côtes-d'Armor). Cette phase expérimentale visait à tester l'ensemble de la chaîne de perception et de contrôle dans un environnement naturel.
 
-\textit{[Instruction : Décrivez les conditions environnementales spécifiques : turbidité de l'eau (visibilité réduite), présence potentielle de courants, profondeur d'opération. Expliquez les défis logistiques (mise à l'eau depuis un ponton ou un bateau). Comparez la signature acoustique de la cage dans cet environnement "bruité" par rapport au bassin (réverbération du fond, objets parasites).]}
+\subsubsection*{Conditions Environnementales}
+
+Les essais se sont déroulés depuis un ponton, avec la cage suspendue par bouées à une profondeur de 2~m, à proximité immédiate de la structure. L'eau du lac présentait une turbidité importante, limitant la visibilité caméra à environ 60~cm --- condition représentative des environnements portuaires où le docking acoustique trouve sa justification.
+
+Cette configuration a révélé un phénomène acoustique important : à des distances supérieures à 6~m, le sonar capte les échos du fond et du ponton en plus de la signature de la cage. Ce bruit additionnel s'explique par la projection 2D de l'ouverture verticale du sonar ($20^{\circ}$), qui intègre les réflexions de toutes les structures présentes dans le cône d'émission. Cette observation a motivé l'adoption des deux stratégies de traitement distinctes présentées en Partie~I (Section~1.4.2).
+
+\subsubsection*{Protocole Expérimental}
+
+La campagne s'est structurée autour de trois axes de validation :
+
+\begin{enumerate}
+    \item \textbf{Validation du tracking longue portée :} Tests de suivi manuel de la cage depuis une distance de 15~m, avec portée sonar configurée en conséquence. L'objectif était de valider la capacité du tracker CSRT à maintenir le suivi sur toute la phase de ralliement.
+    
+    \item \textbf{Validation du tracking automatique :} Tests de détection et suivi automatique par transformée de Hough avec portée sonar limitée à 6~m, permettant l'initialisation automatique du tracker sans intervention de l'opérateur.
+    
+    \item \textbf{Validation du contrôleur de navigation :} Tests de la boucle complète perception-commande, depuis le ralliement jusqu'à l'approche finale de la cage.
+\end{enumerate}
+
+Les vitesses de translation ont été volontairement bridées (mouvements lents et progressifs) afin de minimiser le risque de perte de tracking lors des manœuvres.
 
 \subsection{Analyse des Résultats Expérimentaux}
 
-Cette section synthétise les données collectées lors des deux campagnes d'essais.
+Cette section synthétise les résultats obtenus lors de la campagne au lac de Guerlédan.
+
+\subsubsection*{Performances du Tracking}
+
+Le tracking manuel longue portée s'est révélé fonctionnel et robuste. Sur une dizaine d'essais à 15~m, le tracker CSRT a maintenu le suivi de la cage jusqu'à l'approche finale dans la grande majorité des cas. Deux pertes de tracking ont été observées en fin de mission, mais le tracker continuait alors à suivre une zone de bruit adjacente à la cage, permettant in fine de retrouver la cible visuellement. Le temps de convergence typique pour une mission à 15~m était de 40 secondes à 1 minute, cohérent avec les vitesses bridées.
+
+Le tracking automatique, testé avec une portée sonar limitée à 6~m, a démontré sa capacité à initialiser le suivi sans intervention manuelle. La détection de l'orientation de la cage par transformée de Hough s'est avérée correcte dans ces conditions de portée réduite, validant la stratégie de binarisation percentile décrite en Partie~I.
+
+\subsubsection*{Performances du Contrôleur}
+
+Le contrôleur de navigation a démontré sa capacité à guider le robot jusqu'à proximité immédiate de la cage. Le tracker fournit une estimation de distance fiable jusqu'à environ 50~cm de la cible. Dans les tests utilisant uniquement le tracking manuel (sans estimation d'orientation), le robot atteignait systématiquement la cage.
+
+Des essais complémentaires ont été réalisés en fournissant manuellement l'orientation réelle de la cage dans le code. Dans cette configuration, le robot basculait correctement en mode rotation à l'approche de la cible et parvenait à s'orienter face à l'entrée. Cependant, l'entrée effective dans la cage n'a pas été réalisée de manière reproductible, en raison de deux facteurs :
+\begin{itemize}
+    \item un réglage imprécis de la profondeur du robot (ajustée manuellement avant chaque mission),
+    \item une rotation légère de la cage suspendue entre les essais, non compensée par le système.
+\end{itemize}
+
+\subsubsection*{Limites Identifiées et Perspectives}
+
+La principale limitation observée concerne l'absence d'intégration du changement dynamique de portée sonar au cours de la mission. Bien que l'interface permette de modifier ce paramètre en temps réel, cette fonctionnalité n'a pas été exploitée dans une séquence de mission complète. Une approche optimale consisterait à démarrer en mode ``cage éloignée'' (15~m, tracking manuel) puis à basculer automatiquement en mode ``cage proche'' (6~m, tracking automatique avec estimation d'orientation) lorsque la distance le permet.
+
+Une piste d'amélioration identifiée concerne l'estimation de l'orientation de la cage dans le référentiel monde. En combinant l'orientation de la cage dans le référentiel robot (issue de la détection Hough) avec le cap du robot (mesuré par la boussole embarquée), il serait possible de maintenir une estimation stable de l'orientation absolue de la cage, indépendante des mouvements du véhicule. Cette approche améliorerait la robustesse de l'alignement lors de la phase finale d'approche.
+
+Malgré ces limitations, la campagne valide les briques fondamentales du système : le tracking acoustique est fonctionnel sur toute la plage d'approche (1--15~m), le contrôleur de navigation converge vers la cible, et la détection automatique de l'orientation est opérationnelle à courte portée. L'intégration complète de ces composants dans une mission séquentielle constitue la prochaine étape de développement.
 
 \textit{[Instruction : Comparez les trajectoires réelles du ROV avec celles de la simulation. Présentez des statistiques de réussite (ex: "Sur 20 tentatives, 15 ont abouti à un amarrage réussi"). Analysez les échecs : est-ce un problème de perte de la cible au sonar (perception) ou une incapacité des propulseurs à contrer une perturbation (commande) ? Incluez des images sonar réelles montrant la cage vue par le robot à différentes distances.]}
 
