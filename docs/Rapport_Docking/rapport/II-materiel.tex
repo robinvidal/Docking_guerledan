@@ -263,35 +263,38 @@ Des essais complémentaires ont été réalisés en fournissant manuellement l'o
 
 \subsubsection*{Reconstruction de Trajectoire via ROS bag}
 
-En l'absence de système de positionnement absolu, une reconstruction 
-partielle de la trajectoire a été effectuée à partir des données 
-enregistrées dans le rosbag, les seules informations disponibles dans le rosbag 
-étant le \textit{range} et le \textit{bearing} fournis par le sonar.
+Afin de mieux comprendre le comportement du robot et d'objectiver 
+les performances de l'approche malgré l'absence de vérité terrain, 
+une reconstruction partielle de la trajectoire a été 
+réalisée a posteriori à partir des données d'un rosbag 
+(figure~\ref{fig:traj_reconstruite}), les seules informations 
+disponibles étant le \textit{range} et le \textit{bearing} 
+fournis par le sonar.
 
 \begin{figure}[H]
     \centering
     \includegraphics[width=1\textwidth]{images/traj.png}
-    \caption{Trajectoire 2D reconstruite à partir des données de range et bearing du sonar : le robot converge vers la cage, mais présente une déviation en phase finale (artefact de reconstruction)}
+    \caption{Trajectoire 2D reconstruite à partir des données de range et bearing du sonar : le robot converge vers la cage.}
     \label{fig:traj_reconstruite}
 \end{figure}
 
-La trajectoire 2D reconstruite présente une apparente 
+La trajectoire 2D reconstruite (figure~\ref{fig:traj_reconstruite_zomme}) souligne une apparente 
 incohérence en phase terminale : le robot semble dévier  
 de l'axe d'approche. Cet artefact s'explique par la rotation du 
 BlueROV autour de la cage lorsqu'il s'oriente face à l'entrée, 
-l'orientation de la cage n'étant pas prise en compte dans la reconstruction. En effet, le robot tourne pour faire face à la cage, mais la reconstruction de trajectoire, basée uniquement sur les mesures de range et bearing, interprète ce mouvement comme des déplacements d'où une trajectoire erratique.
+l'orientation de la cage n'étant pas enregistrée et donc prise en compte dans la reconstruction. En effet, le robot tourne pour faire face à la cage, mais la reconstruction de trajectoire, basée uniquement sur les mesures de range et bearing, interprète ce mouvement comme des déplacements d'où une trajectoire erratique.
 
 
 \begin{figure}[H]
     \centering
     \includegraphics[width=1\textwidth]{images/traj_zomme.png}
-    \caption{Zoom sur la partie finale de la trajectoire 2D reconstruite à partir des données de range et bearing du sonar : le robot converge vers la cage, mais présente une déviation en phase finale (artefact de reconstruction)}
+    \caption{Zoom sur la partie finale de la trajectoire 2D reconstruite à partir des données de range et bearing du sonar.}
     \label{fig:traj_reconstruite_zomme}
 \end{figure}
 Les courbes de \textit{range} et \textit{bearing} en revanche sont 
 pleinement cohérentes avec le comportement attendu : le range décroît 
 continûment de 11~m jusqu'à environ 50~cm en 90~s, et le bearing 
-converge vers $0°$ en phase d'approche finale, confirmant que le 
+converge vers $0^\circ$ en phase d'approche finale, confirmant que le 
 robot s'aligne correctement avec l'axe de la cage malgré l'artefact 
 de reconstruction.
 
