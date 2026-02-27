@@ -36,16 +36,12 @@ Avant tout déploiement en milieu naturel, l'ensemble de la chaîne de traitemen
 L'approche théorique, affinée en simulation et sur \textit{rosbags}, a été validée en bassin et sur le site de Guerlédan. La séquence de docking validée suit une logique de navigation hybride :
 
 \begin{enumerate}
-    \item \textbf{Acquisition et Suivi Longue Portée (15~m) :} La cage est identifiée via l'IHM. Le trackeur verrouille la boîte englobante de la cible, permettant un ralliement robuste malgré le bruit ambiant, bien que l'orientation ne soit pas encore résolue à cette distance.
-    \item \textbf{Approche et Alignement (2~m) :} Le ROV exécute une \textbf{manœuvre de réorbitation} : il tourne autour de la cible pour s'aligner parfaitement face à l'ouverture.
+    \item \textbf{Acquisition et Suivi Longue Portée (15~m) :} La cage est identifiée via l'IHM. Le trackeur verrouille la boîte englobante de la cible, permettant un ralliement robuste malgré le bruit ambiant.
+    \item \textbf{Approche et Alignement (2~m) :} Le ROV exécute une \textbf{manœuvre de réorbitation} : il tourne autour de la cible pour s'aligner parfaitement face à l'ouverture que l'on lui a donné préalablement.
     \item \textbf{Insertion Finale :} Une fois l'alignement stabilisé, le drone effectue une avance rectiligne pour pénétrer dans la cage.
 \end{enumerate}
 
-
-
-\begin{quote}
-    \textit{« Malgré une visibilité optique nulle dans les eaux de Guerlédan, la combinaison du suivi manuel à longue distance et de l'ajustement automatique par analyse géométrique à courte distance a permis de réaliser la séquence complète d'amarrage. »}
-\end{quote}
+Le succès opérationnel de cette séquence en trois phases constitue un aboutissement majeur pour ce projet. Il démontre concrètement la viabilité d'un guidage reposant exclusivement sur l'imagerie acoustique au sein d'environnements fortement dégradés où la visibilité optique est nulle. La capacité du système à enchaîner de manière fluide un ralliement longue distance et une manœuvre de réorbitation, valide la robustesse de l'architecture logicielle et des lois de commande implémentées. Bien que l'angle d'approche final ait reposé sur une consigne d'orientation préalablement fournie par l'opérateur, cette validation expérimentale pose les fondations pour le déploiement d'un système de \textit{docking} subaquatique intégralement autonome.
 
 \section{Limites et Perspectives}
 
