@@ -2,15 +2,15 @@
 \chapter*{Conclusion}
 \addcontentsline{toc}{chapter}{Conclusion}
 
-Ce projet a permis de démontrer la faisabilité technique de l'amarrage autonome d'un ROV d'inspection en environnement subaquatique dégradé, en s'appuyant exclusivement sur l'imagerie acoustique pour la navigation terminale.
+Ce projet a permis de démontrer la faisabilité technique de l'amarrage autonome d'un ROV d'inspection en environnement subaquatique dégradé, en s'appuyant exclusivement sur l'imagerie acoustique pour la navigation.
 
 \section{Bilan des Réalisations et Validation Expérimentale}
 
 \subsection{Conception Matérielle et Intégration Système}
 
-Le succès de l'approche repose initialement sur une phase de prototypage itérative de la station d'accueil. Un premier prototype a permis de valider les dimensions de passage du vecteur. Par la suite, une seconde version optimisée pour la signature acoustique a été conçue, utilisant des plaques de PVC et des cordes tendues afin de maximiser la réflexion des ondes sonores et de faciliter la détection des arêtes par le sonar multifaisceaux.
+Le succès de l'approche repose initialement sur une phase de prototypage itérative de la cage de docking. Un premier prototype a permis de valider les dimensions de passage du ROV. Par la suite, une seconde version optimisée pour la signature acoustique a été conçue, utilisant des plaques de PVC et des cordes tendues afin de maximiser la réflexion des ondes sonores et de faciliter la détection des arêtes par le sonar multifaisceaux.
 
-Sur le plan du vecteur, l'intégration mécanique et électronique sur le châssis \textit{BlueROV2 Heavy} est désormais \textbf{pleinement opérationnelle}. L'architecture ROS2 assure une communication fluide entre le driver du sonar Oculus, les algorithmes de traitement et le contrôleur de vol, tandis que la configuration à huit propulseurs garantit la stabilité nécessaire à l'acquisition de données exploitables.
+Sur le plan du ROV, l'intégration mécanique et électronique sur le châssis \textit{BlueROV2 Heavy} est désormais \textbf{pleinement opérationnelle}. L'architecture ROS2 assure une communication fluide entre le driver du sonar Oculus, les algorithmes de traitement et de contrôle, tandis que la configuration à huit propulseurs garantit la stabilité nécessaire à l'acquisition de données exploitables.
 
 \subsection{Supervision et Interface Graphique (IHM)}
 
@@ -26,26 +26,22 @@ Pour accompagner le développement, une interface graphique dédiée a été dé
 Avant tout déploiement en milieu naturel, l'ensemble de la chaîne de traitement et de commande a été rigoureusement éprouvé au sein d'un environnement de simulation et par le rejeu de données d'acquisition (\textit{rosbags}). Cette phase préparatoire a permis de consolider trois piliers majeurs de l'autonomie du système :
 
 \begin{itemize}
-    \item \textbf{Détection géométrique par lignes de Hough :} La simulation a confirmé la viabilité de la transformée de Hough probabiliste pour l'extraction des montants de la cage à partir de données sonar. Elle a permis d'ajuster finement les tolérances géométriques (U-shape) afin de garantir une estimation fiable de la position et de l'orientation ($\psi_{\text{cage}}$) de la cible à courte portée.
-    \item \textbf{Robustesse du système de Tracking :} Les tests virtuels ont mis en évidence la stabilité de l'algorithme de suivi de cible. Face à des environnements bruités et des artefacts acoustiques simulés, le trackeur a démontré sa capacité à maintenir le verrouillage sur la sélection initiale, assurant une continuité de la donnée de positionnement lors de l'approche longue portée.
-    \item \textbf{Algorithme de Contrôle et de Guidage :} L'environnement simulé a été indispensable pour la mise au point des lois de commande du ROV. Il a permis de valider le comportement dynamique du drone en réponse aux consignes d'asservissement générées par le traitement sonar, certifiant ainsi la fluidité des trajectoires de ralliement et la faisabilité cinématique de la complexe manœuvre de réorbitation.
+    \item \textbf{Détection géométrique par lignes de Hough :} La simulation a confirmé la viabilité de la transformée de Hough pour l'extraction des montants de la cage à partir de données sonar. Elle a permis d'ajuster finement les tolérances géométriques (U-shape) afin de garantir une estimation fiable de la position et de l'orientation ($\psi_{\text{cage}}$) de la cible à courte portée.
+    \item \textbf{Robustesse du système de Tracking :} Les tests virtuels ont mis en évidence la stabilité de l'algorithme de suivi de cible. Face à des environnements bruités et des artefacts acoustiques, le trackeur a démontré sa capacité à maintenir le verrouillage sur la sélection initiale, assurant une continuité de la donnée de positionnement lors de l'approche.
+    \item \textbf{Algorithme de Contrôle et de Guidage :} L'environnement simulé a été indispensable pour la mise au point des lois de commande du ROV. Il a permis de valider le comportement dynamique en réponse aux consignes d'asservissement générées par le traitement sonar, certifiant ainsi la fluidité des trajectoires de ralliement et la faisabilité cinématique de la complexe manœuvre de réorbitation.
 \end{itemize}
 
 \subsection{Validation de la Stratégie de Docking}
 
-L'approche théorique, affinée en simulation et sur \textit{rosbags}, a été validée par des preuves de concept majeures en bassin et sur le site de Guerlédan. La séquence de docking validée suit une logique de navigation hybride :
+L'approche théorique, affinée en simulation et sur \textit{rosbags}, a été validée en bassin et sur le site de Guerlédan. La séquence de docking validée suit une logique de navigation hybride :
 
 \begin{enumerate}
-    \item \textbf{Acquisition et Suivi Longue Portée (15~m) :} La cage est identifiée via l'IHM. Le trackeur verrouille la boîte englobante de la cible, permettant un ralliement robuste malgré le bruit ambiant, bien que l'orientation ne soit pas encore résolue à cette distance.
-    \item \textbf{Approche et Alignement (2~m) :} Le ROV exécute une \textbf{manœuvre de réorbitation} : il tourne autour de la cible pour s'aligner parfaitement face à l'ouverture.
+    \item \textbf{Acquisition et Suivi Longue Portée (15~m) :} La cage est identifiée via l'IHM. Le trackeur verrouille la boîte englobante de la cible, permettant un ralliement robuste malgré le bruit ambiant.
+    \item \textbf{Approche et Alignement (2~m) :} Le ROV exécute une \textbf{manœuvre de réorbitation} : il tourne autour de la cible pour s'aligner parfaitement face à l'ouverture que l'on lui a donné préalablement.
     \item \textbf{Insertion Finale :} Une fois l'alignement stabilisé, le drone effectue une avance rectiligne pour pénétrer dans la cage.
 \end{enumerate}
 
-
-
-\begin{quote}
-    \textit{« Malgré une visibilité optique nulle dans les eaux de Guerlédan, la combinaison du suivi manuel à longue distance et de l'ajustement automatique par analyse géométrique à courte distance a permis de réaliser la séquence complète d'amarrage. »}
-\end{quote}
+Le succès opérationnel de cette séquence en trois phases constitue un aboutissement majeur pour ce projet. Il démontre concrètement la viabilité d'un guidage reposant exclusivement sur l'imagerie acoustique au sein d'environnements fortement dégradés où la visibilité optique est nulle. La capacité du système à enchaîner de manière fluide un ralliement longue distance et une manœuvre de réorbitation, valide la robustesse de l'architecture logicielle et des lois de commande implémentées. Bien que l'angle d'approche final ait reposé sur une consigne d'orientation préalablement fournie par l'opérateur, cette validation expérimentale pose les fondations pour le déploiement d'un système de \textit{docking} subaquatique intégralement autonome.
 
 \section{Limites et Perspectives}
 

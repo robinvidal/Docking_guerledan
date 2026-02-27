@@ -102,13 +102,6 @@ Cette solution exploite les propriétés complémentaires des matériaux testés
 
 \begin{figure}[H]
     \centering
-    \includegraphics[width=0.6\textwidth]{images/cage_cubique.JPEG}
-    \caption{Cage cubique finale en cours d'assemblage, équipée de cordages réfléchissants et panneaux absorbants}
-    \label{fig:cage_cubique}
-\end{figure}
-
-\begin{figure}[H]
-    \centering
     \includegraphics[width=0.7\textwidth]{images/cage_pvc_cordes.JPEG}
     \caption{Vue détaillée de la cage avec panneaux de PVC et enroulements de cordages}
     \label{fig:cage_pvc_cordes}
@@ -126,6 +119,70 @@ La figure~\ref{fig:sonar_cage_finale} confirme que cette configuration produit u
 \subsection{Contrôle du robot}
 
 Le contrôle du BlueROV Heavy s'effectue via une manette de jeu (fig.~\ref{fig:manette_annexe}) permettant à l'opérateur de commander manuellement les six degrés de liberté du véhicule ou d'activer des modes automatiques (maintien de profondeur et de cap par régulateurs PID). Les détails complets de l'utilisation de la manette sont fournis en Annexe~\ref{appendix:controle-bluerov}.
+
+\subsection{Interface de Visualisation et Configuration Sonar}
+
+Le développement des algorithmes de traitement d'image et de tracking a nécessité la création d'une interface graphique dédiée, permettant la visualisation temps réel des données sonar et le réglage dynamique des paramètres. Cette interface, développée en PyQt5, s'est révélée indispensable pour l'itération rapide durant les phases de développement et d'expérimentation.
+
+\subsubsection*{Fonctionnalités principales}
+
+L'interface offre plusieurs modes de visualisation (figure~\ref{fig:sonar_viewer}) :
+\begin{itemize}
+    \item \textbf{Vue brute :} Image polaire native du sonar, permettant d'observer les données avant tout traitement.
+    \item \textbf{Vue cartésienne filtrée :} Image après conversion géométrique et application des filtres (figure~\ref{fig:sonar_filtered}).
+    \item \textbf{Vue comparée :} Affichage côte à côte des deux représentations pour évaluer l'impact des traitements.
+\end{itemize}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.8\textwidth]{images/sonar_viewer.png}
+    \caption{Interface de visualisation sonar : vue comparée (brut à gauche, filtré à droite) avec panneau de contrôle du tracker}
+    \label{fig:sonar_viewer}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.8\textwidth]{images/sonar_filtered.png}
+    \caption{Vue filtrée avec binarisation percentile : les structures de la cage ressortent nettement}
+    \label{fig:sonar_filtered}
+\end{figure}
+
+Le panneau de configuration sonar (figure~\ref{fig:sonar_config}) permet de modifier en temps réel les paramètres du capteur : portée maximale, gain et mode de fonctionnement. Cette fonctionnalité s'est avérée essentielle pour adapter rapidement la configuration selon la phase de mission (ralliement à longue portée ou approche finale).
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.8\textwidth]{images/sonar_config.png}
+    \caption{Panneau de configuration du sonar : réglage de la portée, du gain et du mode}
+    \label{fig:sonar_config}
+\end{figure}
+
+L'interface intègre également les contrôles du système de tracking (figure~\ref{fig:sonar_tracker}) :
+\begin{itemize}
+    \item \textbf{Sélection manuelle :} L'opérateur dessine une zone (bounding box) par clic-glisser pour initialiser le tracker CSRT.
+    \item \textbf{Déclenchement automatique :} Un bouton lance la détection automatique par transformée de Hough.
+    \item \textbf{Activation/désactivation des filtres :} Chaque étape de la chaîne de traitement peut être activée ou désactivée individuellement, avec ajustement des paramètres en temps réel.
+\end{itemize}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.8\textwidth]{images/sonar_tracker.png}
+    \caption{Vue avec tracker actif : la bounding box suit la cage détectée}
+    \label{fig:sonar_tracker}
+\end{figure}
+
+\subsubsection*{Apport pour le développement}
+
+Cette interface a significativement accéléré le cycle de développement en permettant :
+\begin{itemize}
+    \item l'ajustement visuel et immédiat des paramètres des filtres (Frost, médian, seuillage),
+    \item l'identification rapide de bugs, notamment le problème de convention d'axes ayant causé des comportements erratiques du tracker,
+    \item le suivi en temps réel des missions, offrant à l'opérateur une vue de ce que ``perçoit'' le robot,
+    \item le changement dynamique de la configuration sonar durant les essais.
+\end{itemize}
+
+\subsubsection*{Réutilisabilité}
+
+L'architecture logicielle a été conçue de manière modulaire sous ROS~2. Les packages développés (\texttt{affichage}, \texttt{tracking}, \texttt{sonar}, \texttt{traitement}) sont indépendants et peuvent être réutilisés pour d'autres projets utilisant le sonar Oculus avec ROS~2. Cette approche favorise le partage et l'extension des travaux réalisés.
 
 \section{Validation Expérimentale du Système de Docking}
 
@@ -147,7 +204,26 @@ Afin de valider la robustesse du système en conditions réelles, une campagne d
 
 Les essais se sont déroulés depuis un ponton, avec la cage suspendue par bouées à une profondeur de 2~m, à proximité immédiate de la structure. L'eau du lac présentait une turbidité importante, limitant la visibilité caméra à environ 60~cm --- condition représentative des environnements portuaires où le docking acoustique trouve sa justification.
 
-Contrairement au bassin de l'ENSTA, les conditions acoustiques du lac se sont révélées nettement plus favorables. À des portées inférieures à 6~m, le niveau de bruit est suffisamment faible pour permettre le fonctionnement des algorithmes de détection automatique : la transformée de Hough et la détection de forme en U produisent des résultats exploitables, validant ainsi les choix de conception de la chaîne de traitement.
+Contrairement au bassin de l'ENSTA, les conditions acoustiques du lac se sont révélées nettement plus favorables. À des portées inférieures à 6~m, le niveau de bruit est suffisamment faible pour permettre le fonctionnement des algorithmes de détection automatique : la transformée de Hough et la détection de forme en U produisent des résultats exploitables, validant ainsi les choix de conception de la chaîne de traitement. La figure~\ref{fig:comparaison_sonar} illustre cette différence marquée entre les deux environnements.
+
+\begin{figure}[H]
+    \centering
+    \begin{subfigure}[b]{0.48\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{images/sonar_piscine.png}
+        \caption{Bassin ENSTA : bruit de réverbération important}
+        \label{fig:sonar_piscine}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.48\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{images/sonar_lac.png}
+        \caption{Lac de Guerlédan : signature de la cage nettement visible}
+        \label{fig:sonar_lac}
+    \end{subfigure}
+    \caption{Comparaison des images sonar entre le bassin (a) et le lac (b) : le milieu ouvert du lac offre un rapport signal-sur-bruit bien supérieur}
+    \label{fig:comparaison_sonar}
+\end{figure}
 
 Cependant, à des distances supérieures à 6~m, le sonar capte les échos du fond et du ponton en plus de la signature de la cage. Ce bruit additionnel s'explique par la projection 2D de l'ouverture verticale du sonar ($20^{\circ}$), qui intègre les réflexions de toutes les structures présentes dans le cône d'émission. Cette observation a motivé l'adoption des deux stratégies de traitement distinctes présentées en Partie~I (Section~1.4.2).
 
@@ -184,6 +260,44 @@ Des essais complémentaires ont été réalisés en fournissant manuellement l'o
     \item un réglage imprécis de la profondeur du robot (ajustée manuellement avant chaque mission),
     \item une rotation légère de la cage suspendue entre les essais, non compensée par le système.
 \end{itemize}
+
+\subsubsection*{Reconstruction de Trajectoire via ROS bag}
+
+Afin de mieux comprendre le comportement du robot et d'objectiver 
+les performances de l'approche malgré l'absence de vérité terrain, 
+une reconstruction partielle de la trajectoire a été 
+réalisée a posteriori à partir des données d'un rosbag 
+(figure~\ref{fig:traj_reconstruite}), les seules informations 
+disponibles étant le \textit{range} et le \textit{bearing} 
+fournis par le sonar.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=1\textwidth]{images/traj.png}
+    \caption{Trajectoire 2D reconstruite à partir des données de range et bearing du sonar : le robot converge vers la cage.}
+    \label{fig:traj_reconstruite}
+\end{figure}
+
+La trajectoire 2D reconstruite (figure~\ref{fig:traj_reconstruite_zomme}) souligne une apparente 
+incohérence en phase terminale : le robot semble dévier  
+de l'axe d'approche. Cet artefact s'explique par la rotation du 
+BlueROV autour de la cage lorsqu'il s'oriente face à l'entrée, 
+l'orientation de la cage n'étant pas enregistrée et donc prise en compte dans la reconstruction. En effet, le robot tourne pour faire face à la cage, mais la reconstruction de trajectoire, basée uniquement sur les mesures de range et bearing, interprète ce mouvement comme des déplacements d'où une trajectoire erratique.
+
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=1\textwidth]{images/traj_zomme.png}
+    \caption{Zoom sur la partie finale de la trajectoire 2D reconstruite à partir des données de range et bearing du sonar.}
+    \label{fig:traj_reconstruite_zomme}
+\end{figure}
+Les courbes de \textit{range} et \textit{bearing} en revanche sont 
+pleinement cohérentes avec le comportement attendu : le range décroît 
+continûment de 11~m jusqu'à environ 50~cm en 90~s, et le bearing 
+converge vers $0^\circ$ en phase d'approche finale, confirmant que le 
+robot s'aligne correctement avec l'axe de la cage malgré l'artefact 
+de reconstruction.
+
 
 \subsubsection*{Limites Identifiées et Perspectives}
 

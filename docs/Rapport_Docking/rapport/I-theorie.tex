@@ -130,6 +130,7 @@ u_z = K_p^z e_z + K_i^z \int e_z \, dt + K_d^z \frac{de_z}{dt}
 \]
 
 Nous utilisons ce PID à la profondeur estimée au sonar de la cage pendant les missions de docking. Cela permet de bien visualiser la cage au sonar tout au long de la mission et d'approcher la cage au plus près, ce qui permettrait une potentielle dernière phase d'entrée dans la cage dans des conditions idéales.
+avec $K_p^z = 100{,}0$, $K_i^z = 5{,}0$, $K_d^z = 10{,}0$. L'intégrateur est borné entre $-50$ et $+50$ pour éviter le windup (accumulation d'une erreur excessive lorsque l'action de commande est saturée). Cette boucle rapide découple la dynamique verticale de la navigation horizontale.
 
 \subsubsection*{Maintien de cap}
 
