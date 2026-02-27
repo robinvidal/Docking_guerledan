@@ -20,11 +20,11 @@ Cette annexe détaille l'utilisation de la manette de contrôle du BlueROV Heavy
 
 Pour pouvoir commander le robot via la manette, il faut d'abord l'armer avec la touche \textbf{Start}.
 
-Il s'agit d'une sécurité qui permet aussi de désarmer le robot avec la même touche. Si une mission se déroule mal, il est donc possible de désarmer le ROV : aucune commande ne lui sera alors envoyée.
+Il s'agit d'une sécurité qui permet aussi de désarmer le robot avec la touche \textbf{Back}. Si une mission se déroule mal, il est donc possible de désarmer le ROV : aucune commande ne lui sera alors envoyée.
 
 \subsection{Contrôle des Lumières}
 
-Les lumières sont contrôlées par le bouton \textbf{Logitech} au centre de la manette. Initialisées à une valeur PWM de 1000, les lumières sont éteintes. Un appui sur la touche augmente la puissance de 100 jusqu'à la valeur maximale de 2000 ; un nouvel appui la ramène à 1000, éteinte.
+Les lumières sont contrôlées par le bouton \textbf{Logitech} au centre de la manette. Initialisées à une valeur PWM de 1000, les lumières sont éteintes. Un appui sur la touche augmente la puissance de 100 jusqu'à la valeur maximale de 2000 ; un nouvel appui la ramène alors à 1000, éteinte.
 
 \textit{Note :} Pour pouvoir contrôler les lumières, il faut au moins avoir établi une connexion SSH entre l'ordinateur et le robot une fois, afin d'autoriser les échanges entre le Raspberry Pi (sur lequel sont connectées les lumières) et le code.
 
@@ -44,21 +44,29 @@ L'orientation (cap) est contrôlée par le \textbf{joystick droit (R3)} de gauch
 
 \subsubsection{Profondeur}
 
-La profondeur du robot est commandée par le \textbf{joystick droit (R3)} poussé vers l'avant/arrière :
+La profondeur du robot est commandée par les gâchettes \textbf{(L2)} et \textbf{(R2)}:
 \begin{itemize}
-    \item En le poussant vers l'avant : le ROV remonte
-    \item En le poussant vers l'arrière : le ROV descend
+    \item En appuyant sur la gâchette \textbf{(R2)} : le ROV remonte
+    \item En appuyant sur la gâchette \textbf{(L2)} : le ROV descend
 \end{itemize}
 
 \subsection{Modes Automatiques (PID)}
 
 \subsubsection{Maintien de Profondeur}
 
-Un régulateur PID a été implémenté pour maintenir une profondeur donnée. Ce mode peut être activé en appuyant sur \textbf{X} : lorsqu'on navigue et que le joystick R3 vient d'être relâché, la profondeur actuelle est mémorisée et le PID stabilise le ROV à cette profondeur. Il faut environ une dizaine de secondes pour obtenir une stabilisation quasi-parfaite, l'action intégrale du PID contribuant à éliminer l'erreur résiduelle.
+Un régulateur PID a été implémenté pour maintenir une profondeur donnée. Ce mode peut être activé en appuyant sur \textbf{B} et désactivé en appuyant sur \textbf{L1 + B}. Lorsqu'on navigue et que les gâchettes L2 et R2 sont relâchées, la profondeur actuelle est mémorisée et le PID stabilise le ROV à cette profondeur. Il faut environ une dizaine de secondes pour obtenir une stabilisation quasi-parfaite, l'action intégrale du PID contribuant à éliminer l'erreur résiduelle.
+
+Nous précisons que la gestion du cap et de la profondeur sont sur des touches différentes. Nous pouvons donc modifier le cap facilement, sans modifier la profondeur et donc sans réinitialiser la profondeur désirée et inversement pour le pid en cap.
 
 \subsubsection{Maintien de Cap}
 
-Un second régulateur PID permet la stabilisation du cap. Il fonctionne de la même façon que l'asservissement de profondeur : lorsque le joystick responsable de l'orientation est relâché, le PID maintient le cap courant.
+Un second régulateur PID permet la stabilisation du cap. Il s'active en appuyant sur \textbf{X} et se désactive en appuyant sur \textbf{L1 + X}. Il fonctionne de la même façon que l'asservissement de profondeur : lorsque le joystick R3, responsable de l'orientation est relâché, le PID maintient le cap courant.
+
+\subsection{Mission de Docking}
+
+Nous avons implémenté deux missions différentes de Docking. La première, se lançant avec le bouton \textbf{A} et se désactivant avec \textbf{L1 + A}, permet de rejoindre la cage sans prendre en compte son orientation.
+
+La seconde mission, activée par le bouton \textbf{Y} et désactivée par \textbf{L1 + Y}, permet de rejoindre la cage en prenant en compte son orientation. En effet, une phase d'orbite autour de la cage est réalisée pour aligner le ROV avec l'entrée de la cage avant de s'en approcher de très près.
 
 \subsection{Résumé des Commandes}
 
@@ -68,14 +76,17 @@ Un second régulateur PID permet la stabilisation du cap. Il fonctionne de la m�
 \hline
 \textbf{Commande} & \textbf{Action} \\
 \hline
-Start & Armement/Désarmement du ROV \\
+Start/Back & Armement/Désarmement du ROV \\
 Logitech (centre) & Contrôle luminosité (PWM 1000--2000) \\
 Flèches haut/bas & Inclinaison caméra (non fonctionnel) \\
 Joystick gauche (L3) & Translation avant/arrière et latérale \\
 Joystick droit (R3) gauche/droite & Rotation (cap) \\
-Joystick droit (R3) avant/arrière & Profondeur (montée/descente) \\
+Gâchette R2/L2 & Profondeur (montée/descente) \\
 Bouton X & Activation maintien de profondeur (PID) \\
-Relâchement joystick orientation & Activation maintien de cap (PID) \\
+Bouton B & Activation maintien de cap (PID) \\
+Bouton A & Lancement mission de docking sans orientation \\
+Bouton Y & Lancement mission de docking avec orientation \\
+L1 + X/B/A/Y & Désactivation des modes \\
 \hline
 \end{tabular}
 \caption{Récapitulatif des commandes de la manette}
