@@ -1,16 +1,60 @@
 \newpage
 \chapter*{Conclusion}
 \addcontentsline{toc}{chapter}{Conclusion}
-\section{Conclusion Générale}
 
-Ce rapport a permis d'explorer la faisabilité technique de l'amarrage autonome d'un ROV d'inspection en utilisant uniquement un sonar d'imagerie acoustique pour la phase terminale.
+Ce projet a permis de démontrer la faisabilité technique de l'amarrage autonome d'un ROV d'inspection en environnement subaquatique dégradé, en s'appuyant exclusivement sur l'imagerie acoustique pour la navigation terminale.
 
-\subsection{Synthèse des Réalisations}
+\section{Bilan des Réalisations et Validation Expérimentale}
 
-\textit{[Instruction : Résumez ici les jalons techniques validés ("ce qui est fait"). Mentionnez que la chaîne logicielle complète (ROS2 + Driver Oculus + Algorithme de détection) est opérationnelle. Soulignez la réussite de l'intégration mécanique et électronique sur le BlueROV Heavy. Rappelez les résultats clés de la simulation et des essais en bassin qui valident l'approche théorique. Si l'amarrage a réussi partiellement ou totalement à Guerlédan, mettez-le en avant comme une preuve de concept majeure en milieu réel turbide.]}
+\subsection{Conception Matérielle et Intégration Système}
 
-\subsection{Limites et Perspectives}
+Le succès de l'approche repose initialement sur une phase de prototypage itérative de la station d'accueil. Un premier prototype a permis de valider les dimensions de passage du vecteur. Par la suite, une seconde version optimisée pour la signature acoustique a été conçue, utilisant des plaques de PVC et des cordes tendues afin de maximiser la réflexion des ondes sonores et de faciliter la détection des arêtes par le sonar multifaisceaux.
 
-Malgré les résultats encourageants, plusieurs verrous subsistent pour atteindre une autonomie industrielle fiable.
+Sur le plan du vecteur, l'intégration mécanique et électronique sur le châssis \textit{BlueROV2 Heavy} est désormais \textbf{pleinement opérationnelle}. L'architecture ROS2 assure une communication fluide entre le driver du sonar Oculus, les algorithmes de traitement et le contrôleur de vol, tandis que la configuration à huit propulseurs garantit la stabilité nécessaire à l'acquisition de données exploitables.
 
-\textit{[Instruction : Discutez honnêtement des "choses non faites" ou des limites actuelles. Par exemple : la détection est-elle robuste si la cage est vue sous un angle critique ? La loi de commande actuelle permet-elle de lutter contre des courants marins violents ? Proposez des pistes pour la suite : fusionner le sonar avec un DVL pour stabiliser la vitesse, implémenter une commande plus avancée (type MPC), ou utiliser des techniques d'apprentissage profond (Deep Learning) pour améliorer la reconnaissance de la cage dans des environnements acoustiques complexes.]}
+\subsection{Supervision et Interface Graphique (IHM)}
+
+Pour accompagner le développement, une interface graphique dédiée a été développée. Cet outil de supervision s'est avéré crucial lors des phases d'essais pour :
+\begin{itemize}
+    \item Visualiser en temps réel les flux bruts et filtrés du sonar.
+    \item Sélectionner manuellement la cage sur l'écran pour initialiser le \textbf{trackeur} de cible.
+    \item Tester et ajuster dynamiquement les paramètres de filtrage et les seuils de détection (Hough) en fonction des conditions acoustiques du milieu.
+\end{itemize}
+
+\subsection{Développement et Validation en Simulation}
+
+Avant tout déploiement en milieu naturel, l'ensemble de la chaîne de traitement et de commande a été rigoureusement éprouvé au sein d'un environnement de simulation et par le rejeu de données d'acquisition (\textit{rosbags}). Cette phase préparatoire a permis de consolider trois piliers majeurs de l'autonomie du système :
+
+\begin{itemize}
+    \item \textbf{Détection géométrique par lignes de Hough :} La simulation a confirmé la viabilité de la transformée de Hough probabiliste pour l'extraction des montants de la cage à partir de données sonar. Elle a permis d'ajuster finement les tolérances géométriques (U-shape) afin de garantir une estimation fiable de la position et de l'orientation ($\psi_{\text{cage}}$) de la cible à courte portée.
+    \item \textbf{Robustesse du système de Tracking :} Les tests virtuels ont mis en évidence la stabilité de l'algorithme de suivi de cible. Face à des environnements bruités et des artefacts acoustiques simulés, le trackeur a démontré sa capacité à maintenir le verrouillage sur la sélection initiale, assurant une continuité de la donnée de positionnement lors de l'approche longue portée.
+    \item \textbf{Algorithme de Contrôle et de Guidage :} L'environnement simulé a été indispensable pour la mise au point des lois de commande du ROV. Il a permis de valider le comportement dynamique du drone en réponse aux consignes d'asservissement générées par le traitement sonar, certifiant ainsi la fluidité des trajectoires de ralliement et la faisabilité cinématique de la complexe manœuvre de réorbitation.
+\end{itemize}
+
+\subsection{Validation de la Stratégie de Docking}
+
+L'approche théorique, affinée en simulation et sur \textit{rosbags}, a été validée par des preuves de concept majeures en bassin et sur le site de Guerlédan. La séquence de docking validée suit une logique de navigation hybride :
+
+\begin{enumerate}
+    \item \textbf{Acquisition et Suivi Longue Portée (15~m) :} La cage est identifiée via l'IHM. Le trackeur verrouille la boîte englobante de la cible, permettant un ralliement robuste malgré le bruit ambiant, bien que l'orientation ne soit pas encore résolue à cette distance.
+    \item \textbf{Approche et Alignement (2~m) :} Le ROV exécute une \textbf{manœuvre de réorbitation} : il tourne autour de la cible pour s'aligner parfaitement face à l'ouverture.
+    \item \textbf{Insertion Finale :} Une fois l'alignement stabilisé, le drone effectue une avance rectiligne pour pénétrer dans la cage.
+\end{enumerate}
+
+
+
+\begin{quote}
+    \textit{« Malgré une visibilité optique nulle dans les eaux de Guerlédan, la combinaison du suivi manuel à longue distance et de l'ajustement automatique par analyse géométrique à courte distance a permis de réaliser la séquence complète d'amarrage. »}
+\end{quote}
+
+\section{Limites et Perspectives}
+
+Bien que les résultats obtenus valident le concept de guidage acoustique, plusieurs optimisations sont nécessaires pour rendre le système industriellement infaillible et totalement autonome.
+
+\paragraph{Automatisation de l'Initialisation du Suivi} 
+Actuellement, la séquence débute par une sélection manuelle de la cible sur l'interface graphique à une distance de 15~mètres. Une perspective d'évolution majeure consiste à utiliser l'algorithme de détection géométrique pour repérer automatiquement la cage dans le flux sonar global. Une fois l'entrée et le barycentre identifiés avec un indice de confiance suffisant, l'algorithme pourrait transmettre directement la boîte englobante (\textit{bounding box}) au trackeur, supprimant ainsi totalement le besoin d'intervention humaine et rendant la phase de ralliement 100\,\% autonome.
+
+\paragraph{Sécurisation de la Phase d'Insertion (Guidage Hybride)} 
+La limite principale du système actuel réside dans les tout derniers mètres du docking. Une fois le ROV réorbité et aligné face à l'entrée, l'insertion finale s'effectue quasiment « en aveugle ». À très courte distance, le champ de vision du sonar (\textit{Field of View}) ne permet plus d'englober la cible entière, et la zone morte acoustique complique le maintien de l'asservissement. 
+
+Pour pallier ce problème et rendre l'amarrage plus performant, une transition vers un guidage optique en phase terminale est envisagée. Des travaux menés par des groupes précédents sur ce même ROV ont démontré d'excellents résultats en utilisant une caméra et des marqueurs visuels (codes ArUco) fixés sur la station d'accueil. L'implémentation d'une architecture hybride — utilisant le sonar pour le ralliement et l'alignement longue/moyenne portée (15~m à 2~m), puis basculant sur la détection ArUco pour le guidage fin des derniers centimètres — constituerait la solution la plus robuste pour garantir un amarrage fiable et reproductible.

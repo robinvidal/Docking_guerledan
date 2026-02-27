@@ -225,7 +225,7 @@ La solution technique adoptée, issue d'une phase itérative de conception et d'
 
 \subsection{Chaîne de Traitement d'Image}
 
-Le chaîne de traitement développée combine des filtres opérant dans deux espaces distincts : polaire (natif du sonar) et cartésien (après transformation géométrique). Cette architecture à deux étages permet d'exploiter les propriétés spécifiques de chaque représentation pour maximiser la qualité de l'image finale.
+La chaîne de traitement développée combine des filtres opérant dans deux espaces distincts : polaire (natif du sonar) et cartésien (après transformation géométrique). Cette architecture à deux étages permet d'exploiter les propriétés spécifiques de chaque représentation pour maximiser la qualité de l'image finale. Les essais expérimentaux ont révélé que le traitement optimal dépend de la distance à la cage, conduisant à l'adoption de deux stratégies distinctes selon la portée configurée du sonar.
 
 \subsubsection*{Architecture de la chaîne de traitement}
 
@@ -235,13 +235,13 @@ Le traitement s'articule en deux phases successives :
     \item Conversion + filtrage cartésien : transformation géométrique puis traitement dans le plan $(x,y)$ du robot.
 \end{enumerate}
 
-\subsubsection*{Phase 1 : Filtrage Polaire}
+\subsubsection*{Phase 1 : Filtrage Polaire (commun aux deux stratégies)}
 
 Les données brutes du sonar sont traitées directement dans leur représentation polaire, où chaque pixel correspond à une direction angulaire (bearing) et une distance (range). Deux filtres complémentaires sont appliqués séquentiellement :
 
 \paragraph{1.1. Filtre de Frost} Ce filtre adaptatif, spécifiquement conçu pour les images acoustiques, réduit le bruit de \textit{speckle} (phénomène d'interférence provoquant une granularité des images) tout en préservant les contours. Ce filtre préserve ainsi les zones homogènes (fort lissage) tout en maintenant les transitions abruptes correspondant aux réflecteurs.
 
-\paragraph{1.2. Filtre médian} Un filtre médian complémentaire (noyau $3 \times 3$) est appliqué pour supprimer le bruit impulsif résiduel. Contrairement au filtrage linéaire, le filtre médian préserve les discontinuités géométriques essentielles pour la détection ultérieure.
+\paragraph{1.2. Filtre médian léger} Un filtre médian complémentaire (noyau $3 \times 3$) est appliqué pour supprimer le bruit impulsif résiduel. Contrairement au filtrage linéaire, le filtre médian préserve les discontinuités géométriques essentielles pour la détection ultérieure.
 
 \subsubsection*{Phase 2 : Conversion Polaire--Cartésienne}
 
@@ -254,24 +254,36 @@ r = \sqrt{x^2 + y^2}, \\[3pt]
 \]
 où $(x, y)$ désignent les coordonnées cartésiennes métriques et $(r, \theta)$ les coordonnées polaires natives du sonar. La résolution spatiale de l'image cartésienne est fixée à $2{,}0 \times$ celle de l'image polaire pour maintenir la fidélité géométrique tout en limitant le coût computationnel.
 
-\subsubsection*{Phase 3 : Filtrage Cartésien}
+\subsubsection*{Phase 3 : Filtrage Cartésien -- Deux Stratégies selon la Distance}
 
-Une cascade de filtres spécialisés est appliquée dans l'espace cartésien pour extraire les structures d'intérêt et supprimer les artefacts :
+Les essais en bassin ont mis en évidence la nécessité d'adapter le traitement cartésien à la distance de la cage. Deux configurations ont été retenues, sélectionnées via la portée maximale configurée du sonar :
 
-\paragraph{3.1. Filtre médian cartésien} Un second filtrage médian (noyau $3 \times 3$) élimine les artefacts introduits par l'interpolation bilinéaire.
+\paragraph{Stratégie ``Cage proche'' (portée sonar $< 6$~m)}
 
-\paragraph{3.2. CLAHE (Contrast Limited Adaptive Histogram Equalization)} Cette technique d'amélioration adaptative du contraste local fait ressortir les structures métalliques de la cage. Le paramètre de limitation de contraste est fixé à $2{,}0$ pour éviter l'amplification excessive du bruit de fond.
+Cette configuration est optimisée pour la phase d'approche finale où la cage occupe une portion significative de l'image sonar :
+\begin{itemize}
+    \item \textbf{Binarisation percentile :} Seuls les $X\%$ pixels les plus intenses (typiquement $X = 1$) sont conservés et fixés à $255$, tous les autres étant mis à zéro. Cette binarisation stricte isole efficacement les réflecteurs de la cage.
+    \item \textbf{Fermeture morphologique :} Une opération de fermeture (dilatation suivie d'une érosion, noyau $3 \times 3$) solidifie les structures détectées en comblant les discontinuités mineures des barres métalliques.
+\end{itemize}
+Cette stratégie produit une image binaire nette permettant la détection robuste de l'orientation de la cage par transformée de Hough et l'initialisation automatique du tracker CSRT.
 
-\paragraph{3.3. Seuillage bas} Un seuil fixe ($T = 40$ sur échelle $[0, 255]$) met à zéro les pixels d'intensité inférieure, éliminant ainsi le bruit de fond et les réflexions diffuses. Contrairement aux méthodes adaptatives coûteuses en calcul, ce seuillage global s'avère suffisant grâce à la robustesse des étapes précédentes.
+\paragraph{Stratégie ``Cage éloignée'' (portée sonar $\geq 6$~m)}
 
-\paragraph{3.4. Fermeture morphologique} Une opération de fermeture (dilatation suivie d'une érosion, noyau $3 \times 3$) solidifie les structures détectées en comblant les discontinuités mineures des barres métalliques de la cage.
+Cette configuration est adaptée à la phase de ralliement où la cage apparaît comme une cible de petite taille dans l'image :
+\begin{itemize}
+    \item \textbf{Seuillage bas :} Un seuil fixe ($T = 40$ sur échelle $[0, 255]$) met à zéro les pixels d'intensité inférieure, éliminant le bruit de fond et les réflexions diffuses tout en préservant les nuances d'intensité de la cible.
+\end{itemize}
+L'absence de binarisation préserve les variations d'intensité de l'image, ce qui améliore significativement l'efficacité du tracker CSRT qui exploite ces gradients pour le suivi. En contrepartie, le tracker doit être initialisé manuellement par l'opérateur lors de cette phase.
 
-\paragraph{3.5. Binarisation percentile (optionnelle)} Pour les scénarios exigeant une binarisation stricte, un filtrage percentile peut être activé : seuls les $X\%$ pixels les plus intenses (typiquement $X = 1$) sont conservés et fixés à $255$, tous les autres étant mis à zéro.
+\subsubsection*{Filtre CLAHE écarté}
 
-\paragraph{3.6. Ouverture--Fermeture (optionnelle)} Une séquence d'ouverture (érosion puis dilatation) suivie d'une fermeture permet un nettoyage morphologique final : l'ouverture élimine les petits objets parasites tandis que la fermeture solidifie les structures restantes.
+Bien que largement utilisée pour l'amélioration du contraste local dans les images sonar \cite{wang2023_acoustic_mfls_docking}, cette technique s'est révélée contre-productive dans notre contexte. L'égalisation adaptative amplifie non seulement les structures de la cage, mais également le bruit de fond et les échos parasites à proximité immédiate de la cage, perturbant ainsi la détection géométrique.
+
 \subsubsection*{Justification et Performances}
 
 Cette architecture en cascade exploite les avantages de chaque représentation : les filtres polaires traitent efficacement le bruit de speckle natif du sonar, tandis que les filtres cartésiens opèrent sur une géométrie euclidienne facilitant l'extraction de caractéristiques géométriques. L'ensemble du traitement s'exécute en temps réel grâce à l'utilisation de caches pour la transformation géométrique et l'optimisation des filtres OpenCV.
+
+L'adoption de deux stratégies distinctes selon la distance permet d'optimiser le compromis entre robustesse de la détection (cage proche) et efficacité du suivi (cage éloignée). Le basculement entre les deux modes s'effectue via la modification de la portée maximale du sonar, paramètre exposé via l'interface ROS~2.
 
 Les paramètres des filtres sont exposés via l'interface ROS~2, permettant un réglage dynamique en fonction des conditions opérationnelles (turbidité, distance à la cible, présence d'obstacles parasites). Cette flexibilité s'est révélée essentielle lors des essais en bassin et en lac, où les conditions acoustiques varient significativement.
 
