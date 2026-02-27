@@ -133,11 +133,11 @@ Après la phase de conception matérielle décrite précédemment, le système c
 
 \subsection{Essais en Bassin ENSTA}
 
-Les premiers essais de validation du système complet de docking ont été réalisés dans le bassin de l'ENSTA Bretagne. L'objectif principal de cette phase était de confirmer la détection de la cage et la réussite du suivi par tracker dans un environnement contrôlé. 
+Les premiers essais ont été réalisés dans le bassin de l'ENSTA Bretagne, une cuve de dimensions réduites ($3 \times 4$~m, profondeur 3~m). La cage était suspendue à 1~m de profondeur, positionnée au centre du bassin (environ 2,5~m devant le robot et 1,5~m derrière). La portée du sonar a été limitée à 3~m afin de réduire les échos des parois.
 
-Le bassin, de par sa taille limitée, présente une caractéristique intéressante pour la validation : les parois et le fond génèrent de multiples échos parasites qui se superposent à la signature acoustique de la cage. Ces réflexions multiples constituent un environnement acoustique particulièrement bruité, bien plus complexe que celui rencontré en lac où l'espace ouvert atténue naturellement ces phénomènes de réverbération. La capacité du système à détecter et suivre la cage dans ces conditions difficiles représentait donc un test exigeant, garantissant que les algorithmes de traitement d'image et le tracker CSRT fonctionneraient de manière robuste lors des essais ultérieurs en environnement réel.
+Malgré cette précaution, l'environnement acoustique du bassin s'est révélé extrêmement bruité. Les réflexions multiples sur les parois, le fond et la surface généraient un niveau de bruit tel que les méthodes de détection automatique (transformée de Hough, détection de forme en U) n'ont pas pu être validées dans ces conditions. Le rapport signal-sur-bruit insuffisant ne permettait pas d'isoler la signature de la cage du fond acoustique ambiant.
 
-\textit{[Instruction : Ajoutez les dimensions du bassin (longueur, largeur, profondeur). Précisez la configuration de la cage (fixée au fond ou suspendue). Décrivez le protocole : position de départ du ROV, procédure de lancement de l'autonomie, critères de succès (positionnement à 1m de la cage avec alignement correct). Mentionnez les outils de vérité terrain utilisés si disponibles (caméras externes, système de localisation).]}
+Cette phase a néanmoins permis de préparer efficacement la campagne d'essais au lac de Guerlédan : validation de l'interface opérateur, test de l'initialisation manuelle du tracker CSRT, vérification du contrôle par manette, et configuration des paramètres du sonar. Ces essais préliminaires ont également confirmé que le bassin, bien que pratique pour les tests matériels, ne constitue pas un environnement représentatif pour la validation des algorithmes de perception acoustique.
 
 \subsection{Campagne d'Essais : Lac de Guerlédan}
 
@@ -147,7 +147,9 @@ Afin de valider la robustesse du système en conditions réelles, une campagne d
 
 Les essais se sont déroulés depuis un ponton, avec la cage suspendue par bouées à une profondeur de 2~m, à proximité immédiate de la structure. L'eau du lac présentait une turbidité importante, limitant la visibilité caméra à environ 60~cm --- condition représentative des environnements portuaires où le docking acoustique trouve sa justification.
 
-Cette configuration a révélé un phénomène acoustique important : à des distances supérieures à 6~m, le sonar capte les échos du fond et du ponton en plus de la signature de la cage. Ce bruit additionnel s'explique par la projection 2D de l'ouverture verticale du sonar ($20^{\circ}$), qui intègre les réflexions de toutes les structures présentes dans le cône d'émission. Cette observation a motivé l'adoption des deux stratégies de traitement distinctes présentées en Partie~I (Section~1.4.2).
+Contrairement au bassin de l'ENSTA, les conditions acoustiques du lac se sont révélées nettement plus favorables. À des portées inférieures à 6~m, le niveau de bruit est suffisamment faible pour permettre le fonctionnement des algorithmes de détection automatique : la transformée de Hough et la détection de forme en U produisent des résultats exploitables, validant ainsi les choix de conception de la chaîne de traitement.
+
+Cependant, à des distances supérieures à 6~m, le sonar capte les échos du fond et du ponton en plus de la signature de la cage. Ce bruit additionnel s'explique par la projection 2D de l'ouverture verticale du sonar ($20^{\circ}$), qui intègre les réflexions de toutes les structures présentes dans le cône d'émission. Cette observation a motivé l'adoption des deux stratégies de traitement distinctes présentées en Partie~I (Section~1.4.2).
 
 \subsubsection*{Protocole Expérimental}
 
