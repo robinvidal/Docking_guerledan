@@ -247,37 +247,6 @@
       \field{type}{phdthesis}
       \field{year}{2021}
     \endentry
-    \entry{fossen2011_marine_craft}{book}{}
-      \name{author}{1}{}{%
-        {{hash=8eca0c434dd587f3eff346c053ba5948}{%
-           family={Fossen},
-           familyi={F\bibinitperiod},
-           given={Thor\bibnamedelima I.},
-           giveni={T\bibinitperiod\bibinitdelim I\bibinitperiod}}}%
-      }
-      \list{location}{1}{%
-        {Chichester, UK}%
-      }
-      \list{publisher}{1}{%
-        {Wiley}%
-      }
-      \strng{namehash}{8eca0c434dd587f3eff346c053ba5948}
-      \strng{fullhash}{8eca0c434dd587f3eff346c053ba5948}
-      \strng{bibnamehash}{8eca0c434dd587f3eff346c053ba5948}
-      \strng{authorbibnamehash}{8eca0c434dd587f3eff346c053ba5948}
-      \strng{authornamehash}{8eca0c434dd587f3eff346c053ba5948}
-      \strng{authorfullhash}{8eca0c434dd587f3eff346c053ba5948}
-      \field{sortinit}{1}
-      \field{sortinithash}{4f6aaa89bab872aa0999fec09ff8e98a}
-      \field{labelnamesource}{author}
-      \field{labeltitlesource}{title}
-      \field{isbn}{978-0-470-74238-7}
-      \field{title}{Handbook of Marine Craft Hydrodynamics and Motion Control}
-      \field{year}{2011}
-      \verb{doi}
-      \verb 10.1002/9781119994138
-      \endverb
-    \endentry
   \enddatalist
 \endrefsection
 \endinput

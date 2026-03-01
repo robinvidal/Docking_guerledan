@@ -300,15 +300,17 @@ robot s'aligne correctement avec l'axe de la cage malgré l'artefact
 de reconstruction.
 
 
-\subsubsection*{Limites Identifiées et Perspectives}
+\subsubsection*{Analyse Critique et Perspectives}
 
-La principale limitation observée concerne l'absence d'intégration du changement dynamique de portée sonar au cours de la mission. Bien que l'interface permette de modifier ce paramètre en temps réel, cette fonctionnalité n'a pas été exploitée dans une séquence de mission complète. Une approche optimale consisterait à démarrer en mode ``cage éloignée'' (15~m, tracking manuel) puis à basculer automatiquement en mode ``cage proche'' (6~m, tracking automatique avec estimation d'orientation) lorsque la distance le permet.
+Les résultats expérimentaux confirment la viabilité du docking acoustique autonome dans un environnement naturel, tout en révélant des enjeux importants pour une intégration opérationnelle complète.
 
-Une piste d'amélioration identifiée concerne l'estimation de l'orientation de la cage dans le référentiel monde. En combinant l'orientation de la cage dans le référentiel robot (issue de la détection Hough) avec le cap du robot (mesuré par la boussole embarquée), il serait possible de maintenir une estimation stable de l'orientation absolue de la cage, indépendante des mouvements du véhicule. Cette approche améliorerait la robustesse de l'alignement lors de la phase finale d'approche.
+Le succès du tracking longue portée et la convergence du contrôleur de navigation valident la solidité de la chaîne de perception-commande. Cependant, l'absence d'entrée reproductible dans la cage soulève deux questions : d'une part, le système de contrôle d'orientation requiert une estimation fiable du cap absolu de la cage, actuellement obtenue uniquement par injection manuelle. D'autre part, même avec cette information, les rotations non-maîtrisées de la structure révèlent que le docking, dans l'état actuel, nécessite des informations supplémentaires pour compenser les mouvements de la cible, notamment en phase d'approche finale.
 
-Malgré ces limitations, la campagne valide les briques fondamentales du système : le tracking acoustique est fonctionnel sur toute la plage d'approche (1--15~m), le contrôleur de navigation converge vers la cible, et la détection automatique de l'orientation est opérationnelle à courte portée. L'intégration complète de ces composants dans une mission séquentielle constitue la prochaine étape de développement.
+La transition entre les deux modes de détection (tracking manuel longue portée vs. automatique courte portée) n'a pas été testée dans une séquence intégrée. Cette omission masque potentiellement des problèmes de continuité lors du basculement automatique, et constitue un élément de vérification à apporter prochainement. L'intégration d'une bascule dynamique de portée sonar représente donc un prérequis essentiel.
 
-\textit{[Instruction : Comparez les trajectoires réelles du ROV avec celles de la simulation. Présentez des statistiques de réussite (ex: "Sur 20 tentatives, 15 ont abouti à un amarrage réussi"). Analysez les échecs : est-ce un problème de perte de la cible au sonar (perception) ou une incapacité des propulseurs à contrer une perturbation (commande) ? Incluez des images sonar réelles montrant la cage vue par le robot à différentes distances.]}
+Sur le plan algorithmique, l'estimation d'orientation par transformée de Hough s'avère correcte à courte portée, mais son couplage avec le cap robot (mesurable via la boussole embarquée) ouvre une opportunité d'amélioration majeure : fusionner ces deux sources ou ajouter un capteur directement sur la cage pour obtenir l'orientation absolue de la cage dans le référentiel monde, indépendamment des mouvements du véhicule. Cette approche modulerait significativement la robustesse de l'alignement final.
+
+Ces résultats posent ainsi les fondations d'un système opérationnel, tout en délimitant clairement le périmètre des améliorations nécessaires pour atteindre l'autonomie complète en conditions portuaires réelles.
 
 
 

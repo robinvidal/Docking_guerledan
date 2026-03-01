@@ -157,15 +157,9 @@ Le simulateur implémente un modèle holonome à 3 degrés de liberté ($x, y, \
 \dot{y} = u \sin\theta + v \cos\theta, \quad 
 \dot{\psi} = \omega
 \]
-<<<<<<< HEAD
-où $(u, v, \omega)$ sont les vitesses avant/arrière, latérale et angulaire saturées à $\pm 0{,}5$~m/s et rad/s. Le sonar est modélisé avec un champ de vision de $\pm 45°$.
+où $(u, v, \omega)$ sont les vitesses avant/arrière, latérale et angulaire saturées à $\pm 0{,}5$~m/s et rad/s. Le sonar est modélisé avec un champ de vision de $\pm 45^\circ$.
 
 Ce modèle simplifié ne prend pas en compte l'inertie du véhicule, la traînée hydrodynamique, les couplages inter-axes ni les perturbations environnementales. Ces limitations connues sont toutefois compensées lors des essais réels en bassin par l'ajustement des gains de contrôle.
-=======
-où les vitesses $(u,v,r)$ dans le référentiel corps sont directement commandées par les contrôleurs proportionnels de navigation. Les actionneurs sont saturés à des valeurs réalistes : $0{,}5$~m/s en translation avant/arrière, $0{,}3$~m/s en translation latérale, et $0{,}5$~rad/s en rotation.
-
-La cage acoustique est modélisée par deux points fixes représentant les deux extrêmités de l'entrée de la cage. Le capteur sonar est simulé géométriquement avec un champ de vision limité à $\pm 65^{\circ}$ et une portée maximale définie. Si les réflecteurs sortent du cône de détection, le contrôleur passe en état \textit{idle} (arrêt, attente de réacquisition visuelle).
->>>>>>> 50440caef407f0e0711b3daf15e03b1f4ef21f70
 
 \subsection{Machine à États Testée}
 
