@@ -209,18 +209,19 @@ pid_surge:
 
 ### Simulation 2D Python
 
-Test rapide des lois de commande sans ROS :
+Test rapide des lois de commande du module `bluerov_control0` (même dossier que `utils_0.py`) :
 
 ```bash
 # Depuis la racine du projet
-cd Docking_guerledan/simulation
-python3 simulation_bluerov.py
+cd Docking_guerledan/ros2_bluerov/src/bluerov_basics/bluerov_control0/bluerov_control0
+python3 test_simu_oriented.py
 ```
 
 **Fonctionnalités :**
-- Visualisation 2D du ROV et de la cage
-- Comparaison contrôleurs (PID, LQR, SMC)
-- Génération de trajectoires
+- Simulation d'approche orientée vers la cage (`OrientedApproachController`)
+- Affichage multi-robots avec trajectoires, cap et état du contrôleur
+- Phases de mission : approche, orbite d'alignement, approche finale
+- Utilise `plot_bluerov.py` et `control.py` localement dans le package `bluerov_control0`
 
 ### Tests unitaires ROS
 
@@ -250,6 +251,8 @@ colcon test-result --verbose
 
 ### control
 - `control_node` : PID cascade (surge, sway, yaw)
+- `utils_0.py` : utilitaires de pilotage BlueROV (gestion joystick, armement MAVROS, saturation commandes RC, modes de maintien cap/profondeur, aide au suivi de cible)
+- `test_simu_oriented.py` : script de simulation locale pour valider l'approche orientée (hors pipeline ROS)
 
 ### mission
 - `mission_node` : FSM 7 états (IDLE, LOCK_ON, APPROACH, DOCKING, DOCKED, RECOVERY, ABORT)
